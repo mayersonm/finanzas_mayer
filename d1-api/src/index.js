@@ -26,13 +26,27 @@ export default {
         return json(await health(env));
       }
 
+      if (url.pathname === '/api/login' && request.method === 'POST') {
+        const payload = await request.json();
+        return json(await login(env, payload));
+      }
+
+      if (url.pathname === '/api/session' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json({ ok: true, authenticated: true });
+      }
+
+      if (url.pathname === '/api/logout' && request.method === 'POST') {
+        return json({ ok: true });
+      }
+
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
-        requireDashboardKey(request, env);
+        await requireDashboardAccess(request, env);
         return json(await dashboard(env, url.searchParams));
       }
 
       if (url.pathname === '/api/transactions' && request.method === 'GET') {
-        requireDashboardKey(request, env);
+        await requireDashboardAccess(request, env);
         return json(await transactions(env, url.searchParams));
       }
 
@@ -70,6 +84,32 @@ async function health(env) {
     transactions: row?.total || 0,
     fixedExpenses: fixed?.total || 0,
     checkedAt: new Date().toISOString(),
+  };
+}
+
+async function login(env, payload) {
+  const password = String(payload?.password || '');
+
+  if (!password) {
+    throw httpError(400, 'Password requerido');
+  }
+
+  if (!(await isValidLoginPassword(env, password))) {
+    throw httpError(401, 'Credenciales invalidas');
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = now + 60 * 60 * 12;
+  const token = await signSessionToken(env, {
+    sub: 'dashboard',
+    iat: now,
+    exp: expiresAt,
+  });
+
+  return {
+    ok: true,
+    token,
+    expiresAt,
   };
 }
 
@@ -486,14 +526,21 @@ function txShape(row) {
   };
 }
 
-function requireDashboardKey(request, env) {
+async function requireDashboardAccess(request, env) {
+  if (hasDashboardKey(request, env)) return;
+
+  const token = bearer(request);
+  if (token && await verifySessionToken(env, token)) return;
+
+  throw httpError(401, 'Unauthorized');
+}
+
+function hasDashboardKey(request, env) {
   const url = new URL(request.url);
   const provided = url.searchParams.get('key') || bearer(request);
   const expected = env.DASHBOARD_API_KEY;
 
-  if (!expected || provided !== expected) {
-    throw httpError(401, 'Unauthorized');
-  }
+  return Boolean(expected && provided === expected);
 }
 
 function requireAdminKey(request, env) {
@@ -508,6 +555,48 @@ function requireAdminKey(request, env) {
 function bearer(request) {
   const header = request.headers.get('authorization') || '';
   return header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
+}
+
+async function isValidLoginPassword(env, password) {
+  if (env.LOGIN_PASSWORD_HASH) {
+    const providedHash = await sha256Hex(password);
+    return constantTimeEqual(providedHash, String(env.LOGIN_PASSWORD_HASH).toLowerCase());
+  }
+
+  if (env.LOGIN_PASSWORD) {
+    return constantTimeEqual(password, String(env.LOGIN_PASSWORD));
+  }
+
+  throw httpError(500, 'LOGIN_PASSWORD o LOGIN_PASSWORD_HASH no configurado');
+}
+
+async function signSessionToken(env, payload) {
+  const body = base64UrlEncode(JSON.stringify(payload));
+  const signature = await hmacSha256(body, sessionSecret(env));
+  return `${body}.${signature}`;
+}
+
+async function verifySessionToken(env, token) {
+  const parts = String(token || '').split('.');
+  if (parts.length !== 2) return false;
+
+  const [body, signature] = parts;
+  const expected = await hmacSha256(body, sessionSecret(env));
+  if (!constantTimeEqual(signature, expected)) return false;
+
+  try {
+    const payload = JSON.parse(base64UrlDecode(body));
+    const now = Math.floor(Date.now() / 1000);
+    return payload?.sub === 'dashboard' && Number(payload.exp || 0) > now;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function sessionSecret(env) {
+  const secret = env.SESSION_SECRET;
+  if (!secret) throw httpError(500, 'SESSION_SECRET no configurado');
+  return String(secret);
 }
 
 function getChatId(env, params) {
@@ -538,6 +627,70 @@ function httpError(status, message) {
   const error = new Error(message);
   error.status = status;
   return error;
+}
+
+async function hmacSha256(value, secret) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    utf8Bytes(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, utf8Bytes(value));
+  return base64UrlEncodeBytes(new Uint8Array(signature));
+}
+
+async function sha256Hex(value) {
+  const digest = await crypto.subtle.digest('SHA-256', utf8Bytes(value));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function utf8Bytes(value) {
+  return new TextEncoder().encode(String(value));
+}
+
+function base64UrlEncode(value) {
+  return base64UrlEncodeBytes(utf8Bytes(value));
+}
+
+function base64UrlEncodeBytes(bytes) {
+  let binary = '';
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function base64UrlDecode(value) {
+  const normalized = String(value || '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function constantTimeEqual(a, b) {
+  const left = String(a || '');
+  const right = String(b || '');
+  if (!left || !right) return false;
+
+  let diff = left.length ^ right.length;
+  const max = Math.max(left.length, right.length);
+
+  for (let i = 0; i < max; i++) {
+    diff |= left.charCodeAt(i % left.length) ^ right.charCodeAt(i % right.length);
+  }
+
+  return diff === 0;
 }
 
 function round(value) {

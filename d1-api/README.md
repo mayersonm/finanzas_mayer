@@ -39,6 +39,8 @@ npx wrangler secret put ADMIN_KEY
 npx wrangler secret put DEFAULT_CHAT_ID
 npx wrangler secret put GAS_API_URL
 npx wrangler secret put GAS_API_KEY
+npx wrangler secret put LOGIN_PASSWORD
+npx wrangler secret put SESSION_SECRET
 ```
 
 Valores sugeridos:
@@ -49,6 +51,8 @@ ADMIN_KEY         = otra clave larga privada para sincronizar
 DEFAULT_CHAT_ID   = tu ChatID
 GAS_API_URL       = URL nueva de Apps Script /exec
 GAS_API_KEY       = dashboard_api_key de Apps Script
+LOGIN_PASSWORD    = clave privada para entrar al dashboard
+SESSION_SECRET    = cadena larga aleatoria para firmar sesiones
 ```
 
 ## 5. Deploy

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -111,7 +111,7 @@ interface ChartTooltipProps {
 }
 
 const API_URL = import.meta.env.VITE_GAS_API_URL || 'https://script.google.com/macros/s/TU_SCRIPT_ID/exec';
-const API_KEY = import.meta.env.VITE_DASHBOARD_API_KEY || 'TU_API_KEY_SECRETA';
+const SESSION_STORAGE_KEY = 'finanzas_dashboard_session';
 
 const MOCK: DashboardData = {
   balance: 5350,
@@ -179,6 +179,22 @@ const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'analisis', label: 'Analisis' },
   { id: 'metas', label: 'Metas' },
 ];
+
+function apiEndpoint(path: 'dashboard' | 'login' | 'session' | 'logout'): string {
+  const dashboardUrl = new URL(API_URL);
+
+  if (dashboardUrl.pathname.endsWith('/api/dashboard')) {
+    dashboardUrl.pathname = dashboardUrl.pathname.replace(/\/api\/dashboard\/?$/, `/api/${path}`);
+    dashboardUrl.search = '';
+    return dashboardUrl.toString();
+  }
+
+  if (path === 'dashboard') return dashboardUrl.toString();
+
+  dashboardUrl.pathname = `/api/${path}`;
+  dashboardUrl.search = '';
+  return dashboardUrl.toString();
+}
 
 function formatMoney(value: number): string {
   const sign = value < 0 ? '-' : '';
@@ -375,13 +391,58 @@ function EmailPanel({ config }: { config?: EmailConfig }) {
   );
 }
 
+function LoginScreen({
+  password,
+  error,
+  loading,
+  onPasswordChange,
+  onSubmit,
+}: {
+  password: string;
+  error: string;
+  loading: boolean;
+  onPasswordChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <main className="login-shell">
+      <section className="login-panel">
+        <span className="eyebrow">Panel financiero privado</span>
+        <h1>Mayeson</h1>
+        <p>Ingresa tu clave para ver el dashboard.</p>
+
+        <form className="login-form" onSubmit={onSubmit}>
+          <label htmlFor="password">Clave</label>
+          <input
+            id="password"
+            autoComplete="current-password"
+            autoFocus
+            type="password"
+            value={password}
+            onChange={(event) => onPasswordChange(event.target.value)}
+            placeholder="Tu clave privada"
+          />
+          {error ? <div className="login-error">{error}</div> : null}
+          <button type="submit" disabled={loading || !password.trim()}>
+            {loading ? 'Validando...' : 'Entrar'}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const [data, setData] = useState<DashboardData>(MOCK);
   const [tab, setTab] = useState<TabId>('inicio');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<ApiStatus>('demo');
+  const [token, setToken] = useState<string | null>(() => window.localStorage.getItem(SESSION_STORAGE_KEY));
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
 
-  const isConfigured = !API_URL.includes('TU_SCRIPT_ID') && API_KEY !== 'TU_API_KEY_SECRETA';
+  const isConfigured = !API_URL.includes('TU_SCRIPT_ID');
   const realExpenses = useMemo(() => getRealExpenses(data), [data]);
   const fixedExpenses = data.fijos || [];
   const totalCategorias = useMemo(
@@ -390,19 +451,31 @@ export default function App() {
   );
   const availableAfterCommitted = (data.ingresosMes ?? 0) - realExpenses.total;
 
-  const fetchData = useCallback(async () => {
-    if (!isConfigured) return;
+  const fetchData = useCallback(async (sessionToken?: string | null) => {
+    const activeToken = sessionToken ?? token;
+    if (!isConfigured || !activeToken) return;
 
     setLoading(true);
     try {
-      const url = new URL(API_URL);
-      url.searchParams.set('key', API_KEY);
-      url.searchParams.set('action', 'dashboard');
+      const url = new URL(apiEndpoint('dashboard'));
 
-      const response = await fetch(url.toString());
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+        },
+      });
+
+      if (response.status === 401) {
+        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+        setToken(null);
+        setAuthError('Sesion expirada. Ingresa nuevamente.');
+        setStatus('error');
+        return;
+      }
+
       const nextData = (await response.json()) as DashboardData;
 
-      if (nextData.ok === false || nextData.error) {
+      if (!response.ok || nextData.ok === false || nextData.error) {
         throw new Error(nextData.error || 'Respuesta invalida');
       }
 
@@ -414,17 +487,74 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [isConfigured]);
+  }, [isConfigured, token]);
+
+  const handleLogin = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const cleanPassword = password.trim();
+    if (!cleanPassword) return;
+
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      const response = await fetch(apiEndpoint('login'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: cleanPassword }),
+      });
+      const result = await response.json() as { ok?: boolean; token?: string; error?: string };
+
+      if (!response.ok || !result.ok || !result.token) {
+        throw new Error(result.error || 'No se pudo iniciar sesion');
+      }
+
+      window.localStorage.setItem(SESSION_STORAGE_KEY, result.token);
+      setToken(result.token);
+      setPassword('');
+      setStatus('demo');
+      await fetchData(result.token);
+    } catch (error) {
+      console.error('Login error:', error);
+      setAuthError('Clave incorrecta o API no disponible.');
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [fetchData, password]);
+
+  const handleLogout = useCallback(() => {
+    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    setToken(null);
+    setData(MOCK);
+    setStatus('demo');
+    setAuthError('');
+    void fetch(apiEndpoint('logout'), { method: 'POST' }).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+    if (!isConfigured || !token) return;
+    void fetchData(token);
+  }, [fetchData, isConfigured, token]);
 
   useEffect(() => {
-    if (!isConfigured) return undefined;
-    const timer = window.setInterval(() => void fetchData(), 60000);
+    if (!isConfigured || !token) return undefined;
+    const timer = window.setInterval(() => void fetchData(token), 60000);
     return () => window.clearInterval(timer);
-  }, [fetchData, isConfigured]);
+  }, [fetchData, isConfigured, token]);
+
+  if (isConfigured && !token) {
+    return (
+      <LoginScreen
+        password={password}
+        error={authError}
+        loading={authLoading}
+        onPasswordChange={setPassword}
+        onSubmit={handleLogin}
+      />
+    );
+  }
 
   return (
     <main className="app-shell">
@@ -438,6 +568,11 @@ export default function App() {
           <button className="refresh-btn" type="button" onClick={() => void fetchData()}>
             Actualizar
           </button>
+          {isConfigured ? (
+            <button className="refresh-btn" type="button" onClick={handleLogout}>
+              Salir
+            </button>
+          ) : null}
           <span className={`status-dot ${status}`} />
           <span>{status === 'live' ? `En vivo${data.source ? ` - ${data.source}` : ''}` : status === 'error' ? 'Error API' : 'Demo'}</span>
         </div>
