@@ -1,0 +1,11 @@
+name = "finanzas-d1-api"
+main = "src/index.js"
+compatibility_date = "2026-05-09"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "finanzas_mayeson"
+database_id = "7964ac92-2d13-4103-8b63-d9235e8cd526"

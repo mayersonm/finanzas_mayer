@@ -1,0 +1,16 @@
+{
+  "name": "finanzas-d1-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create finanzas_mayeson",
+    "db:migrate:local": "wrangler d1 migrations apply finanzas_mayeson --local",
+    "db:migrate:remote": "wrangler d1 migrations apply finanzas_mayeson --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.90.0"
+  }
+}

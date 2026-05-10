@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.vite/
+
+# Local env/secrets
+.env
+.env.*
+!.env.example
+.clasp.json
+.wrangler/
+
+# Backups and local generated files
+backups/
+*.log
+*.tmp
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
