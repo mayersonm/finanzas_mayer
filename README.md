@@ -47,6 +47,8 @@ npx wrangler secret put ADMIN_KEY
 npx wrangler secret put DEFAULT_CHAT_ID
 npx wrangler secret put GAS_API_URL
 npx wrangler secret put GAS_API_KEY
+npx wrangler secret put LOGIN_PASSWORD
+npx wrangler secret put SESSION_SECRET
 ```
 
 ## Comandos utiles
