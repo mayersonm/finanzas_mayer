@@ -40,6 +40,12 @@ export default {
         return json({ ok: true });
       }
 
+      if (url.pathname === '/api/password' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await changePassword(env, payload));
+      }
+
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json(await dashboard(env, url.searchParams));
@@ -97,6 +103,40 @@ async function login(env, payload) {
   if (!(await isValidLoginPassword(env, password))) {
     throw httpError(401, 'Credenciales invalidas');
   }
+
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = now + 60 * 60 * 12;
+  const token = await signSessionToken(env, {
+    sub: 'dashboard',
+    iat: now,
+    exp: expiresAt,
+  });
+
+  return {
+    ok: true,
+    token,
+    expiresAt,
+  };
+}
+
+async function changePassword(env, payload) {
+  const currentPassword = String(payload?.currentPassword || '');
+  const newPassword = String(payload?.newPassword || '');
+
+  if (!currentPassword || !newPassword) {
+    throw httpError(400, 'Password actual y nuevo password requeridos');
+  }
+
+  if (newPassword.length < 12) {
+    throw httpError(400, 'La nueva clave debe tener al menos 12 caracteres');
+  }
+
+  if (!(await isValidLoginPassword(env, currentPassword))) {
+    throw httpError(401, 'Clave actual invalida');
+  }
+
+  const passwordHash = await sha256Hex(newPassword);
+  await setAppSetting(env, 'dashboard_password_hash', passwordHash);
 
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = now + 60 * 60 * 12;
@@ -301,6 +341,27 @@ async function emailConfigFromGas(env) {
   } catch (_error) {
     return undefined;
   }
+}
+
+async function getAppSetting(env, key) {
+  try {
+    const row = await env.DB.prepare('SELECT value FROM app_settings WHERE key = ?')
+      .bind(key)
+      .first();
+    return row?.value ? String(row.value) : '';
+  } catch (_error) {
+    return '';
+  }
+}
+
+async function setAppSetting(env, key, value) {
+  await env.DB.prepare(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(key, value).run();
 }
 
 async function upsertTransaction(env, tx) {
@@ -558,6 +619,12 @@ function bearer(request) {
 }
 
 async function isValidLoginPassword(env, password) {
+  const storedHash = await getAppSetting(env, 'dashboard_password_hash');
+  if (storedHash) {
+    const providedHash = await sha256Hex(password);
+    return constantTimeEqual(providedHash, storedHash);
+  }
+
   if (env.LOGIN_PASSWORD_HASH) {
     const providedHash = await sha256Hex(password);
     return constantTimeEqual(providedHash, String(env.LOGIN_PASSWORD_HASH).toLowerCase());
