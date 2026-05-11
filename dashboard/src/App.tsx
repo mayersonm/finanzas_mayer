@@ -180,7 +180,7 @@ const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'metas', label: 'Metas' },
 ];
 
-function apiEndpoint(path: 'dashboard' | 'login' | 'session' | 'logout'): string {
+function apiEndpoint(path: 'dashboard' | 'login' | 'session' | 'logout' | 'password'): string {
   const dashboardUrl = new URL(API_URL);
 
   if (dashboardUrl.pathname.endsWith('/api/dashboard')) {
@@ -281,6 +281,76 @@ function StatCard({
   );
 }
 
+function HeroSummary({
+  data,
+  realExpenses,
+  availableAfterCommitted,
+}: {
+  data: DashboardData;
+  realExpenses: RealExpenses;
+  availableAfterCommitted: number;
+}) {
+  const monthIncome = data.ingresosMes ?? data.ingresos;
+  const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
+  const commitmentPct = monthIncome > 0 ? percent(realExpenses.total, monthIncome) : realExpenses.total > 0 ? 100 : 0;
+  const spendingPct = monthIncome > 0 ? percent(data.gastosMes, monthIncome) : data.gastosMes > 0 ? 100 : 0;
+
+  return (
+    <section className="hero-panel">
+      <div className="hero-copy">
+        <span className="eyebrow">Resumen de {data.mes}</span>
+        <h2 className={monthBalance >= 0 ? 'hero-title positive' : 'hero-title negative'}>
+          {formatMoney(monthBalance)}
+        </h2>
+        <p>
+          {availableAfterCommitted >= 0
+            ? `${formatMoney(availableAfterCommitted)} disponible estimado despues de fijos y presupuesto.`
+            : `${formatMoney(Math.abs(availableAfterCommitted))} por encima de tus compromisos del mes.`}
+        </p>
+      </div>
+
+      <div className="hero-metrics">
+        <div className="hero-metric good">
+          <span>Ingresos</span>
+          <strong>{formatMoney(monthIncome)}</strong>
+        </div>
+        <div className="hero-metric danger">
+          <span>Gastos</span>
+          <strong>{formatMoney(data.gastosMes)}</strong>
+        </div>
+        <div className="hero-metric info">
+          <span>Comprometido</span>
+          <strong>{commitmentPct}%</strong>
+        </div>
+        <div className="hero-metric warn">
+          <span>Uso de ingresos</span>
+          <strong>{spendingPct}%</strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function InsightCard({
+  label,
+  value,
+  detail,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: 'neutral' | 'good' | 'danger' | 'warn' | 'info';
+}) {
+  return (
+    <article className={`insight-card ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </article>
+  );
+}
+
 function TransactionRow({ tx }: { tx: Transaction }) {
   const isIncome = tx.tipo === 'ingreso';
 
@@ -291,10 +361,13 @@ function TransactionRow({ tx }: { tx: Transaction }) {
       </div>
       <div className="tx-main">
         <strong>{tx.desc}</strong>
-        <span>
-          {tx.cat} - {formatDate(tx.fecha)}
-          {tx.hora ? ` - ${tx.hora}` : ''}
-        </span>
+        <div className="tx-meta">
+          <span className="tx-chip">{tx.cat}</span>
+          <span>
+            {formatDate(tx.fecha)}
+            {tx.hora ? ` - ${tx.hora}` : ''}
+          </span>
+        </div>
       </div>
       <strong className={isIncome ? 'amount income' : 'amount expense'}>
         {isIncome ? '+' : '-'}
@@ -432,6 +505,78 @@ function LoginScreen({
   );
 }
 
+function PasswordPanel({
+  currentPassword,
+  newPassword,
+  confirmPassword,
+  error,
+  success,
+  loading,
+  onCurrentPasswordChange,
+  onNewPasswordChange,
+  onConfirmPasswordChange,
+  onSubmit,
+  onClose,
+}: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  error: string;
+  success: string;
+  loading: boolean;
+  onCurrentPasswordChange: (value: string) => void;
+  onNewPasswordChange: (value: string) => void;
+  onConfirmPasswordChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onClose: () => void;
+}) {
+  return (
+    <section className="settings-panel">
+      <div className="panel-head">
+        <h2>Cambiar clave</h2>
+        <button className="text-btn" type="button" onClick={onClose}>
+          Cerrar
+        </button>
+      </div>
+      <form className="password-form" onSubmit={onSubmit}>
+        <label htmlFor="current-password">Clave actual</label>
+        <input
+          id="current-password"
+          autoComplete="current-password"
+          type="password"
+          value={currentPassword}
+          onChange={(event) => onCurrentPasswordChange(event.target.value)}
+        />
+
+        <label htmlFor="new-password">Nueva clave</label>
+        <input
+          id="new-password"
+          autoComplete="new-password"
+          type="password"
+          value={newPassword}
+          onChange={(event) => onNewPasswordChange(event.target.value)}
+        />
+
+        <label htmlFor="confirm-password">Repetir nueva clave</label>
+        <input
+          id="confirm-password"
+          autoComplete="new-password"
+          type="password"
+          value={confirmPassword}
+          onChange={(event) => onConfirmPasswordChange(event.target.value)}
+        />
+
+        {error ? <div className="login-error">{error}</div> : null}
+        {success ? <div className="settings-success">{success}</div> : null}
+
+        <button type="submit" disabled={loading}>
+          {loading ? 'Guardando...' : 'Guardar clave'}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 export default function App() {
   const [data, setData] = useState<DashboardData>(MOCK);
   const [tab, setTab] = useState<TabId>('inicio');
@@ -441,6 +586,13 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [showPasswordPanel, setShowPasswordPanel] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   const isConfigured = !API_URL.includes('TU_SCRIPT_ID');
   const realExpenses = useMemo(() => getRealExpenses(data), [data]);
@@ -449,6 +601,10 @@ export default function App() {
     () => data.categorias.reduce((total, item) => total + item.monto, 0),
     [data.categorias],
   );
+  const topCategory = data.categorias[0];
+  const monthIncome = data.ingresosMes ?? data.ingresos;
+  const spendingRate = monthIncome > 0 ? percent(data.gastosMes, monthIncome) : data.gastosMes > 0 ? 100 : 0;
+  const commitmentRate = monthIncome > 0 ? percent(realExpenses.total, monthIncome) : realExpenses.total > 0 ? 100 : 0;
   const availableAfterCommitted = (data.ingresosMes ?? 0) - realExpenses.total;
 
   const fetchData = useCallback(async (sessionToken?: string | null) => {
@@ -533,6 +689,59 @@ export default function App() {
     void fetch(apiEndpoint('logout'), { method: 'POST' }).catch(() => undefined);
   }, []);
 
+  const handleChangePassword = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!token) return;
+    if (newPassword.length < 12) {
+      setPasswordError('La nueva clave debe tener al menos 12 caracteres.');
+      setPasswordSuccess('');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('La confirmacion no coincide.');
+      setPasswordSuccess('');
+      return;
+    }
+
+    setPasswordLoading(true);
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    try {
+      const response = await fetch(apiEndpoint('password'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+      const result = await response.json() as { ok?: boolean; token?: string; error?: string };
+
+      if (!response.ok || !result.ok || !result.token) {
+        throw new Error(result.error || 'No se pudo cambiar la clave');
+      }
+
+      window.localStorage.setItem(SESSION_STORAGE_KEY, result.token);
+      setToken(result.token);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordSuccess('Clave actualizada. Usa esta nueva clave en el proximo login.');
+      await fetchData(result.token);
+    } catch (error) {
+      console.error('Password change error:', error);
+      setPasswordError('No se pudo cambiar la clave. Revisa la clave actual.');
+    } finally {
+      setPasswordLoading(false);
+    }
+  }, [confirmPassword, currentPassword, fetchData, newPassword, token]);
+
   useEffect(() => {
     if (!isConfigured || !token) return;
     void fetchData(token);
@@ -559,24 +768,55 @@ export default function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
+        <div className="brand-lockup">
           <span className="eyebrow">Panel financiero</span>
-          <h1>Mayeson</h1>
+          <h1>Mayeson Finanzas</h1>
         </div>
         <div className="status-wrap">
-          <span>{loading ? 'Actualizando' : formatUpdatedAt(data.updatedAt)}</span>
-          <button className="refresh-btn" type="button" onClick={() => void fetchData()}>
+          <span className="updated-at">{loading ? 'Actualizando' : formatUpdatedAt(data.updatedAt)}</span>
+          <button className="refresh-btn primary" type="button" onClick={() => void fetchData()}>
             Actualizar
           </button>
           {isConfigured ? (
-            <button className="refresh-btn" type="button" onClick={handleLogout}>
-              Salir
-            </button>
+            <>
+              <button
+                className="refresh-btn"
+                type="button"
+                onClick={() => {
+                  setPasswordError('');
+                  setPasswordSuccess('');
+                  setShowPasswordPanel((value) => !value);
+                }}
+              >
+                Clave
+              </button>
+              <button className="refresh-btn danger" type="button" onClick={handleLogout}>
+                Salir
+              </button>
+            </>
           ) : null}
-          <span className={`status-dot ${status}`} />
-          <span>{status === 'live' ? `En vivo${data.source ? ` - ${data.source}` : ''}` : status === 'error' ? 'Error API' : 'Demo'}</span>
+          <span className={`status-pill ${status}`}>
+            <span className={`status-dot ${status}`} />
+            {status === 'live' ? `En vivo${data.source ? ` - ${data.source}` : ''}` : status === 'error' ? 'Error API' : 'Demo'}
+          </span>
         </div>
       </header>
+
+      {showPasswordPanel ? (
+        <PasswordPanel
+          currentPassword={currentPassword}
+          newPassword={newPassword}
+          confirmPassword={confirmPassword}
+          error={passwordError}
+          success={passwordSuccess}
+          loading={passwordLoading}
+          onCurrentPasswordChange={setCurrentPassword}
+          onNewPasswordChange={setNewPassword}
+          onConfirmPasswordChange={setConfirmPassword}
+          onSubmit={handleChangePassword}
+          onClose={() => setShowPasswordPanel(false)}
+        />
+      ) : null}
 
       <nav className="tabs" aria-label="Secciones">
         {tabs.map((item) => (
@@ -592,6 +832,30 @@ export default function App() {
       </nav>
 
       {tab === 'inicio' ? (
+        <>
+        <HeroSummary data={data} realExpenses={realExpenses} availableAfterCommitted={availableAfterCommitted} />
+
+        <section className="insight-grid">
+          <InsightCard
+            label="Categoria principal"
+            value={topCategory ? topCategory.cat : 'Sin gastos'}
+            detail={topCategory ? `${formatMoney(topCategory.monto)} este mes` : 'Aun no hay gastos agrupados'}
+            tone="info"
+          />
+          <InsightCard
+            label="Uso de ingresos"
+            value={`${spendingRate}%`}
+            detail="Gastos del mes vs ingresos"
+            tone={spendingRate >= 100 ? 'danger' : spendingRate >= 75 ? 'warn' : 'good'}
+          />
+          <InsightCard
+            label="Compromisos"
+            value={`${commitmentRate}%`}
+            detail="Fijos + presupuesto vs ingresos"
+            tone={commitmentRate >= 100 ? 'danger' : commitmentRate >= 80 ? 'warn' : 'neutral'}
+          />
+        </section>
+
         <div className="content-grid">
           <section className="stats-grid">
             <div className="wide">
@@ -676,6 +940,7 @@ export default function App() {
             </div>
           </section>
         </div>
+        </>
       ) : null}
 
       {tab === 'movimientos' ? (
