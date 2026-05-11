@@ -19,7 +19,7 @@ function registrarMovimiento(chatId, match, originalText) {
         || crearHojaTransacciones();
 
     sheet.appendRow([fecha, hora, tipo, desc, cat.toLowerCase(), monto, chatId]);
-    guardarTransaccionD1({
+    const d1Ok = guardarTransaccionD1({
         chatId: chatId,
         fecha: fecha,
         hora: hora,
@@ -47,7 +47,8 @@ function registrarMovimiento(chatId, match, originalText) {
         `📅 ${fecha}
 
 ` +
-        `_Escribe *balance* para ver tu saldo._`,
+        `_Escribe *balance* para ver tu saldo._` +
+        (d1Ok ? '' : '\n\n⚠️ Guardado en Sheets, pero D1 no respondió. El dashboard puede no verlo al instante.'),
         true
     );
     // Alerta si supera el presupuesto de esta categoría
