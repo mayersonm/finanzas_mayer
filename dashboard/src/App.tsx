@@ -480,9 +480,14 @@ function LoginScreen({
   return (
     <main className="login-shell">
       <section className="login-panel">
+        <div className="login-brand-mark">MF</div>
         <span className="eyebrow">Panel financiero privado</span>
-        <h1>Mayeson</h1>
-        <p>Ingresa tu clave para ver el dashboard.</p>
+        <h1>Mayeson Finanzas</h1>
+        <p>Tu resumen personal de gastos, compromisos y metas en un solo lugar.</p>
+        <div className="login-badges">
+          <span>D1 en vivo</span>
+          <span>Acceso privado</span>
+        </div>
 
         <form className="login-form" onSubmit={onSubmit}>
           <label htmlFor="password">Clave</label>
