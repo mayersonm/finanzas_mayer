@@ -1,0 +1,18 @@
+import { Badge, Card, Text, Title } from '@tremor/react';
+import { TransactionsTable } from '../../components/dashboard/TransactionsTable';
+import type { DashboardData } from '../../types/dashboard';
+
+export function MovementsSection({ data }: { data: DashboardData }) {
+  return (
+    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Title>Movimientos</Title>
+          <Text>{data.transacciones.length} registros recientes</Text>
+        </div>
+        <Badge color="emerald">{data.mes}</Badge>
+      </div>
+      <TransactionsTable transactions={data.transacciones} />
+    </Card>
+  );
+}
