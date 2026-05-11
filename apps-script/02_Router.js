@@ -59,6 +59,13 @@ function handleMessage(chatId, text) {
     case 'correo':
     case 'correos':
     case 'email': return cmdCorreo(chatId, text.trim());
+
+    case '/d1':
+    case 'd1':
+    case 'd1 estado': return cmdD1Estado(chatId);
+
+    case 'd1 configurar':
+    case 'configurar d1': return cmdConfigurarD1(chatId);
   }
 
   // ── COMANDOS CON PARÁMETROS ──────────────────────────────

@@ -2,7 +2,7 @@
 // Escritura doble: Sheets sigue como respaldo y D1 recibe la copia principal.
 //
 // Script Properties:
-//   d1_api_url   = https://tu-worker.workers.dev
+//   d1_api_url   = https://finanzas-d1-api.mayersonm.workers.dev
 //   d1_admin_key = clave ADMIN_KEY del Worker
 
 function guardarTransaccionD1(tx) {
@@ -47,6 +47,67 @@ function guardarTransaccionD1(tx) {
     Logger.log('Error guardarTransaccionD1: ' + err);
     return false;
   }
+}
+
+function cmdD1Estado(chatId) {
+  if (!esAdminD1_(chatId)) {
+    return sendMessage(chatId, 'No autorizado.');
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const apiUrl = props.getProperty('d1_api_url');
+  const adminKey = props.getProperty('d1_admin_key');
+
+  if (!apiUrl || !adminKey) {
+    return sendMessage(
+      chatId,
+      '⚠️ *D1 no está configurado*\n\nEnvia `d1 configurar` y luego registra un gasto de prueba.',
+      true
+    );
+  }
+
+  try {
+    const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/health', {
+      method: 'get',
+      muteHttpExceptions: true,
+    });
+    const code = resp.getResponseCode();
+    const body = JSON.parse(resp.getContentText() || '{}');
+
+    return sendMessage(
+      chatId,
+      `✅ *D1 configurado*\n\n` +
+      `Worker: HTTP ${code}\n` +
+      `Transacciones en D1: ${body.transactions || 0}\n` +
+      `Fijos en D1: ${body.fixedExpenses || 0}`,
+      true
+    );
+  } catch (err) {
+    return sendMessage(
+      chatId,
+      '⚠️ D1 está configurado, pero no pude conectar con el Worker.\n\n' + String(err),
+      true
+    );
+  }
+}
+
+function cmdConfigurarD1(chatId) {
+  if (!esAdminD1_(chatId)) {
+    return sendMessage(chatId, 'No autorizado.');
+  }
+
+  configurarD1Worker();
+  return sendMessage(
+    chatId,
+    '✅ *D1 configurado*\n\nAhora registra un gasto y luego pulsa *Actualizar* en el dashboard.',
+    true
+  );
+}
+
+function esAdminD1_(chatId) {
+  const props = PropertiesService.getScriptProperties();
+  const adminChatId = props.getProperty('dashboard_chat_id') || '1538086276';
+  return String(chatId).trim() === String(adminChatId).trim();
 }
 
 function crearIdTransaccionD1_(tx) {
