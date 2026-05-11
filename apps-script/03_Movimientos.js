@@ -9,7 +9,7 @@ function registrarMovimiento(chatId, match, originalText) {
         : capitalizar(cat);
 
     if (isNaN(monto) || monto <= 0) {
-        return sendMessage(chatId, 'âŒ El monto debe ser un nÃºmero positivo. Ej: *gasto 45.50 comida almuerzo*', true);
+        return sendMessage(chatId, '❌ El monto debe ser un número positivo. Ej: *gasto 45.50 comida almuerzo*', true);
     }
 
     const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
@@ -31,32 +31,32 @@ function registrarMovimiento(chatId, match, originalText) {
     });
     
 
-    const emoji = tipo === 'gasto' ? 'ðŸ“¤' : 'ðŸ“¥';
-    const color = tipo === 'gasto' ? 'ðŸ”´' : 'ðŸŸ¢';
+    const emoji = tipo === 'gasto' ? '📤' : '📥';
+    const color = tipo === 'gasto' ? '🔴' : '🟢';
 
     sendMessage(chatId,
-        `${emoji} *Â¡Registrado!*
+        `${emoji} *¡Registrado!*
 
 ` +
         `${color} ${desc}
 ` +
-        `ðŸ’µ S/ ${monto.toFixed(2)}
+        `💵 S/ ${monto.toFixed(2)}
 ` +
-        `ðŸ·ï¸ ${capitalizar(cat)}
+        `🏷️ ${capitalizar(cat)}
 ` +
-        `ðŸ“… ${fecha}
+        `📅 ${fecha}
 
 ` +
         `_Escribe *balance* para ver tu saldo._`,
         true
     );
-    // Alerta si supera el presupuesto de esta categorÃ­a
+    // Alerta si supera el presupuesto de esta categoría
     if (tipo === 'gasto') verificarPresupuesto(chatId, cat);
 }
 
 // ---- PRESUPUESTO MENSUAL -----------------------------------
 // Guarda los presupuestos en la hoja "Presupuestos"
-// Columnas: ChatID | CategorÃ­a | Limite
+// Columnas: ChatID | Categoría | Limite
 
 function cmdPresupuesto(chatId, text) {
     const parts = text.split(' ');
@@ -68,10 +68,10 @@ function cmdPresupuesto(chatId, text) {
 
     if (!cat || isNaN(limit) || limit <= 0) {
         return sendMessage(chatId,
-            'âŒ Formato: *presupuesto [categorÃ­a] [monto]* Ej: presupuesto comida 500', true);
+            '❌ Formato: *presupuesto [categoría] [monto]* Ej: presupuesto comida 500', true);
     }
 
-    const sheet = getOrCreateSheet('Presupuestos', ['ChatID', 'CategorÃ­a', 'LÃ­mite']);
+    const sheet = getOrCreateSheet('Presupuestos', ['ChatID', 'Categoría', 'Límite']);
     const data = sheet.getDataRange().getValues();
 
     // Actualiza si ya existe, si no agrega fila nueva
@@ -79,35 +79,35 @@ function cmdPresupuesto(chatId, text) {
         if (String(data[i][0]) === chatId && normalizarCat(data[i][1]) === cat) {
             sheet.getRange(i + 1, 3).setValue(limit);
             return sendMessage(chatId,
-                `âœ… Presupuesto actualizado
+                `✅ Presupuesto actualizado
 
-ðŸ·ï¸ ${capitalizar(cat)}
-ðŸ’° S/ ${limit.toFixed(2)} / mes`, true);
+🏷️ ${capitalizar(cat)}
+💰 S/ ${limit.toFixed(2)} / mes`, true);
         }
     }
     sheet.appendRow([chatId, cat, limit]);
     sendMessage(chatId,
-        `âœ… Presupuesto guardado
+        `✅ Presupuesto guardado
 
-ðŸ·ï¸ ${capitalizar(cat)}
-ðŸ’° S/ ${limit.toFixed(2)} / mes
+🏷️ ${capitalizar(cat)}
+💰 S/ ${limit.toFixed(2)} / mes
 
 _Escribe *presupuesto* para ver todos._`, true);
 }
 
 function mostrarPresupuestos(chatId) {
-    const sheet = getOrCreateSheet('Presupuestos', ['ChatID', 'CategorÃ­a', 'LÃ­mite']);
+    const sheet = getOrCreateSheet('Presupuestos', ['ChatID', 'Categoría', 'Límite']);
     const data = sheet.getDataRange().getValues().slice(1)
         .filter(r => String(r[0]) === chatId);
 
     if (!data.length) {
         return sendMessage(chatId,
-            'ðŸ“­ No tienes presupuestos. Crea uno: `presupuesto comida 500`', true);
+            '📭 No tienes presupuestos. Crea uno: `presupuesto comida 500`', true);
     }
 
     const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
     const gastosCat = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {};
-    let msg = `ðŸ“Š *Presupuestos â€” ${mes}*
+    let msg = `📊 *Presupuestos — ${mes}*
 
 `;
 
@@ -116,7 +116,7 @@ function mostrarPresupuestos(chatId) {
         const limite = parseFloat(r[2]);
         const gasto = gastosCat[cat.toLowerCase()] || 0;
         const pct = Math.min(Math.round((gasto / limite) * 100), 100);
-        const estado = pct >= 100 ? 'ðŸ”´' : pct >= 80 ? 'ðŸŸ¡' : 'ðŸŸ¢';
+        const estado = pct >= 100 ? '🔴' : pct >= 80 ? '🟡' : '🟢';
         msg += `${estado} *${capitalizar(cat)}*
 `;
         msg += `${buildBar(pct)} ${pct}%
@@ -131,7 +131,7 @@ function mostrarPresupuestos(chatId) {
 
 
 function verificarPresupuesto(chatId, cat) {
-  const sheet = getOrCreateSheet('Presupuestos', ['ChatID','CategorÃ­a','LÃ­mite']);
+  const sheet = getOrCreateSheet('Presupuestos', ['ChatID','Categoría','Límite']);
   const fila  = sheet.getDataRange().getValues().slice(1)
     .find(r => String(r[0]) === chatId && r[1].toLowerCase() === cat.toLowerCase());
 
@@ -139,17 +139,17 @@ function verificarPresupuesto(chatId, cat) {
 
   const limite    = parseFloat(fila[2]);
   const mes       = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
-  const porCat    = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {}; // â† fix
+  const porCat    = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {}; // ← fix
   const gasto     = porCat[cat.toLowerCase()] || 0;
   const pct       = Math.round((gasto / limite) * 100);
 
   if (pct >= 100) {
     sendMessage(chatId,
-      `ðŸ”´ *Â¡Presupuesto superado!*\n` +
+      `🔴 *¡Presupuesto superado!*\n` +
       `${capitalizar(cat)}: S/ ${gasto.toFixed(2)} / S/ ${limite.toFixed(2)}`, true);
   } else if (pct >= 80) {
     sendMessage(chatId,
-      `ðŸŸ¡ *Alerta:* llevas el ${pct}% de ${capitalizar(cat)}\n` +
+      `🟡 *Alerta:* llevas el ${pct}% de ${capitalizar(cat)}\n` +
       `S/ ${gasto.toFixed(2)} de S/ ${limite.toFixed(2)}`, true);
   }
 }
@@ -166,7 +166,7 @@ function cmdMetas(chatId, text) {
     if (!nombre || isNaN(objetivo) || objetivo <= 0) {
         return sendMessage(
             chatId,
-            'âŒ Formato:\n*meta [nombre] [objetivo]*\nEj: meta viaje europa 3000',
+            '❌ Formato:\n*meta [nombre] [objetivo]*\nEj: meta viaje europa 3000',
             true
         );
     }
@@ -186,7 +186,7 @@ function cmdMetas(chatId, text) {
     if (existe) {
         return sendMessage(
             chatId,
-            `âš ï¸ Ya tienes una meta llamada *${capitalizar(nombre)}*.\nUsa *ahorrar ${nombre} [monto]* para sumar.`,
+            `⚠️ Ya tienes una meta llamada *${capitalizar(nombre)}*.\nUsa *ahorrar ${nombre} [monto]* para sumar.`,
             true
         );
     }
@@ -207,8 +207,8 @@ function cmdMetas(chatId, text) {
 
     sendMessage(
         chatId,
-        `ðŸŽ¯ *Meta creada!* ðŸ“Œ ${capitalizar(nombre)}
-         ðŸ’° Objetivo: S/ ${objetivo.toFixed(2)}
+        `🎯 *Meta creada!* 📌 ${capitalizar(nombre)}
+         💰 Objetivo: S/ ${objetivo.toFixed(2)}
          Usa: *ahorrar ${nombre} [monto]*`,
         true
     );
@@ -222,7 +222,7 @@ function cmdAhorrar(chatId, text) {
 
     if (!nombre || isNaN(monto) || monto <= 0) {
         return sendMessage(chatId,
-            'âŒ Formato:\n*ahorrar [meta] [monto]*\nEj: ahorrar viaje 200', true);
+            '❌ Formato:\n*ahorrar [meta] [monto]*\nEj: ahorrar viaje 200', true);
     }
 
     const sheet = getOrCreateSheet('Metas', ['ChatID', 'Nombre', 'Objetivo', 'Ahorrado', 'Creada']);
@@ -243,20 +243,20 @@ function cmdAhorrar(chatId, text) {
 
             return sendMessage(
                 chatId,
-                (completada ? `ðŸ† *Â¡Meta alcanzada!*\n\n` : `ðŸ’ª *Ahorro registrado!*\n\n`) +
-                `ðŸ“Œ ${capitalizar(nombre)}\n` +
+                (completada ? `🏆 *¡Meta alcanzada!*\n\n` : `💪 *Ahorro registrado!*\n\n`) +
+                `📌 ${capitalizar(nombre)}\n` +
                 `${buildBar(pct)} ${pct}%\n\n` +
-                `ðŸ’° S/ ${nuevo.toFixed(2)} de S/ ${objetivo.toFixed(2)}\n` +
+                `💰 S/ ${nuevo.toFixed(2)} de S/ ${objetivo.toFixed(2)}\n` +
                 (completada
-                    ? `\nðŸŽ‰ Â¡Lo lograste!`
-                    : `\nâ³ Faltan S/ ${(objetivo - nuevo).toFixed(2)}`),
+                    ? `\n🎉 ¡Lo lograste!`
+                    : `\n⏳ Faltan S/ ${(objetivo - nuevo).toFixed(2)}`),
                 true
             );
         }
     }
 
     sendMessage(chatId,
-        `âŒ No encontrÃ© la meta *${capitalizar(nombre)}*.\nEscribe *metas* para ver tus metas.`, true);
+        `❌ No encontré la meta *${capitalizar(nombre)}*.\nEscribe *metas* para ver tus metas.`, true);
 }
 
 function mostrarMetas(chatId) {
@@ -266,23 +266,23 @@ function mostrarMetas(chatId) {
 
   if (!data.length) {
     return sendMessage(chatId,
-      'ðŸ“­ No tienes metas de ahorro.\n\nCrea una:\n`meta viaje 3000`', true);
+      '📭 No tienes metas de ahorro.\n\nCrea una:\n`meta viaje 3000`', true);
   }
 
-  let msg = `ðŸŽ¯ *Tus metas de ahorro*\n\n`;
+  let msg = `🎯 *Tus metas de ahorro*\n\n`;
 
   data.forEach(r => {
     const ahorrado = parseFloat(r[3]);
     const objetivo = parseFloat(r[2]);
     const pct      = Math.min(Math.round((ahorrado / objetivo) * 100), 100);
     const faltan   = objetivo - ahorrado;
-    const emoji    = pct >= 100 ? 'ðŸ†' : pct >= 50 ? 'ðŸ’ª' : 'ðŸŽ¯';
+    const emoji    = pct >= 100 ? '🏆' : pct >= 50 ? '💪' : '🎯';
 
     msg += `- ${emoji} *${capitalizar(r[1])}*\n`;
     msg += `${buildBar(pct)} ${pct}%\n`;
     msg += `S/ ${ahorrado.toFixed(2)} / S/ ${objetivo.toFixed(2)}\n`;
     msg += pct >= 100
-      ? `Â¡Meta completada! ðŸŽ‰\n`
+      ? `¡Meta completada! 🎉\n`
       : `Faltan S/ ${faltan.toFixed(2)}\n`;
     msg += `\n`;
   });
