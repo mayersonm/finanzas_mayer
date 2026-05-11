@@ -14,6 +14,10 @@ import { OverviewSection } from './features/overview/OverviewSection';
 import { getRealExpenses } from './lib/finance';
 import type { ApiStatus, DashboardData, TabId } from './types/dashboard';
 
+interface FetchOptions {
+  sync?: boolean;
+}
+
 export default function App() {
   const [data, setData] = useState<DashboardData>(MOCK_DASHBOARD);
   const [tab, setTab] = useState<TabId>('inicio');
@@ -34,12 +38,34 @@ export default function App() {
   const configured = isApiConfigured();
   const realExpenses = useMemo(() => getRealExpenses(data), [data]);
 
-  const fetchData = useCallback(async (sessionToken?: string | null) => {
+  const fetchData = useCallback(async (sessionToken?: string | null, options: FetchOptions = {}) => {
     const activeToken = sessionToken ?? token;
     if (!configured || !activeToken) return;
 
     setLoading(true);
     try {
+      if (options.sync) {
+        const syncResponse = await fetch(apiEndpoint('sync'), {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+          },
+        });
+
+        if (syncResponse.status === 401) {
+          window.localStorage.removeItem(SESSION_STORAGE_KEY);
+          setToken(null);
+          setAuthError('Sesion expirada. Ingresa nuevamente.');
+          setStatus('error');
+          return;
+        }
+
+        const syncData = (await syncResponse.json()) as { ok?: boolean; error?: string };
+        if (!syncResponse.ok || syncData.ok === false) {
+          throw new Error(syncData.error || 'No se pudo sincronizar con Sheets');
+        }
+      }
+
       const url = new URL(apiEndpoint('dashboard'));
 
       const response = await fetch(url.toString(), {
@@ -199,7 +225,7 @@ export default function App() {
         loading={loading}
         status={status}
         isConfigured={configured}
-        onRefresh={() => void fetchData()}
+        onRefresh={() => void fetchData(undefined, { sync: true })}
         onTogglePasswordPanel={() => {
           setPasswordError('');
           setPasswordSuccess('');

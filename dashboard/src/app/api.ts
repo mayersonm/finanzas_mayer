@@ -1,6 +1,6 @@
 import { API_URL } from './config';
 
-type ApiPath = 'dashboard' | 'login' | 'session' | 'logout' | 'password';
+type ApiPath = 'dashboard' | 'login' | 'session' | 'logout' | 'password' | 'sync';
 
 export function apiEndpoint(path: ApiPath): string {
   const dashboardUrl = new URL(API_URL);
