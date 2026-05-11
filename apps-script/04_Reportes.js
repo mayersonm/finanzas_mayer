@@ -11,13 +11,13 @@ function sendBalance(chatId) {
   });
 
   const balance = ingresos - gastos;
-  const emoji   = balance >= 0 ? 'ðŸŸ¢' : 'ðŸ”´';
+  const emoji   = balance >= 0 ? '🟢' : '🔴';
 
   sendMessage(chatId,
-    `ðŸ’° *Tu Balance*\n\n` +
-    `ðŸ“¥ Ingresos:  S/ ${ingresos.toFixed(2)}\n` +
-    `ðŸ“¤ Gastos:    S/ ${gastos.toFixed(2)}\n` +
-    `â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€\n` +
+    `💰 *Tu Balance*\n\n` +
+    `📥 Ingresos:  S/ ${ingresos.toFixed(2)}\n` +
+    `📤 Gastos:    S/ ${gastos.toFixed(2)}\n` +
+    `─────────────────\n` +
     `${emoji} Balance: S/ ${balance.toFixed(2)}\n\n` +
     `_${data.length} movimiento${data.length !== 1 ? 's' : ''} en total_`,
     true
@@ -33,10 +33,10 @@ function sendResumen(chatId) {
     .filter(row => Utilities.formatDate(new Date(row[0]), 'America/Lima', 'yyyy-MM') === mesActual);
 
   if (data.length === 0) {
-    return sendMessage(chatId, 'ðŸ“­ No hay movimientos este mes todavÃ­a.');
+    return sendMessage(chatId, '📭 No hay movimientos este mes todavía.');
   }
 
-  // Solo calcula totales â€” categorÃ­as las maneja obtenerGastosPorMesCat
+  // Solo calcula totales — categorías las maneja obtenerGastosPorMesCat
   let ingresos = 0, gastos = 0;
   data.forEach(row => {
     const monto = parseFloat(row[5]) || 0;
@@ -44,11 +44,11 @@ function sendResumen(chatId) {
     else                      gastos   += monto;
   });
 
-  // CategorÃ­as agrupadas y normalizadas (siempre minÃºscula)
+  // Categorías agrupadas y normalizadas (siempre minúscula)
   const porCat    = (obtenerGastosPorMesCat(chatId, mesActual)[mesActual]) || {};
   const lineasCat = Object.entries(porCat)
     .sort((a, b) => b[1] - a[1])
-    .map(([cat, monto]) => `  â€¢ ${capitalizar(cat)}: S/ ${monto.toFixed(2)}`)
+    .map(([cat, monto]) => `  • ${capitalizar(cat)}: S/ ${monto.toFixed(2)}`)
     .join('\n');
 
   const meses     = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -56,22 +56,22 @@ function sendResumen(chatId) {
   const nombreMes = meses[hoy.getMonth()];
 
   sendMessage(chatId,
-    `ðŸ“Š *Resumen de ${nombreMes}*\n\n` +
-    `ðŸ“¥ Ingresos: S/ ${ingresos.toFixed(2)}\n` +
-    `ðŸ“¤ Gastos:   S/ ${gastos.toFixed(2)}\n` +
-    `ðŸ’° Balance:  S/ ${(ingresos - gastos).toFixed(2)}\n\n` +
-    `*Gastos por categorÃ­a:*\n${lineasCat || '  (sin gastos)'}`,
+    `📊 *Resumen de ${nombreMes}*\n\n` +
+    `📥 Ingresos: S/ ${ingresos.toFixed(2)}\n` +
+    `📤 Gastos:   S/ ${gastos.toFixed(2)}\n` +
+    `💰 Balance:  S/ ${(ingresos - gastos).toFixed(2)}\n\n` +
+    `*Gastos por categoría:*\n${lineasCat || '  (sin gastos)'}`,
     true
   );
 }
 
 
-// ---- ÃšLTIMAS 5 TRANSACCIONES
+// ---- ÚLTIMAS 5 TRANSACCIONES
 function sendUltimos(chatId) {
   const data = obtenerTransacciones(chatId).slice(-5).reverse();
 
   if (data.length === 0) {
-    return sendMessage(chatId, 'ðŸ“­ No tienes movimientos registrados aÃºn.');
+    return sendMessage(chatId, '📭 No tienes movimientos registrados aún.');
   }
 
   const lineas = data.map(row => {
@@ -79,28 +79,28 @@ function sendUltimos(chatId) {
     const desc  = row[3];
     const monto = parseFloat(row[5]).toFixed(2);
     const fecha = row[0];
-    const emoji = tipo === 'gasto' ? 'ðŸ”´' : 'ðŸŸ¢';
-    return `${emoji} ${desc} â€” S/ ${monto} _(${Utilities.formatDate(new Date(fecha), Session.getScriptTimeZone(), 'dd/MM/yyyy')})_`;
+    const emoji = tipo === 'gasto' ? '🔴' : '🟢';
+    return `${emoji} ${desc} — S/ ${monto} _(${Utilities.formatDate(new Date(fecha), Session.getScriptTimeZone(), 'dd/MM/yyyy')})_`;
   }).join('\n');
 
-  sendMessage(chatId, `ðŸ“‹ *Ãšltimos movimientos:*\n\n${lineas}`, true);
+  sendMessage(chatId, `📋 *Últimos movimientos:*\n\n${lineas}`, true);
 }
 // ---- EXPORTAR A CSV
 function cmdExportar(chatId) {
-  sendMessage(chatId, 'â³ Generando tu historial...', true);
+  sendMessage(chatId, '⏳ Generando tu historial...', true);
 
   const data = obtenerTransacciones(chatId);
   if (!data.length) {
-    return sendMessage(chatId, 'ðŸ“­ No tienes transacciones para exportar.');
+    return sendMessage(chatId, '📭 No tienes transacciones para exportar.');
   }
 
   const bom    = '\uFEFF';
-  const header = 'Fecha,Hora,Tipo,DescripciÃ³n,CategorÃ­a,Monto\n';
+  const header = 'Fecha,Hora,Tipo,Descripción,Categoría,Monto\n';
   const rows   = data.map(r => {
     const fecha = Utilities.formatDate(new Date(r[0]), 'America/Lima', 'dd/MM/yyyy');
     const hora  = Utilities.formatDate(new Date(r[1]), 'America/Lima', 'HH:mm');
     const tipo  = r[2];
-    const desc  = String(r[3]).replace(/"/g, '""'); // escapa comillas en descripciÃ³n
+    const desc  = String(r[3]).replace(/"/g, '""'); // escapa comillas en descripción
     const cat   = r[4];
     const monto = parseFloat(r[5]).toFixed(2);
     return `${fecha},${hora},${tipo},"${desc}",${cat},${monto}`;
@@ -118,7 +118,7 @@ function cmdExportar(chatId) {
 }
 
 
-// ---- REPORTE SEMANAL AUTOMÃTICO
+// ---- REPORTE SEMANAL AUTOMÁTICO
 // Ejecuta setupReporteSemanal() UNA sola vez desde el editor
 // para crear el trigger que corre cada lunes a las 8AM Lima
 
@@ -126,7 +126,7 @@ function reporteSemanal() {
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
   if (!sheet) return;
 
-  // ObtÃ©n todos los chatIds Ãºnicos
+  // Obtén todos los chatIds únicos
   const chatIds = [...new Set(
     sheet.getDataRange().getValues().slice(1).map(r => String(r[6])).filter(Boolean)
   )];
@@ -149,7 +149,7 @@ function enviarReporteSemanal(chatId) {
 
   if (!txs.length) return;
 
-  // Totales y categorÃ­as solo de las transacciones de esa semana
+  // Totales y categorías solo de las transacciones de esa semana
   let ingresos = 0, gastos = 0;
   const porCat = {};
 
@@ -159,24 +159,24 @@ function enviarReporteSemanal(chatId) {
       ingresos += monto;
     } else {
       gastos += monto;
-      const cat = String(r[4]).toLowerCase(); // normaliza a minÃºscula
+      const cat = String(r[4]).toLowerCase(); // normaliza a minúscula
       porCat[cat] = (porCat[cat] || 0) + monto;
     }
   });
 
   const topCats = Object.entries(porCat)
     .sort((a, b) => b[1] - a[1]).slice(0, 3)
-    .map(([cat, m]) => `  â€¢ ${capitalizar(cat)}: S/ ${m.toFixed(2)}`)
+    .map(([cat, m]) => `  • ${capitalizar(cat)}: S/ ${m.toFixed(2)}`)
     .join('\n');
 
-  const rango = `${Utilities.formatDate(lunes,   'America/Lima', 'dd MMM')} â€“ ` +
+  const rango = `${Utilities.formatDate(lunes,   'America/Lima', 'dd MMM')} – ` +
                 `${Utilities.formatDate(domingo, 'America/Lima', 'dd MMM')}`;
 
   sendMessage(chatId,
-    `ðŸ“… *Reporte semanal*\n_${rango}_\n\n` +
-    `ðŸ“¥ Ingresos: S/ ${ingresos.toFixed(2)}\n` +
-    `ðŸ“¤ Gastos:   S/ ${gastos.toFixed(2)}\n` +
-    `ðŸ’° Balance:  S/ ${(ingresos - gastos).toFixed(2)}\n\n` +
+    `📅 *Reporte semanal*\n_${rango}_\n\n` +
+    `📥 Ingresos: S/ ${ingresos.toFixed(2)}\n` +
+    `📤 Gastos:   S/ ${gastos.toFixed(2)}\n` +
+    `💰 Balance:  S/ ${(ingresos - gastos).toFixed(2)}\n\n` +
     (topCats ? `*Top gastos:*\n${topCats}\n\n` : '') +
     `_${txs.length} movimiento${txs.length !== 1 ? 's' : ''} esta semana_`,
     true
@@ -197,7 +197,7 @@ function sendResumenDiario(chatId) {
   );
 
   if (!txsHoy.length) {
-    return sendMessage(chatId, 'ðŸ“­ No registraste ningÃºn movimiento hoy.');
+    return sendMessage(chatId, '📭 No registraste ningún movimiento hoy.');
   }
 
   let ingresos = 0, gastos = 0;
@@ -216,23 +216,23 @@ function sendResumenDiario(chatId) {
 
   const lineasCat = Object.entries(porCat)
     .sort((a, b) => b[1] - a[1])
-    .map(([cat, m]) => `  â€¢ ${capitalizar(cat)}: S/ ${m.toFixed(2)}`)
+    .map(([cat, m]) => `  • ${capitalizar(cat)}: S/ ${m.toFixed(2)}`)
     .join('\n');
 
   const fechaFmt = Utilities.formatDate(new Date(), 'America/Lima', 'dd/MM/yyyy');
 
   sendMessage(chatId,
-    `ðŸŒ™ *Resumen del dÃ­a â€” ${fechaFmt}*\n\n` +
-    `ðŸ“¥ Ingresos: S/ ${ingresos.toFixed(2)}\n` +
-    `ðŸ“¤ Gastos:   S/ ${gastos.toFixed(2)}\n` +
-    `ðŸ’° Balance:  S/ ${(ingresos - gastos).toFixed(2)}\n\n` +
-    (lineasCat ? `*Por categorÃ­a:*\n${lineasCat}\n\n` : '') +
+    `🌙 *Resumen del día — ${fechaFmt}*\n\n` +
+    `📥 Ingresos: S/ ${ingresos.toFixed(2)}\n` +
+    `📤 Gastos:   S/ ${gastos.toFixed(2)}\n` +
+    `💰 Balance:  S/ ${(ingresos - gastos).toFixed(2)}\n\n` +
+    (lineasCat ? `*Por categoría:*\n${lineasCat}\n\n` : '') +
     `_${txsHoy.length} movimiento${txsHoy.length !== 1 ? 's' : ''} hoy_`,
     true
   );
 }
 
-// Llamada automÃ¡ticamente por el trigger cada noche
+// Llamada automáticamente por el trigger cada noche
 function resumenDiarioAutomatico() {
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
   if (!sheet) return;
@@ -257,7 +257,7 @@ function resumenDiarioAutomatico() {
   }
 }
 
-// ---- BÃšSQUEDA DE TRANSACCIONES -----------------------------
+// ---- BÚSQUEDA DE TRANSACCIONES -----------------------------
 // buscar almuerzo
 // buscar kfc
 // buscar freelance
@@ -267,7 +267,7 @@ function cmdBuscar(chatId, text) {
 
   if (!query || query.length < 2) {
     return sendMessage(chatId,
-      'âŒ Escribe al menos 2 caracteres.\nEj: `buscar almuerzo`', true);
+      '❌ Escribe al menos 2 caracteres.\nEj: `buscar almuerzo`', true);
   }
 
   const resultados = obtenerTransacciones(chatId).filter(r =>
@@ -277,25 +277,25 @@ function cmdBuscar(chatId, text) {
 
   if (!resultados.length) {
     return sendMessage(chatId,
-      `ðŸ” Sin resultados para *"${query}"*`, true);
+      `🔍 Sin resultados para *"${query}"*`, true);
   }
 
   const lineas = resultados.map(r => {
-    const emoji = r[2] === 'gasto' ? 'ðŸ”´' : 'ðŸŸ¢';
+    const emoji = r[2] === 'gasto' ? '🔴' : '🟢';
     const fecha = Utilities.formatDate(new Date(r[0]), 'America/Lima', 'dd/MM/yyyy');
     const monto = parseFloat(r[5]).toFixed(2);
-    return `${emoji} ${r[3]} â€” S/ ${monto} _(${fecha})_`;
+    return `${emoji} ${r[3]} — S/ ${monto} _(${fecha})_`;
   }).join('\n');
 
   sendMessage(chatId,
-    `ðŸ” *"${query}"* â€” ${resultados.length} resultado${resultados.length !== 1 ? 's' : ''}\n\n${lineas}`,
+    `🔍 *"${query}"* — ${resultados.length} resultado${resultados.length !== 1 ? 's' : ''}\n\n${lineas}`,
     true
   );
 }
 
 
-// ---- PROYECCIÃ“N DE FIN DE MES ------------------------------
-// Calcula a quÃ© ritmo vas y proyecta el balance al 31
+// ---- PROYECCIÓN DE FIN DE MES ------------------------------
+// Calcula a qué ritmo vas y proyecta el balance al 31
 
 function cmdProyeccion(chatId) {
   const hoy       = new Date();
@@ -309,7 +309,7 @@ function cmdProyeccion(chatId) {
   );
 
   if (!data.length) {
-    return sendMessage(chatId, 'ðŸ“­ No hay movimientos este mes para proyectar.');
+    return sendMessage(chatId, '📭 No hay movimientos este mes para proyectar.');
   }
 
   let ingresos = 0, gastos = 0;
@@ -319,44 +319,44 @@ function cmdProyeccion(chatId) {
     else                    gastos   += monto;
   });
 
-  // Gasto diario promedio y proyecciÃ³n
+  // Gasto diario promedio y proyección
   const gastoDiario   = gastos / diaHoy;
   const gastoProyect  = gastoDiario * diasMes;
   const balanceActual = ingresos - gastos;
   const balanceProyect = ingresos - gastoProyect;
-  const emoji         = balanceProyect >= 0 ? 'ðŸŸ¢' : 'ðŸ”´';
+  const emoji         = balanceProyect >= 0 ? '🟢' : '🔴';
 
   // Presupuestos para comparar
-  const sheetPres = getOrCreateSheet('Presupuestos', ['ChatID','CategorÃ­a','LÃ­mite']);
+  const sheetPres = getOrCreateSheet('Presupuestos', ['ChatID','Categoría','Límite']);
   const totalPres = sheetPres.getDataRange().getValues().slice(1)
     .filter(r => String(r[0]) === chatId)
     .reduce((a, r) => a + parseFloat(r[2]), 0);
 
   const alertaPres = totalPres > 0 && gastoProyect > totalPres
-    ? `\nâš ï¸ Proyectas superar tus presupuestos por S/ ${(gastoProyect - totalPres).toFixed(2)}`
+    ? `\n⚠️ Proyectas superar tus presupuestos por S/ ${(gastoProyect - totalPres).toFixed(2)}`
     : '';
 
   sendMessage(chatId,
-    `ðŸ“ˆ *ProyecciÃ³n â€” fin de mes*\n\n` +
-    `ðŸ“… DÃ­a ${diaHoy} de ${diasMes} (faltan ${diasRest} dÃ­as)\n\n` +
-    `ðŸ’¸ Gasto diario promedio: S/ ${gastoDiario.toFixed(2)}\n` +
-    `ðŸ“¤ Gastos proyectados:    S/ ${gastoProyect.toFixed(2)}\n` +
-    `ðŸ“¥ Ingresos actuales:     S/ ${ingresos.toFixed(2)}\n` +
-    `â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€\n` +
+    `📈 *Proyección — fin de mes*\n\n` +
+    `📅 Día ${diaHoy} de ${diasMes} (faltan ${diasRest} días)\n\n` +
+    `💸 Gasto diario promedio: S/ ${gastoDiario.toFixed(2)}\n` +
+    `📤 Gastos proyectados:    S/ ${gastoProyect.toFixed(2)}\n` +
+    `📥 Ingresos actuales:     S/ ${ingresos.toFixed(2)}\n` +
+    `─────────────────\n` +
     `${emoji} Balance proyectado: S/ ${balanceProyect.toFixed(2)}\n` +
-    `ðŸ’° Balance actual:       S/ ${balanceActual.toFixed(2)}` +
+    `💰 Balance actual:       S/ ${balanceActual.toFixed(2)}` +
     alertaPres,
     true
   );
 }
 
 
-// ---- ANÃLISIS CON IA (CLAUDE) ------------------------------
+// ---- ANÁLISIS CON IA (CLAUDE) ------------------------------
 // Necesitas tu API key de Anthropic en Script Properties:
-// Archivo â†’ Propiedades del proyecto â†’ claude_api_key
+// Archivo → Propiedades del proyecto → claude_api_key
 function cmdAnalisisIA(chatId) {
   // chatId = 1538086276;
-  sendMessage(chatId, 'ðŸ¤– Analizando tus finanzas...', true);
+  sendMessage(chatId, '🤖 Analizando tus finanzas...', true);
  
   const hoy       = new Date();
   const mesActual = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM');
@@ -371,7 +371,7 @@ function cmdAnalisisIA(chatId) {
  
   if (data.length < 3) {
     return sendMessage(chatId,
-      'ðŸ“­ Necesito al menos 3 movimientos este mes para hacer un anÃ¡lisis Ãºtil.', true);
+      '📭 Necesito al menos 3 movimientos este mes para hacer un análisis útil.', true);
   }
  
   let ingresos = 0, gastos = 0;
@@ -394,10 +394,10 @@ function cmdAnalisisIA(chatId) {
     .join('\n');
  
   // Presupuestos activos
-  const sheetPres    = getOrCreateSheet('Presupuestos', ['ChatID','CategorÃ­a','LÃ­mite']);
+  const sheetPres    = getOrCreateSheet('Presupuestos', ['ChatID','Categoría','Límite']);
   const presupuestos = sheetPres.getDataRange().getValues().slice(1)
     .filter(r => String(r[0]) === chatId)
-    .map(r => `- ${r[1]}: lÃ­mite S/ ${r[2]}`)
+    .map(r => `- ${r[1]}: límite S/ ${r[2]}`)
     .join('\n');
  
   // Metas activas
@@ -414,44 +414,44 @@ function cmdAnalisisIA(chatId) {
   const gastoProyect = gastoDiario * diasMes;
  
   const prompt = [
-  'Eres un asesor financiero personal para Mayeson, un desarrollador independiente en PerÃº.',
-  'Analiza sus finanzas de este mes y da 5 consejos concretos con nÃºmeros reales.',
+  'Eres un asesor financiero personal para Mayeson, un desarrollador independiente en Perú.',
+  'Analiza sus finanzas de este mes y da 5 consejos concretos con números reales.',
   '',
   'DATOS DEL MES:',
-  `Mes: ${nombreMes} | DÃ­a ${diaHoy} de ${diasMes} (${pctMes}% del mes transcurrido)`,
+  `Mes: ${nombreMes} | Día ${diaHoy} de ${diasMes} (${pctMes}% del mes transcurrido)`,
   `Ingresos: S/ ${ingresos.toFixed(2)}`,
   `Gastos: S/ ${gastos.toFixed(2)}`,
   `Balance: S/ ${(ingresos - gastos).toFixed(2)}`,
   `Gasto diario promedio: S/ ${gastoDiario.toFixed(2)}`,
-  `ProyecciÃ³n de gastos al cierre: S/ ${gastoProyect.toFixed(2)}`,
-  `Â¿ProyecciÃ³n supera ingresos?: ${gastoProyect > ingresos ? 'SÃ âš ï¸' : 'No'}`,
+  `Proyección de gastos al cierre: S/ ${gastoProyect.toFixed(2)}`,
+  `¿Proyección supera ingresos?: ${gastoProyect > ingresos ? 'SÍ ⚠️' : 'No'}`,
   '',
-  'GASTOS POR CATEGORÃA:',
+  'GASTOS POR CATEGORÍA:',
   resumenCats,
   presupuestos ? `\nPRESUPUESTOS ACTIVOS:\n${presupuestos}` : '',
   metas        ? `\nMETAS DE AHORRO:\n${metas}`              : '',
   '',
   'REGLAS:',
-  '- Responde en espaÃ±ol.',
-  '- USA los nÃºmeros reales para dar contexto en cada consejo.',
-  '- SÃ© especÃ­fico: menciona categorÃ­as, montos y fechas cuando ayude.',
-  '- Si una categorÃ­a supera el 40% del gasto total, menciÃ³nala con su monto.',
-  '- Si la proyecciÃ³n supera los ingresos, pon alerta en el punto 1.',
+  '- Responde en español.',
+  '- USA los números reales para dar contexto en cada consejo.',
+  '- Sé específico: menciona categorías, montos y fechas cuando ayude.',
+  '- Si una categoría supera el 40% del gasto total, menciónala con su monto.',
+  '- Si la proyección supera los ingresos, pon alerta en el punto 1.',
   '- Compara el gasto diario actual vs lo ideal para no pasarse.',
   '- Relaciona los consejos con las metas de ahorro si existen.',
-  '- Tono cercano, directo y motivador. Nada de teorÃ­a.',
-  '- Cierra con una frase corta de motivaciÃ³n.',
+  '- Tono cercano, directo y motivador. Nada de teoría.',
+  '- Cierra con una frase corta de motivación.',
   '',
   'FORMATO EXACTO (respeta el markdown para Telegram):',
-  'ðŸ’¡ *AnÃ¡lisis de ' + nombreMes + '*',
+  '💡 *Análisis de ' + nombreMes + '*',
   '',
-  '1. [consejo con nÃºmero real]',
-  '2. [consejo con nÃºmero real]',
-  '3. [consejo con nÃºmero real]',
-  '4. [consejo con nÃºmero real]',
-  '5. [consejo con nÃºmero real]',
+  '1. [consejo con número real]',
+  '2. [consejo con número real]',
+  '3. [consejo con número real]',
+  '4. [consejo con número real]',
+  '5. [consejo con número real]',
   '',
-  'ðŸ”¥ [frase motivadora corta]',
+  '🔥 [frase motivadora corta]',
 ].join('\n');
  
   try {
@@ -459,7 +459,7 @@ function cmdAnalisisIA(chatId) {
  
     if (!apiKey) {
       return sendMessage(chatId,
-        'âŒ No hay API key configurada.\nRevisa las propiedades del script.', true);
+        '❌ No hay API key configurada.\nRevisa las propiedades del script.', true);
     }
  
     const resp = UrlFetchApp.fetch('https://api.synterolink.com/v1/messages', {
@@ -482,21 +482,21 @@ function cmdAnalisisIA(chatId) {
     if (result.error) {
       Logger.log('Error API: ' + JSON.stringify(result.error));
       return sendMessage(chatId,
-        `âŒ Error de la API: ${result.error.message || 'desconocido'}`, true);
+        `❌ Error de la API: ${result.error.message || 'desconocido'}`, true);
     }
  
     const consejo = result.content?.find(b => b.type === 'text')?.text;
  
     if (!consejo) {
       Logger.log('Respuesta inesperada: ' + JSON.stringify(result));
-      return sendMessage(chatId, 'âŒ Respuesta vacÃ­a de la IA. Intenta de nuevo.', true);
+      return sendMessage(chatId, '❌ Respuesta vacía de la IA. Intenta de nuevo.', true);
     }
  
     sendMessage(chatId, consejo, true);
  
   } catch (err) {
     Logger.log('Error cmdAnalisisIA: ' + err.toString());
-    sendMessage(chatId, 'âŒ Error al conectar con la IA. Intenta en unos segundos.', true);
+    sendMessage(chatId, '❌ Error al conectar con la IA. Intenta en unos segundos.', true);
   }
 }
 
@@ -522,7 +522,7 @@ function alertarFijosPendientes() {
       Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes
     );
 
-    // Filtra los que no estÃ¡n registrados y no fueron saltados
+    // Filtra los que no están registrados y no fueron saltados
     const pendientes = fijosList.filter(f => {
       const saltado   = cache.get(`skip_fijo_${chatId}_${f.nombre.toLowerCase()}_${mes}`);
       const registrado = txsMes.some(r =>
@@ -534,18 +534,18 @@ function alertarFijosPendientes() {
     if (!pendientes.length) return;
 
     const lineas = pendientes.map(f =>
-      `âš ï¸ ${capitalizar(f.nombre)} â€” S/ ${f.monto.toFixed(2)}`
+      `⚠️ ${capitalizar(f.nombre)} — S/ ${f.monto.toFixed(2)}`
     ).join('\n');
 
     const total = pendientes.reduce((a, f) => a + f.monto, 0);
 
     sendMessage(chatId,
-      `ðŸ”” *Gastos fijos pendientes este mes*\n\n` +
+      `🔔 *Gastos fijos pendientes este mes*\n\n` +
       `${lineas}\n\n` +
-      `â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€\n` +
-      `ðŸ’¸ Total pendiente: S/ ${total.toFixed(2)}\n\n` +
-      `_Â¿Ya los pagaste? RegÃ­stralos manualmente._\n` +
-      `_Â¿No los pagarÃ¡s este mes? Usa \`saltar fijo [nombre]\`_`, true
+      `─────────────────\n` +
+      `💸 Total pendiente: S/ ${total.toFixed(2)}\n\n` +
+      `_¿Ya los pagaste? Regístralos manualmente._\n` +
+      `_¿No los pagarás este mes? Usa \`saltar fijo [nombre]\`_`, true
     );
   });
 }
@@ -591,23 +591,23 @@ function cmdCompararMeses(chatId) {
 
   if (!ant.total) {
     return sendMessage(chatId,
-      `ðŸ“­ No hay datos de ${nomAnt} para comparar.`, true);
+      `📭 No hay datos de ${nomAnt} para comparar.`, true);
   }
 
   // Diferencias
   function diff(a, b) {
-    if (b === 0) return a > 0 ? '+100%' : 'â€”';
+    if (b === 0) return a > 0 ? '+100%' : '—';
     const pct = Math.round(((a - b) / b) * 100);
     return (pct >= 0 ? '+' : '') + pct + '%';
   }
 
   function flecha(a, b, menorEsBueno = false) {
-    if (a === b) return 'âž¡ï¸';
-    if (menorEsBueno) return a < b ? 'âœ…' : 'ðŸ”´';
-    return a > b ? 'âœ…' : 'ðŸ”´';
+    if (a === b) return '➡️';
+    if (menorEsBueno) return a < b ? '✅' : '🔴';
+    return a > b ? '✅' : '🔴';
   }
 
-  // Top categorÃ­as combinadas
+  // Top categorías combinadas
   const todasCats = new Set([
     ...Object.keys(act.cats),
     ...Object.keys(ant.cats)
@@ -624,7 +624,7 @@ function cmdCompararMeses(chatId) {
     .join('\n');
 
   sendMessage(chatId,
-    `ðŸ“† *${nomAnt} vs ${nomAct}*\n\n` +
+    `📆 *${nomAnt} vs ${nomAct}*\n\n` +
     `*Ingresos*\n` +
     `${flecha(act.ing, ant.ing)} ${nomAnt}: S/ ${ant.ing.toFixed(2)}\n` +
     `${flecha(act.ing, ant.ing)} ${nomAct}: S/ ${act.ing.toFixed(2)} (${diff(act.ing, ant.ing)})\n\n` +
@@ -634,21 +634,21 @@ function cmdCompararMeses(chatId) {
     `*Balance*\n` +
     `${flecha(act.bal, ant.bal)} ${nomAnt}: S/ ${ant.bal.toFixed(2)}\n` +
     `${flecha(act.bal, ant.bal)} ${nomAct}: S/ ${act.bal.toFixed(2)} (${diff(act.bal, ant.bal)})\n\n` +
-    `*Top categorÃ­as*\n${catLines}\n\n` +
-    `_${ant.total} movimientos en ${nomAnt} Â· ${act.total} en ${nomAct}_`,
+    `*Top categorías*\n${catLines}\n\n` +
+    `_${ant.total} movimientos en ${nomAnt} · ${act.total} en ${nomAct}_`,
     true
   );
 }
 
 // ---- FOTO DE RECIBO CON IA ---------------------------------
-// El usuario envÃ­a una foto de un ticket/recibo
-// Claude extrae: monto, categorÃ­a, descripciÃ³n y lo registra
+// El usuario envía una foto de un ticket/recibo
+// Claude extrae: monto, categoría, descripción y lo registra
 
 function procesarFotoRecibo(chatId, msg) {
-  sendMessage(chatId, 'ðŸ“¸ Analizando tu recibo...', true);
+  sendMessage(chatId, '📸 Analizando tu recibo...', true);
 
   try {
-    // Toma la foto de mayor resoluciÃ³n
+    // Toma la foto de mayor resolución
     const foto    = msg.photo[msg.photo.length - 1];
     const fileId  = foto.file_id;
 
@@ -665,7 +665,7 @@ function procesarFotoRecibo(chatId, msg) {
     const imageB64  = Utilities.base64Encode(imageResp.getContent());
     const mimeType  = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
 
-    // EnvÃ­a a Claude con visiÃ³n
+    // Envía a Claude con visión
     const apiKey = PropertiesService.getScriptProperties().getProperty('claude_api_key');
     const resp   = UrlFetchApp.fetch('https://api.synterolink.com/v1/messages', {
       method : 'post',
@@ -687,11 +687,11 @@ function procesarFotoRecibo(chatId, msg) {
             {
               type: 'text',
               text:
-                'Analiza este recibo o ticket de compra y extrae la informaciÃ³n.\n' +
+                'Analiza este recibo o ticket de compra y extrae la información.\n' +
                 'Responde SOLO con este JSON exacto, sin explicaciones ni markdown:\n' +
                 '{"monto": 45.50, "descripcion": "Almuerzo pollo a la brasa", "categoria": "comida"}\n\n' +
-                'CategorÃ­as vÃ¡lidas: comida, transporte, servicios, entretenimiento, salud, ropa, educacion, otro\n' +
-                'Si no puedes leer el monto exacto, estÃ­malo.\n' +
+                'Categorías válidas: comida, transporte, servicios, entretenimiento, salud, ropa, educacion, otro\n' +
+                'Si no puedes leer el monto exacto, estímalo.\n' +
                 'Si no es un recibo, responde: {"error": "No es un recibo"}'
             }
           ]
@@ -704,7 +704,7 @@ function procesarFotoRecibo(chatId, msg) {
     const texto  = result.content?.find(b => b.type === 'text')?.text?.trim();
 
     if (!texto) {
-      return sendMessage(chatId, 'âŒ No pude analizar la imagen. Intenta de nuevo.', true);
+      return sendMessage(chatId, '❌ No pude analizar la imagen. Intenta de nuevo.', true);
     }
 
     // Parsea el JSON que devuelve Claude
@@ -712,21 +712,21 @@ function procesarFotoRecibo(chatId, msg) {
     try {
       datos = JSON.parse(texto);
     } catch(e) {
-      Logger.log('JSON invÃ¡lido de Claude: ' + texto);
-      return sendMessage(chatId, 'âŒ No pude leer el recibo. Â¿Es una foto clara del ticket?', true);
+      Logger.log('JSON inválido de Claude: ' + texto);
+      return sendMessage(chatId, '❌ No pude leer el recibo. ¿Es una foto clara del ticket?', true);
     }
 
     if (datos.error) {
       return sendMessage(chatId,
-        'ðŸ“¸ Esa imagen no parece un recibo.\n\nEnvÃ­a una foto clara del ticket o agrega el gasto manualmente:\n`gasto 45 comida almuerzo`', true);
+        '📸 Esa imagen no parece un recibo.\n\nEnvía una foto clara del ticket o agrega el gasto manualmente:\n`gasto 45 comida almuerzo`', true);
     }
 
     const monto = parseFloat(datos.monto);
     if (isNaN(monto) || monto <= 0) {
-      return sendMessage(chatId, 'âŒ No pude leer el monto del recibo. AgrÃ©galo manualmente.', true);
+      return sendMessage(chatId, '❌ No pude leer el monto del recibo. Agrégalo manualmente.', true);
     }
 
-    // Registra automÃ¡ticamente en Sheets
+    // Registra automáticamente en Sheets
     const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
     const hora  = Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm');
     const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones')
@@ -751,18 +751,18 @@ function procesarFotoRecibo(chatId, msg) {
     verificarPresupuesto(chatId, cat);
 
     sendMessage(chatId,
-      `ðŸ“¸ *Â¡Recibo registrado!*\n\n` +
-      `ðŸ”´ ${desc}\n` +
-      `ðŸ’µ S/ ${monto.toFixed(2)}\n` +
-      `ðŸ·ï¸ ${capitalizar(cat)}\n` +
-      `ðŸ“… ${fecha}\n\n` +
-      `_Â¿El dato es incorrecto? ElimÃ­nalo con \`ultimos\` y agrÃ©galo manualmente._`,
+      `📸 *¡Recibo registrado!*\n\n` +
+      `🔴 ${desc}\n` +
+      `💵 S/ ${monto.toFixed(2)}\n` +
+      `🏷️ ${capitalizar(cat)}\n` +
+      `📅 ${fecha}\n\n` +
+      `_¿El dato es incorrecto? Elimínalo con \`ultimos\` y agrégalo manualmente._`,
       true
     );
 
   } catch (err) {
     Logger.log('Error procesarFotoRecibo: ' + err.toString());
-    sendMessage(chatId, 'âŒ Error al procesar la foto. Intenta de nuevo.', true);
+    sendMessage(chatId, '❌ Error al procesar la foto. Intenta de nuevo.', true);
   }
 }
 
