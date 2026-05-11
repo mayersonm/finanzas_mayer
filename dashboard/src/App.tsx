@@ -1,17 +1,37 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Area,
   AreaChart,
-  Bar,
+  Badge,
   BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+  Button,
+  Card,
+  DonutChart,
+  Metric,
+  ProgressBar,
+  Tab,
+  TabGroup,
+  TabList,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  Text,
+  Title,
+  type Color,
+} from '@tremor/react';
+import {
+  RiBankCardLine,
+  RiDashboardLine,
+  RiFileList3Line,
+  RiFundsBoxLine,
+  RiLockPasswordLine,
+  RiLogoutBoxRLine,
+  RiRefreshLine,
+  RiShieldKeyholeLine,
+  RiWallet3Line,
+} from '@remixicon/react';
 
 type TxType = 'ingreso' | 'gasto';
 type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'analisis' | 'metas';
@@ -100,16 +120,6 @@ interface DashboardData {
   error?: string;
 }
 
-interface ChartTooltipProps {
-  active?: boolean;
-  payload?: Array<{
-    color?: string;
-    name?: string | number;
-    value?: string | number;
-  }>;
-  label?: string | number;
-}
-
 const API_URL = import.meta.env.VITE_GAS_API_URL || 'https://script.google.com/macros/s/TU_SCRIPT_ID/exec';
 const SESSION_STORAGE_KEY = 'finanzas_dashboard_session';
 
@@ -172,13 +182,15 @@ const MOCK: DashboardData = {
   source: 'demo',
 };
 
-const tabs: Array<{ id: TabId; label: string }> = [
-  { id: 'inicio', label: 'Inicio' },
-  { id: 'movimientos', label: 'Movimientos' },
-  { id: 'compromisos', label: 'Compromisos' },
-  { id: 'analisis', label: 'Analisis' },
-  { id: 'metas', label: 'Metas' },
+const tabs: Array<{ id: TabId; label: string; icon: typeof RiDashboardLine }> = [
+  { id: 'inicio', label: 'Inicio', icon: RiDashboardLine },
+  { id: 'movimientos', label: 'Movimientos', icon: RiFileList3Line },
+  { id: 'compromisos', label: 'Compromisos', icon: RiBankCardLine },
+  { id: 'analisis', label: 'Analisis', icon: RiFundsBoxLine },
+  { id: 'metas', label: 'Metas', icon: RiWallet3Line },
 ];
+
+const categoryColors: Color[] = ['emerald', 'amber', 'sky', 'rose', 'violet', 'cyan', 'orange', 'teal'];
 
 function apiEndpoint(path: 'dashboard' | 'login' | 'session' | 'logout' | 'password'): string {
   const dashboardUrl = new URL(API_URL);
@@ -246,221 +258,59 @@ function getBudgetConsidered(item: Budget): number {
   return item.gasto > 0 ? item.gasto : item.limite;
 }
 
-function CustomTooltip({ active, payload, label }: ChartTooltipProps) {
-  if (!active || !payload?.length) return null;
-
-  return (
-    <div className="chart-tooltip">
-      <div className="tooltip-label">{label}</div>
-      {payload.map((item) => (
-        <div key={`${item.name}`} className="tooltip-row" style={{ color: item.color }}>
-          {item.name}: {formatMoney(Number(item.value) || 0)}
-        </div>
-      ))}
-    </div>
-  );
+function budgetColor(pct: number): Color {
+  if (pct >= 100) return 'rose';
+  if (pct >= 80) return 'amber';
+  return 'emerald';
 }
 
-function StatCard({
-  label,
-  value,
-  sub,
-  accent,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent: string;
-}) {
-  return (
-    <section className="stat-card" style={{ borderTopColor: accent }}>
-      <span className="eyebrow">{label}</span>
-      <strong>{value}</strong>
-      {sub ? <small>{sub}</small> : null}
-    </section>
-  );
+function goalColor(pct: number): Color {
+  if (pct >= 100) return 'emerald';
+  if (pct >= 50) return 'amber';
+  return 'sky';
 }
 
-function HeroSummary({
-  data,
-  realExpenses,
-  availableAfterCommitted,
-}: {
-  data: DashboardData;
-  realExpenses: RealExpenses;
-  availableAfterCommitted: number;
-}) {
-  const monthIncome = data.ingresosMes ?? data.ingresos;
-  const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
-  const commitmentPct = monthIncome > 0 ? percent(realExpenses.total, monthIncome) : realExpenses.total > 0 ? 100 : 0;
-  const spendingPct = monthIncome > 0 ? percent(data.gastosMes, monthIncome) : data.gastosMes > 0 ? 100 : 0;
-
-  return (
-    <section className="hero-panel">
-      <div className="hero-copy">
-        <span className="eyebrow">Resumen de {data.mes}</span>
-        <h2 className={monthBalance >= 0 ? 'hero-title positive' : 'hero-title negative'}>
-          {formatMoney(monthBalance)}
-        </h2>
-        <p>
-          {availableAfterCommitted >= 0
-            ? `${formatMoney(availableAfterCommitted)} disponible estimado despues de fijos y presupuesto.`
-            : `${formatMoney(Math.abs(availableAfterCommitted))} por encima de tus compromisos del mes.`}
-        </p>
-      </div>
-
-      <div className="hero-metrics">
-        <div className="hero-metric good">
-          <span>Ingresos</span>
-          <strong>{formatMoney(monthIncome)}</strong>
-        </div>
-        <div className="hero-metric danger">
-          <span>Gastos</span>
-          <strong>{formatMoney(data.gastosMes)}</strong>
-        </div>
-        <div className="hero-metric info">
-          <span>Comprometido</span>
-          <strong>{commitmentPct}%</strong>
-        </div>
-        <div className="hero-metric warn">
-          <span>Uso de ingresos</span>
-          <strong>{spendingPct}%</strong>
-        </div>
-      </div>
-    </section>
-  );
+function statusColor(status: ApiStatus): Color {
+  if (status === 'live') return 'emerald';
+  if (status === 'error') return 'rose';
+  return 'amber';
 }
 
-function InsightCard({
+function fixedStatus(item: FixedExpense): string {
+  return item.estado || (item.pagadoMes ? 'pagado' : item.saltadoMes ? 'saltado' : 'pendiente');
+}
+
+function fixedStatusColor(status: string): Color {
+  if (status === 'pagado') return 'emerald';
+  if (status === 'saltado') return 'sky';
+  return 'amber';
+}
+
+function KpiCard({
   label,
   value,
   detail,
-  tone = 'neutral',
+  color,
 }: {
   label: string;
   value: string;
   detail: string;
-  tone?: 'neutral' | 'good' | 'danger' | 'warn' | 'info';
+  color: Color;
 }) {
   return (
-    <article className={`insight-card ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </article>
+    <Card decoration="top" decorationColor={color} className="rounded-tremor-default">
+      <Text>{label}</Text>
+      <Metric className="mt-2 truncate text-2xl sm:text-3xl">{value}</Metric>
+      <Text className="mt-2">{detail}</Text>
+    </Card>
   );
 }
 
-function TransactionRow({ tx }: { tx: Transaction }) {
-  const isIncome = tx.tipo === 'ingreso';
-
+function EmptyState({ children }: { children: string }) {
   return (
-    <article className="tx-row">
-      <div className={isIncome ? 'tx-icon tx-icon-income' : 'tx-icon tx-icon-expense'}>
-        {isIncome ? '+' : '-'}
-      </div>
-      <div className="tx-main">
-        <strong>{tx.desc}</strong>
-        <div className="tx-meta">
-          <span className="tx-chip">{tx.cat}</span>
-          <span>
-            {formatDate(tx.fecha)}
-            {tx.hora ? ` - ${tx.hora}` : ''}
-          </span>
-        </div>
-      </div>
-      <strong className={isIncome ? 'amount income' : 'amount expense'}>
-        {isIncome ? '+' : '-'}
-        {formatMoney(tx.monto)}
-      </strong>
-    </article>
-  );
-}
-
-function ProgressBar({
-  label,
-  current,
-  target,
-  kind,
-  detail,
-}: {
-  label: string;
-  current: number;
-  target: number;
-  kind: 'goal' | 'budget';
-  detail?: string;
-}) {
-  const pct = percent(current, target);
-  const color = kind === 'budget'
-    ? pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#22c55e'
-    : pct >= 100 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#3b82f6';
-
-  return (
-    <div className="progress-item">
-      <div className="progress-head">
-        <strong>{label}</strong>
-        <span>
-          {formatMoney(current)} / {formatMoney(target)}
-        </span>
-      </div>
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${pct}%`, backgroundColor: color }} />
-      </div>
-      <div className="progress-foot">
-        <small style={{ color }}>{pct}%</small>
-        {detail ? <small>{detail}</small> : null}
-      </div>
+    <div className="rounded-tremor-default border border-dashed border-slate-800 bg-slate-900/40 p-5 text-sm text-slate-400">
+      {children}
     </div>
-  );
-}
-
-function FixedExpenseRow({ item }: { item: FixedExpense }) {
-  const status = item.estado || (item.pagadoMes ? 'pagado' : item.saltadoMes ? 'saltado' : 'pendiente');
-  const className = status === 'pagado'
-    ? 'fixed-status paid'
-    : status === 'saltado'
-      ? 'fixed-status skipped'
-      : 'fixed-status pending';
-
-  return (
-    <article className="fixed-row">
-      <span className="fixed-color" style={{ backgroundColor: item.color || '#6b7280' }} />
-      <div>
-        <strong>{item.nombre}</strong>
-        <small>{item.cat}</small>
-      </div>
-      <strong>{formatMoney(item.monto)}</strong>
-      <span className={className}>{status}</span>
-    </article>
-  );
-}
-
-function EmailPanel({ config }: { config?: EmailConfig }) {
-  if (!config) return null;
-
-  return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2>Correo</h2>
-        <span className={config.configured ? 'pill ok' : 'pill warn'}>
-          {config.configured ? 'Configurado' : 'Pendiente'}
-        </span>
-      </div>
-      <div className="config-list">
-        <div>
-          <span>Diario</span>
-          <strong>{config.daily || '-'}</strong>
-        </div>
-        <div>
-          <span>Mensual</span>
-          <strong>{config.monthly || '-'}</strong>
-        </div>
-        <div>
-          <span>Anual</span>
-          <strong>{config.yearly || '-'}</strong>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -478,19 +328,28 @@ function LoginScreen({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <main className="login-shell">
-      <section className="login-panel">
-        <div className="login-brand-mark">MF</div>
-        <span className="eyebrow">Panel financiero privado</span>
-        <h1>Mayeson Finanzas</h1>
-        <p>Tu resumen personal de gastos, compromisos y metas en un solo lugar.</p>
-        <div className="login-badges">
-          <span>D1 en vivo</span>
-          <span>Acceso privado</span>
+    <main className="grid min-h-screen place-items-center px-4 py-8">
+      <Card className="w-full max-w-md rounded-tremor-default border-slate-800 bg-slate-950/80 p-6 shadow-2xl shadow-black/30">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="grid h-12 w-12 place-items-center rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 text-sm font-black text-emerald-200">
+            MF
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Badge color="emerald">D1 en vivo</Badge>
+            <Badge color="cyan">Privado</Badge>
+          </div>
         </div>
 
-        <form className="login-form" onSubmit={onSubmit}>
-          <label htmlFor="password">Clave</label>
+        <Badge color="emerald" icon={RiShieldKeyholeLine}>
+          Acceso seguro
+        </Badge>
+        <Title className="mt-4 text-2xl">Mayeson Finanzas</Title>
+        <Text className="mt-2">Dashboard personal para revisar gastos, compromisos y metas.</Text>
+
+        <form className="mt-7 space-y-4" onSubmit={onSubmit}>
+          <label className="block text-sm font-semibold text-slate-200" htmlFor="password">
+            Clave privada
+          </label>
           <input
             id="password"
             autoComplete="current-password"
@@ -498,14 +357,19 @@ function LoginScreen({
             type="password"
             value={password}
             onChange={(event) => onPasswordChange(event.target.value)}
-            placeholder="Tu clave privada"
+            placeholder="Ingresa tu clave"
+            className="block h-11 w-full rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500"
           />
-          {error ? <div className="login-error">{error}</div> : null}
-          <button type="submit" disabled={loading || !password.trim()}>
-            {loading ? 'Validando...' : 'Entrar'}
-          </button>
+          {error ? (
+            <div className="rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+              {error}
+            </div>
+          ) : null}
+          <Button className="w-full" color="emerald" loading={loading} loadingText="Validando..." disabled={!password.trim()}>
+            Entrar
+          </Button>
         </form>
-      </section>
+      </Card>
     </main>
   );
 }
@@ -536,49 +400,191 @@ function PasswordPanel({
   onClose: () => void;
 }) {
   return (
-    <section className="settings-panel">
-      <div className="panel-head">
-        <h2>Cambiar clave</h2>
-        <button className="text-btn" type="button" onClick={onClose}>
+    <Card className="mb-5 ml-auto max-w-xl rounded-tremor-default border-slate-800 bg-slate-950/80">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Title>Cambiar clave</Title>
+          <Text>Usa minimo 12 caracteres para la nueva clave.</Text>
+        </div>
+        <Button type="button" variant="light" color="slate" onClick={onClose}>
           Cerrar
-        </button>
+        </Button>
       </div>
-      <form className="password-form" onSubmit={onSubmit}>
-        <label htmlFor="current-password">Clave actual</label>
+
+      <form className="mt-5 grid gap-3" onSubmit={onSubmit}>
         <input
-          id="current-password"
           autoComplete="current-password"
           type="password"
           value={currentPassword}
           onChange={(event) => onCurrentPasswordChange(event.target.value)}
+          placeholder="Clave actual"
+          className="h-11 rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500"
         />
-
-        <label htmlFor="new-password">Nueva clave</label>
         <input
-          id="new-password"
           autoComplete="new-password"
           type="password"
           value={newPassword}
           onChange={(event) => onNewPasswordChange(event.target.value)}
+          placeholder="Nueva clave"
+          className="h-11 rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500"
         />
-
-        <label htmlFor="confirm-password">Repetir nueva clave</label>
         <input
-          id="confirm-password"
           autoComplete="new-password"
           type="password"
           value={confirmPassword}
           onChange={(event) => onConfirmPasswordChange(event.target.value)}
+          placeholder="Repetir nueva clave"
+          className="h-11 rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500"
         />
-
-        {error ? <div className="login-error">{error}</div> : null}
-        {success ? <div className="settings-success">{success}</div> : null}
-
-        <button type="submit" disabled={loading}>
-          {loading ? 'Guardando...' : 'Guardar clave'}
-        </button>
+        {error ? (
+          <div className="rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+            {error}
+          </div>
+        ) : null}
+        {success ? (
+          <div className="rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+            {success}
+          </div>
+        ) : null}
+        <Button type="submit" color="emerald" loading={loading} loadingText="Guardando...">
+          Guardar clave
+        </Button>
       </form>
-    </section>
+    </Card>
+  );
+}
+
+function BudgetProgress({ item }: { item: Budget }) {
+  const pct = percent(item.gasto, item.limite);
+  const considered = getBudgetConsidered(item);
+
+  return (
+    <div className="border-b border-slate-800 py-4 last:border-b-0 last:pb-0 first:pt-0">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <Text className="truncate font-semibold text-slate-200">{item.cat}</Text>
+          <Text>Considerado: {formatMoney(considered)}</Text>
+        </div>
+        <Badge color={budgetColor(pct)}>{pct}%</Badge>
+      </div>
+      <ProgressBar className="mt-3" value={pct} color={budgetColor(pct)} />
+      <div className="mt-2 flex justify-between gap-3 text-sm text-slate-400">
+        <span>{formatMoney(item.gasto)}</span>
+        <span>{formatMoney(item.limite)}</span>
+      </div>
+    </div>
+  );
+}
+
+function GoalProgress({ item }: { item: Goal }) {
+  const pct = percent(item.ahorrado, item.objetivo);
+
+  return (
+    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <Title className="truncate">{item.nombre}</Title>
+          <Text>
+            {formatMoney(item.ahorrado)} / {formatMoney(item.objetivo)}
+          </Text>
+        </div>
+        <Badge color={goalColor(pct)}>{pct}%</Badge>
+      </div>
+      <ProgressBar className="mt-4" value={pct} color={goalColor(pct)} />
+    </Card>
+  );
+}
+
+function FixedExpenseRow({ item }: { item: FixedExpense }) {
+  const status = fixedStatus(item);
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-slate-800 py-4 last:border-b-0 last:pb-0 first:pt-0">
+      <div className="min-w-0">
+        <Text className="truncate font-semibold text-slate-200">{item.nombre}</Text>
+        <Text className="truncate">{item.cat}</Text>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <span className="font-mono text-sm font-semibold text-slate-100">{formatMoney(item.monto)}</span>
+        <Badge color={fixedStatusColor(status)}>{status}</Badge>
+      </div>
+    </div>
+  );
+}
+
+function EmailPanel({ config }: { config?: EmailConfig }) {
+  if (!config) return null;
+
+  return (
+    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Title>Correo</Title>
+          <Text>Resumenes activos</Text>
+        </div>
+        <Badge color={config.configured ? 'emerald' : 'amber'}>
+          {config.configured ? 'Configurado' : 'Pendiente'}
+        </Badge>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        {[
+          ['Diario', config.daily || '-'],
+          ['Mensual', config.monthly || '-'],
+          ['Anual', config.yearly || '-'],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-tremor-default border border-slate-800 bg-slate-900/60 p-3">
+            <Text>{label}</Text>
+            <p className="mt-1 truncate font-mono text-sm font-semibold text-slate-100">{value}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
+  if (!transactions.length) return <EmptyState>Sin movimientos registrados.</EmptyState>;
+
+  return (
+    <Table className="mt-4">
+      <TableHead>
+        <TableRow>
+          <TableHeaderCell>Fecha</TableHeaderCell>
+          <TableHeaderCell>Detalle</TableHeaderCell>
+          <TableHeaderCell>Categoria</TableHeaderCell>
+          <TableHeaderCell className="text-right">Monto</TableHeaderCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {transactions.map((tx, index) => {
+          const isIncome = tx.tipo === 'ingreso';
+
+          return (
+            <TableRow key={tx.id || `${tx.fecha}-${tx.desc}-${index}`}>
+              <TableCell>
+                <div className="whitespace-nowrap">
+                  <p className="text-slate-200">{formatDate(tx.fecha)}</p>
+                  <p className="text-xs text-slate-500">{tx.hora || '00:00'}</p>
+                </div>
+              </TableCell>
+              <TableCell>
+                <div className="min-w-[12rem]">
+                  <p className="font-semibold text-slate-100">{tx.desc}</p>
+                  <Badge className="mt-1" color={isIncome ? 'emerald' : 'rose'}>
+                    {tx.tipo}
+                  </Badge>
+                </div>
+              </TableCell>
+              <TableCell className="capitalize">{tx.cat}</TableCell>
+              <TableCell className={`text-right font-mono font-semibold ${isIncome ? 'text-emerald-300' : 'text-rose-300'}`}>
+                {isIncome ? '+' : '-'}
+                {formatMoney(tx.monto)}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -601,16 +607,17 @@ export default function App() {
 
   const isConfigured = !API_URL.includes('TU_SCRIPT_ID');
   const realExpenses = useMemo(() => getRealExpenses(data), [data]);
-  const fixedExpenses = data.fijos || [];
   const totalCategorias = useMemo(
     () => data.categorias.reduce((total, item) => total + item.monto, 0),
     [data.categorias],
   );
   const topCategory = data.categorias[0];
   const monthIncome = data.ingresosMes ?? data.ingresos;
+  const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
+  const availableAfterCommitted = monthIncome - realExpenses.total;
   const spendingRate = monthIncome > 0 ? percent(data.gastosMes, monthIncome) : data.gastosMes > 0 ? 100 : 0;
   const commitmentRate = monthIncome > 0 ? percent(realExpenses.total, monthIncome) : realExpenses.total > 0 ? 100 : 0;
-  const availableAfterCommitted = (data.ingresosMes ?? 0) - realExpenses.total;
+  const activeTabIndex = Math.max(tabs.findIndex((item) => item.id === tab), 0);
 
   const fetchData = useCallback(async (sessionToken?: string | null) => {
     const activeToken = sessionToken ?? token;
@@ -771,41 +778,46 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-lockup">
-          <span className="eyebrow">Panel financiero</span>
-          <h1>Mayeson Finanzas</h1>
+    <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+      <Card className="mb-5 rounded-tremor-default border-slate-800 bg-slate-950/80">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <Badge color={statusColor(status)}>
+                {status === 'live' ? `En vivo${data.source ? ` - ${data.source}` : ''}` : status === 'error' ? 'Error API' : 'Demo'}
+              </Badge>
+              <Badge color="cyan">{data.mesKey || data.mes}</Badge>
+            </div>
+            <Title className="text-2xl sm:text-3xl">Mayeson Finanzas</Title>
+            <Text className="mt-1">Ultima actualizacion: {loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)}</Text>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button icon={RiRefreshLine} color="emerald" loading={loading} loadingText="Actualizando" onClick={() => void fetchData()}>
+              Actualizar
+            </Button>
+            {isConfigured ? (
+              <>
+                <Button
+                  icon={RiLockPasswordLine}
+                  variant="secondary"
+                  color="slate"
+                  onClick={() => {
+                    setPasswordError('');
+                    setPasswordSuccess('');
+                    setShowPasswordPanel((value) => !value);
+                  }}
+                >
+                  Clave
+                </Button>
+                <Button icon={RiLogoutBoxRLine} variant="light" color="rose" onClick={handleLogout}>
+                  Salir
+                </Button>
+              </>
+            ) : null}
+          </div>
         </div>
-        <div className="status-wrap">
-          <span className="updated-at">{loading ? 'Actualizando' : formatUpdatedAt(data.updatedAt)}</span>
-          <button className="refresh-btn primary" type="button" onClick={() => void fetchData()}>
-            Actualizar
-          </button>
-          {isConfigured ? (
-            <>
-              <button
-                className="refresh-btn"
-                type="button"
-                onClick={() => {
-                  setPasswordError('');
-                  setPasswordSuccess('');
-                  setShowPasswordPanel((value) => !value);
-                }}
-              >
-                Clave
-              </button>
-              <button className="refresh-btn danger" type="button" onClick={handleLogout}>
-                Salir
-              </button>
-            </>
-          ) : null}
-          <span className={`status-pill ${status}`}>
-            <span className={`status-dot ${status}`} />
-            {status === 'live' ? `En vivo${data.source ? ` - ${data.source}` : ''}` : status === 'error' ? 'Error API' : 'Demo'}
-          </span>
-        </div>
-      </header>
+      </Card>
 
       {showPasswordPanel ? (
         <PasswordPanel
@@ -823,251 +835,246 @@ export default function App() {
         />
       ) : null}
 
-      <nav className="tabs" aria-label="Secciones">
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={tab === item.id ? 'active' : ''}
-            onClick={() => setTab(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      <TabGroup
+        index={activeTabIndex}
+        onIndexChange={(index) => {
+          const nextTab = tabs[index]?.id;
+          if (nextTab) setTab(nextTab);
+        }}
+      >
+        <TabList variant="solid" color="emerald" className="mb-5 w-full overflow-x-auto">
+          {tabs.map((item) => (
+            <Tab key={item.id} icon={item.icon}>
+              {item.label}
+            </Tab>
+          ))}
+        </TabList>
+      </TabGroup>
 
       {tab === 'inicio' ? (
         <>
-        <HeroSummary data={data} realExpenses={realExpenses} availableAfterCommitted={availableAfterCommitted} />
-
-        <section className="insight-grid">
-          <InsightCard
-            label="Categoria principal"
-            value={topCategory ? topCategory.cat : 'Sin gastos'}
-            detail={topCategory ? `${formatMoney(topCategory.monto)} este mes` : 'Aun no hay gastos agrupados'}
-            tone="info"
-          />
-          <InsightCard
-            label="Uso de ingresos"
-            value={`${spendingRate}%`}
-            detail="Gastos del mes vs ingresos"
-            tone={spendingRate >= 100 ? 'danger' : spendingRate >= 75 ? 'warn' : 'good'}
-          />
-          <InsightCard
-            label="Compromisos"
-            value={`${commitmentRate}%`}
-            detail="Fijos + presupuesto vs ingresos"
-            tone={commitmentRate >= 100 ? 'danger' : commitmentRate >= 80 ? 'warn' : 'neutral'}
-          />
-        </section>
-
-        <div className="content-grid">
-          <section className="stats-grid">
-            <div className="wide">
-              <StatCard
-                label="Balance total"
-                value={formatMoney(data.balance)}
-                sub={`${data.movimientos} movimientos registrados`}
-                accent={data.balance >= 0 ? '#22c55e' : '#ef4444'}
-              />
-            </div>
-            <StatCard label={`Ingresos ${data.mes}`} value={formatMoney(data.ingresosMes ?? data.ingresos)} accent="#22c55e" />
-            <StatCard label={`Gastos ${data.mes}`} value={formatMoney(data.gastosMes)} accent="#ef4444" />
-            <StatCard label="Comprometido" value={formatMoney(realExpenses.total)} sub="Fijos + presupuesto" accent="#3b82f6" />
-            <StatCard
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
+              label={`Balance ${data.mes}`}
+              value={formatMoney(monthBalance)}
+              detail={`${data.movimientos} movimientos registrados`}
+              color={monthBalance >= 0 ? 'emerald' : 'rose'}
+            />
+            <KpiCard
+              label="Gastos del mes"
+              value={formatMoney(data.gastosMes)}
+              detail={`${spendingRate}% de ingresos usados`}
+              color={spendingRate >= 100 ? 'rose' : spendingRate >= 75 ? 'amber' : 'sky'}
+            />
+            <KpiCard
               label="Libre estimado"
               value={formatMoney(availableAfterCommitted)}
-              sub={data.mesKey || data.mes}
-              accent={availableAfterCommitted >= 0 ? '#22c55e' : '#ef4444'}
+              detail="Ingresos menos fijos y presupuesto"
+              color={availableAfterCommitted >= 0 ? 'emerald' : 'rose'}
+            />
+            <KpiCard
+              label="Comprometido"
+              value={formatMoney(realExpenses.total)}
+              detail={`${commitmentRate}% de tus ingresos`}
+              color={commitmentRate >= 100 ? 'rose' : commitmentRate >= 80 ? 'amber' : 'violet'}
             />
           </section>
 
-          <section className="panel">
-            <div className="panel-head">
-              <h2>Ultimos 6 meses</h2>
-            </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={data.meses} barGap={6}>
-                <XAxis dataKey="mes" tick={{ fill: '#7a8172', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis hide />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="ingresos" name="Ingresos" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="gastos" name="Gastos" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </section>
-
-          <section className="panel split-panel">
-            <div className="panel-head">
-              <h2>Gastos por categoria</h2>
-            </div>
-            {data.categorias.length ? (
-              <div className="pie-wrap">
-                <PieChart width={148} height={148}>
-                  <Pie data={data.categorias} dataKey="monto" cx={72} cy={72} innerRadius={42} outerRadius={66} paddingAngle={3}>
-                    {data.categorias.map((item) => (
-                      <Cell key={item.cat} fill={item.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-                <div className="legend">
-                  {data.categorias.map((item) => (
-                    <div key={item.cat} className="legend-row">
-                      <span style={{ backgroundColor: item.color }} />
-                      <strong>{item.cat}</strong>
-                      <em>{percent(item.monto, totalCategorias)}%</em>
-                    </div>
-                  ))}
+          <section className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+            <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <Title>Ultimos 6 meses</Title>
+                  <Text>Ingresos contra gastos</Text>
                 </div>
+                <Badge color="emerald">S/</Badge>
               </div>
-            ) : (
-              <p className="empty-state">Sin gastos este mes.</p>
-            )}
+              <BarChart
+                className="mt-6 h-72"
+                data={data.meses}
+                index="mes"
+                categories={['ingresos', 'gastos']}
+                colors={['emerald', 'rose']}
+                valueFormatter={formatMoney}
+                yAxisWidth={74}
+                showLegend
+              />
+            </Card>
+
+            <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <Title>Gastos por categoria</Title>
+                  <Text>{topCategory ? `Principal: ${topCategory.cat}` : 'Sin gastos este mes'}</Text>
+                </div>
+                <Badge color="cyan">{data.categorias.length}</Badge>
+              </div>
+              {data.categorias.length ? (
+                <>
+                  <DonutChart
+                    className="mt-6 h-56"
+                    data={data.categorias}
+                    category="monto"
+                    index="cat"
+                    colors={categoryColors}
+                    valueFormatter={formatMoney}
+                    showLabel
+                  />
+                  <div className="mt-5 space-y-3">
+                    {data.categorias.slice(0, 5).map((item, index) => (
+                      <div key={item.cat} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-200">{item.cat}</p>
+                          <ProgressBar className="mt-2" value={percent(item.monto, totalCategorias)} color={categoryColors[index % categoryColors.length]} />
+                        </div>
+                        <p className="font-mono text-sm font-semibold text-slate-100">{formatMoney(item.monto)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="mt-6">
+                  <EmptyState>Sin gastos este mes.</EmptyState>
+                </div>
+              )}
+            </Card>
           </section>
 
-          <section className="panel">
-            <div className="panel-head">
-              <h2>Gasto real del mes</h2>
-            </div>
-            <div className="real-grid">
-              <div>
-                <span>Fijos</span>
-                <strong>{formatMoney(realExpenses.totalFijos)}</strong>
-              </div>
-              <div>
-                <span>Presupuesto</span>
-                <strong>{formatMoney(realExpenses.totalPresupuesto)}</strong>
-              </div>
-              <div className="total">
-                <span>Total</span>
-                <strong>{formatMoney(realExpenses.total)}</strong>
-              </div>
-            </div>
+          <section className="mt-5 grid gap-4 md:grid-cols-3">
+            <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+              <Text>Ingresos del mes</Text>
+              <Metric className="mt-2 text-2xl">{formatMoney(monthIncome)}</Metric>
+            </Card>
+            <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+              <Text>Fijos</Text>
+              <Metric className="mt-2 text-2xl">{formatMoney(realExpenses.totalFijos)}</Metric>
+            </Card>
+            <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+              <Text>Presupuesto considerado</Text>
+              <Metric className="mt-2 text-2xl">{formatMoney(realExpenses.totalPresupuesto)}</Metric>
+            </Card>
           </section>
-        </div>
         </>
       ) : null}
 
       {tab === 'movimientos' ? (
-        <section className="panel">
-          <div className="panel-head compact">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <h2>Movimientos</h2>
-              <span>{data.transacciones.length} registros recientes</span>
+              <Title>Movimientos</Title>
+              <Text>{data.transacciones.length} registros recientes</Text>
             </div>
+            <Badge color="emerald">{data.mes}</Badge>
           </div>
-          <div className="tx-list">
-            {data.transacciones.length ? data.transacciones.map((tx, index) => (
-              <TransactionRow key={tx.id || `${tx.fecha}-${tx.desc}-${index}`} tx={tx} />
-            )) : <p className="empty-state">Sin movimientos registrados.</p>}
+          <TransactionsTable transactions={data.transacciones} />
+        </Card>
+      ) : null}
+
+      {tab === 'compromisos' ? (
+        <section className="grid gap-4 lg:grid-cols-2">
+          <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Title>Gastos fijos</Title>
+                <Text>{(data.fijos || []).length} activos</Text>
+              </div>
+              <Badge color="amber">{formatMoney(realExpenses.totalFijos)}</Badge>
+            </div>
+            <div className="mt-5">
+              {(data.fijos || []).length ? (
+                (data.fijos || []).map((item) => <FixedExpenseRow key={item.nombre} item={item} />)
+              ) : (
+                <EmptyState>Sin gastos fijos registrados.</EmptyState>
+              )}
+            </div>
+          </Card>
+
+          <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Title>Presupuesto</Title>
+                <Text>Si no hay gasto, se considera el limite completo.</Text>
+              </div>
+              <Badge color="sky">{formatMoney(realExpenses.totalPresupuesto)}</Badge>
+            </div>
+            <div className="mt-5">
+              {data.presupuestos.length ? (
+                data.presupuestos.map((item) => <BudgetProgress key={item.cat} item={item} />)
+              ) : (
+                <EmptyState>Sin presupuestos registrados.</EmptyState>
+              )}
+            </div>
+          </Card>
+
+          <div className="lg:col-span-2">
+            <EmailPanel config={data.emailConfig} />
           </div>
         </section>
       ) : null}
 
-      {tab === 'compromisos' ? (
-        <div className="content-grid">
-          <section className="panel">
-            <div className="panel-head">
-              <h2>Gastos fijos</h2>
-              <span>{fixedExpenses.length} activos</span>
-            </div>
-            <div className="fixed-list">
-              {fixedExpenses.length ? fixedExpenses.map((item) => (
-                <FixedExpenseRow key={item.nombre} item={item} />
-              )) : <p className="empty-state">Sin gastos fijos registrados.</p>}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-head">
-              <h2>Presupuesto considerado</h2>
-              <span>{formatMoney(realExpenses.totalPresupuesto)}</span>
-            </div>
-            {data.presupuestos.length ? (
-              data.presupuestos.map((item) => (
-                <ProgressBar
-                  key={item.cat}
-                  label={item.cat}
-                  current={item.gasto}
-                  target={item.limite}
-                  kind="budget"
-                  detail={`considera ${formatMoney(getBudgetConsidered(item))}`}
-                />
-              ))
-            ) : (
-              <p className="empty-state">Sin presupuestos registrados.</p>
-            )}
-          </section>
-
-          <section className="panel wide-panel">
-            <div className="panel-head">
-              <h2>Resumen comprometido</h2>
-            </div>
-            <div className="commitment-strip">
-              <StatCard label="Fijos" value={formatMoney(realExpenses.totalFijos)} accent="#f59e0b" />
-              <StatCard label="Presupuesto" value={formatMoney(realExpenses.totalPresupuesto)} accent="#3b82f6" />
-              <StatCard label="Total" value={formatMoney(realExpenses.total)} accent="#22c55e" />
-            </div>
-          </section>
-
-          <EmailPanel config={data.emailConfig} />
-        </div>
-      ) : null}
-
       {tab === 'analisis' ? (
-        <div className="content-grid">
-          <section className="panel wide-panel">
-            <div className="panel-head">
-              <h2>Tendencia</h2>
-            </div>
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={data.meses}>
-                <defs>
-                  <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.28} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.26} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="mes" tick={{ fill: '#7a8172', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis hide />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="ingresos" name="Ingresos" stroke="#22c55e" fill="url(#incomeFill)" strokeWidth={2} />
-                <Area type="monotone" dataKey="gastos" name="Gastos" stroke="#ef4444" fill="url(#expenseFill)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </section>
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
+          <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+            <Title>Tendencia</Title>
+            <Text>Ingresos y gastos por mes</Text>
+            <AreaChart
+              className="mt-6 h-80"
+              data={data.meses}
+              index="mes"
+              categories={['ingresos', 'gastos']}
+              colors={['emerald', 'rose']}
+              valueFormatter={formatMoney}
+              yAxisWidth={74}
+              curveType="monotone"
+              showGradient
+              showLegend
+            />
+          </Card>
 
-          <section className="category-grid">
-            {data.categorias.length ? data.categorias.map((item) => (
-              <article key={item.cat} className="category-card">
-                <span>{item.cat}</span>
-                <strong style={{ color: item.color }}>{formatMoney(item.monto)}</strong>
-                <small>{percent(item.monto, totalCategorias)}% del total</small>
-                <div className="mini-track">
-                  <div style={{ width: `${percent(item.monto, totalCategorias)}%`, backgroundColor: item.color }} />
-                </div>
-              </article>
-            )) : <p className="empty-state">Sin categorias para analizar.</p>}
-          </section>
-        </div>
+          <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+            <Title>Categorias</Title>
+            <Text>Distribucion del gasto actual</Text>
+            <div className="mt-5 space-y-4">
+              {data.categorias.length ? (
+                data.categorias.map((item, index) => {
+                  const pct = percent(item.monto, totalCategorias);
+                  const color = categoryColors[index % categoryColors.length];
+
+                  return (
+                    <div key={item.cat}>
+                      <div className="flex items-center justify-between gap-4">
+                        <Text className="truncate font-semibold text-slate-200">{item.cat}</Text>
+                        <span className="font-mono text-sm text-slate-100">{formatMoney(item.monto)}</span>
+                      </div>
+                      <ProgressBar className="mt-2" value={pct} color={color} />
+                      <Text className="mt-1">{pct}% del total</Text>
+                    </div>
+                  );
+                })
+              ) : (
+                <EmptyState>Sin categorias para analizar.</EmptyState>
+              )}
+            </div>
+          </Card>
+        </section>
       ) : null}
 
       {tab === 'metas' ? (
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Metas de ahorro</h2>
+        <section>
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <Title>Metas de ahorro</Title>
+              <Text>Seguimiento de avance por objetivo</Text>
+            </div>
+            <Badge color="violet">{data.metas.length}</Badge>
           </div>
-          {data.metas.length ? (
-            data.metas.map((item) => (
-              <ProgressBar key={item.nombre} label={item.nombre} current={item.ahorrado} target={item.objetivo} kind="goal" />
-            ))
-          ) : (
-            <p className="empty-state">Sin metas registradas.</p>
-          )}
+          <div className="grid gap-4 md:grid-cols-2">
+            {data.metas.length ? (
+              data.metas.map((item) => <GoalProgress key={item.nombre} item={item} />)
+            ) : (
+              <EmptyState>Sin metas registradas.</EmptyState>
+            )}
+          </div>
         </section>
       ) : null}
     </main>

@@ -10,9 +10,6 @@ export default defineConfig({
         entryFileNames: '[name]-[hash].js',
         chunkFileNames: '[name]-[hash].js',
         assetFileNames: '[name]-[hash][extname]',
-        manualChunks: {
-          charts: ['recharts'],
-        },
       },
     },
   },
