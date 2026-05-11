@@ -305,8 +305,7 @@ async function syncFromGas(env, params) {
 
   let goalCount = 0;
   for (const raw of dashData.metas || []) {
-    await upsertGoal(env, chatId, raw);
-    goalCount++;
+    if (await upsertGoal(env, chatId, raw)) goalCount++;
   }
 
   let fixedCount = 0;
@@ -413,9 +412,9 @@ async function upsertBudget(env, chatId, raw) {
 
 async function upsertGoal(env, chatId, raw) {
   const name = normalizeKey(raw.nombre || raw.name || '');
-  const target = Number(raw.objetivo || raw.target_amount || 0);
-  const saved = Number(raw.ahorrado || raw.saved_amount || 0);
-  if (!name || target <= 0) return;
+  const target = parseAmount(raw.objetivo || raw.target_amount || 0);
+  const saved = parseAmount(raw.ahorrado || raw.saved_amount || 0);
+  if (!name || target <= 0) return false;
 
   await env.DB.prepare(`
     INSERT INTO goals (id, chat_id, name, target_amount, saved_amount, updated_at)
@@ -425,6 +424,8 @@ async function upsertGoal(env, chatId, raw) {
       saved_amount = excluded.saved_amount,
       updated_at = CURRENT_TIMESTAMP
   `).bind(`goal:${chatId}:${name}`, chatId, name, target, saved).run();
+
+  return true;
 }
 
 async function upsertFixedExpense(env, chatId, raw) {
@@ -767,6 +768,17 @@ function constantTimeEqual(a, b) {
 
 function round(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function parseAmount(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+
+  const cleaned = String(value || '')
+    .replace(/[^0-9,.-]/g, '')
+    .replace(',', '.');
+  const parsed = Number(cleaned);
+
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function clamp(value, min, max) {
