@@ -253,7 +253,7 @@ export default function App() {
       <DashboardTabs activeTab={tab} onTabChange={setTab} />
 
       {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} /> : null}
-      {tab === 'movimientos' ? <MovementsSection data={data} /> : null}
+      {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} /> : null}
       {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
       {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
       {tab === 'metas' ? <GoalsSection data={data} /> : null}

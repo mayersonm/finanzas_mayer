@@ -42,9 +42,62 @@ function guardarTransaccionD1(tx) {
       return false;
     }
 
-    return true;
+    return payload.id;
   } catch (err) {
     Logger.log('Error guardarTransaccionD1: ' + err);
+    return false;
+  }
+}
+
+function guardarReciboD1(receipt) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiUrl = props.getProperty('d1_api_url');
+    const adminKey = props.getProperty('d1_admin_key');
+
+    if (!apiUrl || !adminKey) {
+      Logger.log('Recibo D1 omitido: faltan d1_api_url o d1_admin_key');
+      return false;
+    }
+
+    if (!receipt || !receipt.transactionId || !receipt.imageBase64) {
+      Logger.log('Recibo D1 omitido: faltan transactionId o imageBase64');
+      return false;
+    }
+
+    const payload = {
+      transaction_id: String(receipt.transactionId),
+      chat_id: String(receipt.chatId),
+      image_base64: receipt.imageBase64,
+      content_type: receipt.mimeType || receipt.contentType || 'image/jpeg',
+      file_name: receipt.fileName || 'recibo.jpg',
+      telegram_file_id: receipt.telegramFileId || '',
+      telegram_file_path: receipt.telegramFilePath || '',
+      fecha: receipt.fecha || '',
+      hora: receipt.hora || '',
+      tipo: receipt.tipo || 'gasto',
+      desc: receipt.desc || '',
+      cat: receipt.cat || 'otro',
+      monto: Number(receipt.monto || 0),
+    };
+
+    const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/receipts', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-admin-key': adminKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+
+    const code = resp.getResponseCode();
+    if (code < 200 || code >= 300) {
+      Logger.log('Error recibo D1 HTTP ' + code + ': ' + resp.getContentText());
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    Logger.log('Error guardarReciboD1: ' + err);
     return false;
   }
 }
@@ -111,28 +164,14 @@ function esAdminD1_(chatId) {
 }
 
 function crearIdTransaccionD1_(tx) {
-  const raw = [
+  return [
+    'tx',
     tx.chatId,
     tx.fecha,
     tx.hora,
     tx.tipo,
-    tx.cat,
-    tx.monto,
+    String(tx.cat || 'otro').toLowerCase(),
+    Number(tx.monto),
     tx.desc,
-    tx.source || 'telegram',
-  ].join('|');
-
-  const digest = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    raw,
-    Utilities.Charset.UTF_8
-  );
-
-  return 'tx_' + digest
-    .map(function (byte) {
-      const value = byte < 0 ? byte + 256 : byte;
-      return value.toString(16).padStart(2, '0');
-    })
-    .join('')
-    .slice(0, 32);
+  ].join(':').slice(0, 180);
 }
