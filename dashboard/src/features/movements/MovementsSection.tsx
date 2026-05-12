@@ -4,7 +4,7 @@ import type { DashboardData } from '../../types/dashboard';
 
 export function MovementsSection({ data }: { data: DashboardData }) {
   return (
-    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <Title>Movimientos</Title>

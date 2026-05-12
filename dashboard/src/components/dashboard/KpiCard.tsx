@@ -12,9 +12,9 @@ export function KpiCard({
   color: Color;
 }) {
   return (
-    <Card decoration="top" decorationColor={color} className="rounded-tremor-default">
+    <Card decoration="top" decorationColor={color} className="rounded-tremor-default !p-4 sm:!p-6">
       <Text>{label}</Text>
-      <Metric className="mt-2 truncate text-2xl sm:text-3xl">{value}</Metric>
+      <Metric className="mt-2 truncate text-xl sm:text-3xl">{value}</Metric>
       <Text className="mt-2">{detail}</Text>
     </Card>
   );

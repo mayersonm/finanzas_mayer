@@ -23,7 +23,7 @@ export function OverviewSection({
 
   return (
     <>
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label={`Balance ${data.mes}`}
           value={formatMoney(monthBalance)}
@@ -50,8 +50,8 @@ export function OverviewSection({
         />
       </section>
 
-      <section className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+      <section className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Title>Ultimos 6 meses</Title>
@@ -60,18 +60,18 @@ export function OverviewSection({
             <Badge color="emerald">S/</Badge>
           </div>
           <BarChart
-            className="mt-6 h-72"
+            className="mt-4 h-56 sm:mt-6 sm:h-72"
             data={data.meses}
             index="mes"
             categories={['ingresos', 'gastos']}
             colors={['emerald', 'rose']}
             valueFormatter={formatMoney}
-            yAxisWidth={74}
+            yAxisWidth={56}
             showLegend
           />
         </Card>
 
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <Title>Gastos por categoria</Title>
@@ -82,7 +82,7 @@ export function OverviewSection({
           {data.categorias.length ? (
             <>
               <DonutChart
-                className="mt-6 h-56"
+                className="mt-4 h-48 sm:mt-6 sm:h-56"
                 data={data.categorias}
                 category="monto"
                 index="cat"
@@ -90,7 +90,7 @@ export function OverviewSection({
                 valueFormatter={formatMoney}
                 showLabel
               />
-              <div className="mt-5 space-y-3">
+              <div className="mt-4 space-y-3 sm:mt-5">
                 {data.categorias.slice(0, 5).map((item, index) => (
                   <div key={item.cat} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                     <div className="min-w-0">
@@ -110,18 +110,18 @@ export function OverviewSection({
         </Card>
       </section>
 
-      <section className="mt-5 grid gap-4 md:grid-cols-3">
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+      <section className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 md:grid-cols-3">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <Text>Ingresos del mes</Text>
-          <Metric className="mt-2 text-2xl">{formatMoney(monthIncome)}</Metric>
+          <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(monthIncome)}</Metric>
         </Card>
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <Text>Fijos</Text>
-          <Metric className="mt-2 text-2xl">{formatMoney(realExpenses.totalFijos)}</Metric>
+          <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(realExpenses.totalFijos)}</Metric>
         </Card>
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <Text>Presupuesto considerado</Text>
-          <Metric className="mt-2 text-2xl">{formatMoney(realExpenses.totalPresupuesto)}</Metric>
+          <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(realExpenses.totalPresupuesto)}</Metric>
         </Card>
       </section>
     </>

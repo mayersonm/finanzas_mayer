@@ -22,8 +22,8 @@ export function AppHeader({
   onLogout: () => void;
 }) {
   return (
-    <Card className="mb-5 rounded-tremor-default border-slate-800 bg-slate-950/80">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <Card className="mb-4 rounded-tremor-default border-slate-800 bg-slate-950/80 !p-4 sm:mb-5 sm:!p-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <Badge color={statusColor(status)}>
@@ -31,20 +31,20 @@ export function AppHeader({
             </Badge>
             <Badge color="cyan">{data.mesKey || data.mes}</Badge>
           </div>
-          <Title className="text-2xl sm:text-3xl">Mayeson Finanzas</Title>
-          <Text className="mt-1">Ultima actualizacion: {loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)}</Text>
+          <Title className="text-xl sm:text-3xl">Mayeson Finanzas</Title>
+          <Text className="mt-1 text-xs sm:text-sm">Ultima actualizacion: {loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)}</Text>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button icon={RiRefreshLine} color="emerald" loading={loading} loadingText="Actualizando" onClick={onRefresh}>
+        <div className="grid gap-2 min-[420px]:grid-cols-3 sm:flex sm:flex-wrap">
+          <Button className="min-w-0" icon={RiRefreshLine} color="emerald" loading={loading} loadingText="Actualizando" onClick={onRefresh}>
             Actualizar
           </Button>
           {isConfigured ? (
             <>
-              <Button icon={RiLockPasswordLine} variant="secondary" color="slate" onClick={onTogglePasswordPanel}>
+              <Button className="min-w-0" icon={RiLockPasswordLine} variant="secondary" color="slate" onClick={onTogglePasswordPanel}>
                 Clave
               </Button>
-              <Button icon={RiLogoutBoxRLine} variant="light" color="rose" onClick={onLogout}>
+              <Button className="min-w-0" icon={RiLogoutBoxRLine} variant="light" color="rose" onClick={onLogout}>
                 Salir
               </Button>
             </>

@@ -5,8 +5,8 @@ export function EmailPanel({ config }: { config?: EmailConfig }) {
   if (!config) return null;
 
   return (
-    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
-      <div className="flex items-start justify-between gap-4">
+    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+      <div className="flex items-start justify-between gap-3 sm:gap-4">
         <div>
           <Title>Correo</Title>
           <Text>Resumenes activos</Text>
@@ -15,7 +15,7 @@ export function EmailPanel({ config }: { config?: EmailConfig }) {
           {config.configured ? 'Configurado' : 'Pendiente'}
         </Badge>
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      <div className="mt-4 grid gap-3 sm:mt-5 sm:grid-cols-3">
         {[
           ['Diario', config.daily || '-'],
           ['Mensual', config.monthly || '-'],
