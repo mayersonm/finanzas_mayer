@@ -16,6 +16,7 @@ const COLORS = {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const receiptFileMatch = url.pathname.match(/^\/api\/receipts\/([^/]+)\/file$/);
 
     if (request.method === 'OPTIONS') {
       return corsResponse(null, 204);
@@ -67,6 +68,17 @@ export default {
         return json(await insertTransaction(env, payload), 201);
       }
 
+      if (url.pathname === '/api/receipts' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await uploadReceipt(env, payload), 201);
+      }
+
+      if (receiptFileMatch && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return receiptFile(env, decodeURIComponent(receiptFileMatch[1]));
+      }
+
       if (url.pathname === '/api/sync/gas' && request.method === 'POST') {
         requireAdminKey(request, env);
         return json(await syncFromGas(env, url.searchParams));
@@ -88,12 +100,14 @@ export default {
 async function health(env) {
   const row = await env.DB.prepare('SELECT COUNT(*) AS total FROM transactions').first();
   const fixed = await env.DB.prepare('SELECT COUNT(*) AS total FROM fixed_expenses WHERE active = 1').first();
+  const receipts = await env.DB.prepare('SELECT COUNT(*) AS total FROM receipts').first();
 
   return {
     ok: true,
     database: 'finanzas_mayeson',
     transactions: row?.total || 0,
     fixedExpenses: fixed?.total || 0,
+    receipts: receipts?.total || 0,
     checkedAt: new Date().toISOString(),
   };
 }
@@ -182,11 +196,23 @@ async function dashboard(env, params) {
   `).bind(chatId, monthKey).first();
 
   const latest = await env.DB.prepare(`
-    SELECT id, tx_date AS fecha, tx_time AS hora, type AS tipo,
-           description AS desc, category AS cat, amount AS monto
-    FROM transactions
-    WHERE chat_id = ?
-    ORDER BY tx_date DESC, tx_time DESC, created_at DESC
+    SELECT
+      t.id,
+      t.tx_date AS fecha,
+      t.tx_time AS hora,
+      t.type AS tipo,
+      t.description AS desc,
+      t.category AS cat,
+      t.amount AS monto,
+      r.id AS receipt_id,
+      r.file_name AS receipt_file_name,
+      r.content_type AS receipt_content_type,
+      r.size AS receipt_size,
+      r.created_at AS receipt_uploaded_at
+    FROM transactions t
+    LEFT JOIN receipts r ON r.transaction_id = t.id
+    WHERE t.chat_id = ?
+    ORDER BY t.tx_date DESC, t.tx_time DESC, t.created_at DESC
     LIMIT 20
   `).bind(chatId).all();
 
@@ -241,11 +267,23 @@ async function transactions(env, params) {
   const chatId = getChatId(env, params);
   const limit = clamp(Number(params.get('limit') || 100), 1, 500);
   const rows = await env.DB.prepare(`
-    SELECT id, tx_date AS fecha, tx_time AS hora, type AS tipo,
-           description AS desc, category AS cat, amount AS monto
-    FROM transactions
-    WHERE chat_id = ?
-    ORDER BY tx_date DESC, tx_time DESC, created_at DESC
+    SELECT
+      t.id,
+      t.tx_date AS fecha,
+      t.tx_time AS hora,
+      t.type AS tipo,
+      t.description AS desc,
+      t.category AS cat,
+      t.amount AS monto,
+      r.id AS receipt_id,
+      r.file_name AS receipt_file_name,
+      r.content_type AS receipt_content_type,
+      r.size AS receipt_size,
+      r.created_at AS receipt_uploaded_at
+    FROM transactions t
+    LEFT JOIN receipts r ON r.transaction_id = t.id
+    WHERE t.chat_id = ?
+    ORDER BY t.tx_date DESC, t.tx_time DESC, t.created_at DESC
     LIMIT ?
   `).bind(chatId, limit).all();
 
@@ -264,6 +302,136 @@ async function insertTransaction(env, payload) {
   const tx = normalizeTransaction(payload, chatId);
   await upsertTransaction(env, tx);
   return { ok: true, transaction: tx };
+}
+
+async function uploadReceipt(env, payload) {
+  const chatId = String(payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const transactionId = String(payload.transaction_id || payload.transactionId || '').trim();
+  const imageBase64 = String(payload.image_base64 || payload.imageBase64 || '').trim();
+  const contentType = normalizeImageContentType(payload.content_type || payload.contentType || payload.mimeType);
+  const fileName = safeFileName(payload.file_name || payload.fileName || `recibo.${imageExtension(contentType)}`);
+
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  if (!transactionId) throw httpError(400, 'transaction_id requerido');
+  if (!imageBase64) throw httpError(400, 'image_base64 requerido');
+
+  const cleanedBase64 = cleanBase64(imageBase64);
+  const bytes = base64ToBytes(cleanedBase64);
+  if (!bytes.byteLength) throw httpError(400, 'Imagen vacia');
+  if (bytes.byteLength > 10 * 1024 * 1024) throw httpError(413, 'Imagen demasiado grande');
+
+  const txDate = String(payload.fecha || payload.tx_date || '').slice(0, 10);
+  const txTime = String(payload.hora || payload.tx_time || '').slice(0, 5);
+  const type = String(payload.tipo || payload.type || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
+  const description = String(payload.desc || payload.description || '').trim();
+  const category = normalizeCategory(payload.cat || payload.category || 'otro', description);
+  const amount = parseAmount(payload.monto || payload.amount || 0);
+  const receiptId = String(payload.id || `receipt_${(await sha256Hex(`${chatId}|${transactionId}|${fileName}`)).slice(0, 32)}`).slice(0, 180);
+  const month = txDate.slice(0, 7) || formatMonth(new Date());
+  const r2Key = `receipts/${safeObjectSegment(chatId)}/${month}/${safeObjectSegment(receiptId)}.${imageExtension(contentType)}`;
+  let storage = 'd1';
+  let storedR2Key = null;
+  let storedBase64 = cleanedBase64;
+
+  if (env.RECEIPTS_BUCKET) {
+    await env.RECEIPTS_BUCKET.put(r2Key, bytes, {
+      httpMetadata: {
+        contentType,
+      },
+      customMetadata: {
+        chat_id: chatId,
+        transaction_id: transactionId,
+      },
+    });
+    storage = 'r2';
+    storedR2Key = r2Key;
+    storedBase64 = null;
+  }
+
+  await env.DB.prepare(`
+    INSERT INTO receipts (
+      id, transaction_id, chat_id, storage, r2_key, image_base64, file_name, content_type, size,
+      telegram_file_id, telegram_file_path, tx_date, tx_time, type,
+      description, category, amount, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(transaction_id) DO UPDATE SET
+      storage = excluded.storage,
+      r2_key = excluded.r2_key,
+      image_base64 = excluded.image_base64,
+      file_name = excluded.file_name,
+      content_type = excluded.content_type,
+      size = excluded.size,
+      telegram_file_id = excluded.telegram_file_id,
+      telegram_file_path = excluded.telegram_file_path,
+      tx_date = excluded.tx_date,
+      tx_time = excluded.tx_time,
+      type = excluded.type,
+      description = excluded.description,
+      category = excluded.category,
+      amount = excluded.amount,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(
+    receiptId,
+    transactionId,
+    chatId,
+    storage,
+    storedR2Key,
+    storedBase64,
+    fileName,
+    contentType,
+    bytes.byteLength,
+    String(payload.telegram_file_id || payload.telegramFileId || ''),
+    String(payload.telegram_file_path || payload.telegramFilePath || ''),
+    txDate,
+    txTime,
+    type,
+    description,
+    category,
+    amount || null,
+  ).run();
+
+  return {
+    ok: true,
+    receipt: {
+      id: receiptId,
+      transactionId,
+      fileName,
+      contentType,
+      size: bytes.byteLength,
+    },
+  };
+}
+
+async function receiptFile(env, receiptId) {
+  const row = await env.DB.prepare(`
+    SELECT storage, r2_key, image_base64, file_name, content_type
+    FROM receipts
+    WHERE id = ?
+  `).bind(receiptId).first();
+
+  if (!row) throw httpError(404, 'Recibo no encontrado');
+
+  if (row.storage === 'r2') {
+    if (!env.RECEIPTS_BUCKET) throw httpError(500, 'RECEIPTS_BUCKET no configurado');
+
+    const object = await env.RECEIPTS_BUCKET.get(row.r2_key);
+    if (!object) throw httpError(404, 'Archivo no encontrado');
+
+    return corsResponse(object.body, 200, {
+      'content-type': row.content_type || 'application/octet-stream',
+      'cache-control': 'private, max-age=60',
+      'content-disposition': `inline; filename="${safeHeaderFileName(row.file_name || 'recibo')}"`,
+    });
+  }
+
+  if (!row.image_base64) throw httpError(404, 'Imagen no disponible');
+
+  return corsResponse(base64ToBytes(row.image_base64), 200, {
+    'content-type': row.content_type || 'application/octet-stream',
+    'cache-control': 'private, max-age=60',
+    'content-disposition': `inline; filename="${safeHeaderFileName(row.file_name || 'recibo')}"`,
+  });
 }
 
 async function syncFromGas(env, params) {
@@ -381,7 +549,10 @@ async function upsertTransaction(env, tx) {
       description = excluded.description,
       category = excluded.category,
       amount = excluded.amount,
-      source = excluded.source,
+      source = CASE
+        WHEN excluded.source = 'gas' AND transactions.source <> 'gas' THEN transactions.source
+        ELSE excluded.source
+      END,
       updated_at = CURRENT_TIMESTAMP
   `).bind(
     tx.id,
@@ -563,13 +734,23 @@ function normalizeTransaction(raw, chatId) {
   const desc = String(raw.desc || raw.description || 'Sin descripcion').trim();
   const cat = normalizeCategory(raw.cat || raw.category || 'otro', desc);
   const monto = Math.abs(Number(raw.monto || raw.amount || 0));
+  const rawId = String(raw.id || '').trim();
 
   if (!fecha || monto <= 0) {
     throw httpError(400, 'Transaccion invalida');
   }
 
   return {
-    id: String(raw.id || `tx:${chatId}:${fecha}:${hora}:${tipo}:${cat}:${monto}:${desc}`).slice(0, 180),
+    id: stableTransactionId({
+      rawId,
+      chatId,
+      fecha,
+      hora,
+      tipo,
+      cat,
+      monto,
+      desc,
+    }),
     chat_id: chatId,
     fecha,
     hora,
@@ -590,6 +771,13 @@ function txShape(row) {
     desc: row.desc,
     cat: row.cat,
     monto: round(row.monto),
+    receipt: row.receipt_id ? {
+      id: row.receipt_id,
+      fileName: row.receipt_file_name || 'recibo',
+      contentType: row.receipt_content_type || 'image/jpeg',
+      size: Number(row.receipt_size || 0),
+      uploadedAt: row.receipt_uploaded_at || '',
+    } : undefined,
   };
 }
 
@@ -779,6 +967,77 @@ function parseAmount(value) {
   const parsed = Number(cleaned);
 
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function stableTransactionId({ rawId, chatId, fecha, hora, tipo, cat, monto, desc }) {
+  const provided = String(rawId || '').trim();
+  if (provided && !/^\d+$/.test(provided)) return provided.slice(0, 180);
+
+  return [
+    'tx',
+    chatId,
+    fecha,
+    hora,
+    tipo,
+    cat,
+    round(monto),
+    desc,
+  ].join(':').slice(0, 180);
+}
+
+function cleanBase64(value) {
+  return String(value || '')
+    .replace(/^data:[^;]+;base64,/i, '')
+    .replace(/\s/g, '');
+}
+
+function base64ToBytes(value) {
+  const cleaned = cleanBase64(value);
+
+  const binary = atob(cleaned);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return bytes;
+}
+
+function normalizeImageContentType(value) {
+  const contentType = String(value || '').toLowerCase();
+  if (contentType === 'image/png') return 'image/png';
+  if (contentType === 'image/webp') return 'image/webp';
+  return 'image/jpeg';
+}
+
+function imageExtension(contentType) {
+  if (contentType === 'image/png') return 'png';
+  if (contentType === 'image/webp') return 'webp';
+  return 'jpg';
+}
+
+function safeObjectSegment(value) {
+  return String(value || 'item')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120) || 'item';
+}
+
+function safeFileName(value) {
+  const name = String(value || 'recibo')
+    .split(/[\\/]/)
+    .pop()
+    .replace(/[\r\n"]/g, '')
+    .trim();
+
+  return name.slice(0, 120) || 'recibo';
+}
+
+function safeHeaderFileName(value) {
+  return safeFileName(value).replace(/[^\x20-\x7E]/g, '');
 }
 
 function clamp(value, min, max) {

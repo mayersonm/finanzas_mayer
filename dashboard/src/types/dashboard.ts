@@ -12,6 +12,15 @@ export interface Transaction {
   desc: string;
   cat: string;
   monto: number;
+  receipt?: TransactionReceipt;
+}
+
+export interface TransactionReceipt {
+  id: string;
+  fileName?: string;
+  contentType?: string;
+  size?: number;
+  uploadedAt?: string;
 }
 
 export interface CategoryTotal {

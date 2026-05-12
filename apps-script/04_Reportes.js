@@ -736,7 +736,8 @@ function procesarFotoRecibo(chatId, msg) {
     const cat  = normalizarCat(datos.categoria || 'otro', datos.descripcion || desc);
 
     sheet.appendRow([fecha, hora, 'gasto', desc, cat, monto, chatId]);
-    guardarTransaccionD1({
+
+    const txD1 = {
       chatId: chatId,
       fecha: fecha,
       hora: hora,
@@ -745,7 +746,26 @@ function procesarFotoRecibo(chatId, msg) {
       cat: cat,
       monto: monto,
       source: 'telegram_receipt',
-    });
+    };
+    const transactionId = guardarTransaccionD1(txD1);
+
+    if (transactionId) {
+      guardarReciboD1({
+        transactionId: transactionId,
+        chatId: chatId,
+        imageBase64: imageB64,
+        mimeType: mimeType,
+        fileName: filePath.split('/').pop() || 'recibo.jpg',
+        telegramFileId: fileId,
+        telegramFilePath: filePath,
+        fecha: fecha,
+        hora: hora,
+        tipo: 'gasto',
+        desc: desc,
+        cat: cat,
+        monto: monto,
+      });
+    }
 
     // Verifica presupuesto
     verificarPresupuesto(chatId, cat);
