@@ -19,9 +19,9 @@ export function DashboardTabs({
         if (nextTab) onTabChange(nextTab);
       }}
     >
-      <TabList variant="solid" color="emerald" className="mb-5 w-full overflow-x-auto">
+      <TabList variant="solid" color="emerald" className="mb-4 w-full overflow-x-auto sm:mb-5">
         {tabs.map((item) => (
-          <Tab key={item.id} icon={item.icon}>
+          <Tab key={item.id} icon={item.icon} className="text-xs sm:text-sm">
             {item.label}
           </Tab>
         ))}

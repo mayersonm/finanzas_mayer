@@ -27,7 +27,7 @@ export function PasswordPanel({
   onClose: () => void;
 }) {
   return (
-    <Card className="mb-5 ml-auto max-w-xl rounded-tremor-default border-slate-800 bg-slate-950/80">
+    <Card className="mb-4 ml-auto max-w-xl rounded-tremor-default border-slate-800 bg-slate-950/80 !p-4 sm:mb-5 sm:!p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <Title>Cambiar clave</Title>
@@ -45,7 +45,7 @@ export function PasswordPanel({
           value={currentPassword}
           onChange={(event) => onCurrentPasswordChange(event.target.value)}
           placeholder="Clave actual"
-          className="h-11 rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500"
+          className="h-10 rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500 sm:h-11"
         />
         <input
           autoComplete="new-password"
@@ -53,7 +53,7 @@ export function PasswordPanel({
           value={newPassword}
           onChange={(event) => onNewPasswordChange(event.target.value)}
           placeholder="Nueva clave"
-          className="h-11 rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500"
+          className="h-10 rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500 sm:h-11"
         />
         <input
           autoComplete="new-password"
@@ -61,7 +61,7 @@ export function PasswordPanel({
           value={confirmPassword}
           onChange={(event) => onConfirmPasswordChange(event.target.value)}
           placeholder="Repetir nueva clave"
-          className="h-11 rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500"
+          className="h-10 rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500 sm:h-11"
         />
         {error ? (
           <div className="rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">

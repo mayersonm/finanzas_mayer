@@ -16,8 +16,8 @@ export function CommitmentsSection({
   const fixedExpenses = data.fijos || [];
 
   return (
-    <section className="grid gap-4 lg:grid-cols-2">
-      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+    <section className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <Title>Gastos fijos</Title>
@@ -25,7 +25,7 @@ export function CommitmentsSection({
           </div>
           <Badge color="amber">{formatMoney(realExpenses.totalFijos)}</Badge>
         </div>
-        <div className="mt-5">
+        <div className="mt-4 sm:mt-5">
           {fixedExpenses.length ? (
             fixedExpenses.map((item) => <FixedExpenseRow key={item.nombre} item={item} />)
           ) : (
@@ -34,7 +34,7 @@ export function CommitmentsSection({
         </div>
       </Card>
 
-      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70">
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <Title>Presupuesto</Title>
@@ -42,7 +42,7 @@ export function CommitmentsSection({
           </div>
           <Badge color="sky">{formatMoney(realExpenses.totalPresupuesto)}</Badge>
         </div>
-        <div className="mt-5">
+        <div className="mt-4 sm:mt-5">
           {data.presupuestos.length ? (
             data.presupuestos.map((item) => <BudgetProgress key={item.cat} item={item} />)
           ) : (

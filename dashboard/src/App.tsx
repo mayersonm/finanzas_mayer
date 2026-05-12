@@ -219,7 +219,7 @@ export default function App() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+    <main className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-6 sm:py-5 lg:px-8">
       <AppHeader
         data={data}
         loading={loading}
