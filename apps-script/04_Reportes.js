@@ -648,8 +648,8 @@ function procesarFotoRecibo(chatId, msg) {
   sendMessage(chatId, '📸 Analizando tu recibo...', true);
 
   try {
-    // Toma la foto de mayor resolución
-    const foto    = msg.photo[msg.photo.length - 1];
+    // Toma una foto legible sin pasarnos de peso para la API de vision.
+    const foto    = elegirFotoRecibo_(msg.photo);
     const fileId  = foto.file_id;
 
     // Obtiene la URL de descarga
@@ -657,16 +657,32 @@ function procesarFotoRecibo(chatId, msg) {
       `https://api.telegram.org/bot${TOKEN}/getFile?file_id=${fileId}`,
       { muteHttpExceptions: true }
     );
-    const filePath = JSON.parse(fileResp.getContentText()).result.file_path;
+    const fileBody = parseJsonSeguro_(fileResp.getContentText(), {});
+    if (fileResp.getResponseCode() >= 300 || !fileBody.ok || !fileBody.result || !fileBody.result.file_path) {
+      Logger.log('Telegram getFile error HTTP ' + fileResp.getResponseCode() + ': ' + fileResp.getContentText());
+      return sendMessage(chatId, '❌ No pude descargar la foto desde Telegram. Intenta enviarla otra vez.', true);
+    }
+
+    const filePath = fileBody.result.file_path;
     const fileUrl  = `https://api.telegram.org/file/bot${TOKEN}/${filePath}`;
 
     // Descarga la imagen y convierte a base64
     const imageResp = UrlFetchApp.fetch(fileUrl, { muteHttpExceptions: true });
+    if (imageResp.getResponseCode() >= 300) {
+      Logger.log('Telegram file download error HTTP ' + imageResp.getResponseCode() + ': ' + imageResp.getContentText());
+      return sendMessage(chatId, '❌ No pude descargar el archivo de la foto. Intenta nuevamente.', true);
+    }
+
     const imageB64  = Utilities.base64Encode(imageResp.getContent());
     const mimeType  = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
 
     // Envía a Claude con visión
     const apiKey = PropertiesService.getScriptProperties().getProperty('claude_api_key');
+    if (!apiKey) {
+      Logger.log('Falta Script Property claude_api_key');
+      return sendMessage(chatId, '❌ Falta configurar la API key de Claude para leer recibos.', true);
+    }
+
     const resp   = UrlFetchApp.fetch('https://api.synterolink.com/v1/messages', {
       method : 'post',
       headers: {
@@ -700,17 +716,29 @@ function procesarFotoRecibo(chatId, msg) {
       muteHttpExceptions: true
     });
 
-    const result = JSON.parse(resp.getContentText());
+    const rawClaude = resp.getContentText();
+    if (resp.getResponseCode() >= 300) {
+      Logger.log('Claude error HTTP ' + resp.getResponseCode() + ': ' + rawClaude);
+      return sendMessage(chatId, '❌ La IA no pudo leer el recibo en este momento. Intenta otra foto más clara o agrega el gasto manualmente.', true);
+    }
+
+    const result = parseJsonSeguro_(rawClaude, null);
+    if (!result) {
+      Logger.log('Claude JSON invalido: ' + rawClaude);
+      return sendMessage(chatId, '❌ La respuesta de IA no fue válida. Intenta nuevamente con una foto más clara.', true);
+    }
+
     const texto  = result.content?.find(b => b.type === 'text')?.text?.trim();
 
     if (!texto) {
+      Logger.log('Claude sin texto util: ' + rawClaude);
       return sendMessage(chatId, '❌ No pude analizar la imagen. Intenta de nuevo.', true);
     }
 
     // Parsea el JSON que devuelve Claude
     let datos;
     try {
-      datos = JSON.parse(texto);
+      datos = JSON.parse(extraerJsonRecibo_(texto));
     } catch(e) {
       Logger.log('JSON inválido de Claude: ' + texto);
       return sendMessage(chatId, '❌ No pude leer el recibo. ¿Es una foto clara del ticket?', true);
@@ -749,8 +777,9 @@ function procesarFotoRecibo(chatId, msg) {
     };
     const transactionId = guardarTransaccionD1(txD1);
 
+    let reciboGuardado = false;
     if (transactionId) {
-      guardarReciboD1({
+      reciboGuardado = guardarReciboD1({
         transactionId: transactionId,
         chatId: chatId,
         imageBase64: imageB64,
@@ -776,13 +805,45 @@ function procesarFotoRecibo(chatId, msg) {
       `💵 S/ ${monto.toFixed(2)}\n` +
       `🏷️ ${capitalizar(cat)}\n` +
       `📅 ${fecha}\n\n` +
+      (reciboGuardado ? `🧾 Foto guardada en el dashboard\n\n` : `⚠️ El gasto se registró, pero la foto no se pudo adjuntar al dashboard.\n\n`) +
       `_¿El dato es incorrecto? Elimínalo con \`ultimos\` y agrégalo manualmente._`,
       true
     );
 
   } catch (err) {
-    Logger.log('Error procesarFotoRecibo: ' + err.toString());
+    Logger.log('Error procesarFotoRecibo: ' + (err && err.stack ? err.stack : err));
     sendMessage(chatId, '❌ Error al procesar la foto. Intenta de nuevo.', true);
   }
+}
+
+function elegirFotoRecibo_(photos) {
+  if (!photos || !photos.length) throw new Error('Mensaje sin photos');
+
+  const maxBytes = 2 * 1024 * 1024;
+  const candidatas = photos
+    .filter(function (p) { return !p.file_size || p.file_size <= maxBytes; })
+    .sort(function (a, b) {
+      return ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0));
+    });
+
+  return candidatas[0] || photos[Math.max(photos.length - 2, 0)] || photos[photos.length - 1];
+}
+
+function parseJsonSeguro_(text, fallback) {
+  try {
+    return JSON.parse(text || '');
+  } catch (_err) {
+    return fallback;
+  }
+}
+
+function extraerJsonRecibo_(text) {
+  const limpio = String(text || '').trim();
+  if (limpio.charAt(0) === '{') return limpio;
+
+  const match = limpio.match(/\{[\s\S]*\}/);
+  if (match) return match[0];
+
+  return limpio;
 }
 
