@@ -17,8 +17,14 @@ function normalizarCat(cat, desc) {
     cafe: 'comida',
     restaurant: 'comida',
     restaurante: 'comida',
-    mercado: 'comida',
-    supermercado: 'comida',
+    mercado: 'supermercado',
+    supermercado: 'supermercado',
+    super: 'supermercado',
+    wong: 'supermercado',
+    metro: 'supermercado',
+    tottus: 'supermercado',
+    makro: 'supermercado',
+    vivanda: 'supermercado',
     kfc: 'comida',
     popeyes: 'comida',
     bembos: 'comida',
@@ -96,7 +102,8 @@ function normalizarCat(cat, desc) {
   if (direct[rawCat]) return direct[rawCat];
 
   const rules = [
-    { cat: 'comida', words: ['kfc', 'popeyes', 'bembos', 'mcdonalds', 'supermercado', 'mercado', 'pollo', 'pizza', 'almuerzo', 'cena', 'desayuno', 'yogurt', 'leche'] },
+    { cat: 'supermercado', words: ['supermercado', 'mercado', 'wong', 'metro', 'tottus', 'makro', 'vivanda', 'plaza vea'] },
+    { cat: 'comida', words: ['kfc', 'popeyes', 'bembos', 'mcdonalds', 'pollo', 'pizza', 'almuerzo', 'cena', 'desayuno', 'yogurt', 'leche'] },
     { cat: 'transporte', words: ['taxi', 'uber', 'didi', 'indrive', 'gasolina', 'combustible', 'peaje', 'estacionamiento', 'carro'] },
     { cat: 'servicios', words: ['internet', 'alquiler', 'renta', 'luz', 'agua', 'telefono', 'celular', 'recibo de gas'] },
     { cat: 'entretenimiento', words: ['netflix', 'spotify', 'juegos', 'steam', 'cine', 'disney'] },

@@ -55,6 +55,109 @@ function registrarMovimiento(chatId, match, originalText) {
     if (tipo === 'gasto') verificarPresupuesto(chatId, cat);
 }
 
+// ---- CORREGIR CATEGORIA ------------------------------------
+// Ejemplos:
+//   categoria ultimo comida
+//   categoria 1 supermercado
+// Usa la numeracion que muestra el comando "ultimos".
+function cmdCategoria(chatId, text) {
+    const match = String(text || '').match(/^(?:categoria|cat)\s+(ultimo|último|last|\d+)\s+(.+)$/i);
+    if (!match) {
+        return sendMessage(
+            chatId,
+            '❌ Formato: `categoria ultimo comida` o `categoria 1 supermercado`.\n\nUsa `ultimos` para ver la numeración.',
+            true
+        );
+    }
+
+    const ref = String(match[1]).toLowerCase();
+    const nuevaCat = normalizarCat(match[2]);
+    if (!nuevaCat) {
+        return sendMessage(chatId, '❌ Categoria no valida.', true);
+    }
+
+    const ultimos = obtenerUltimosConFila_(chatId, 5);
+    if (!ultimos.length) {
+        return sendMessage(chatId, '📭 No tienes movimientos para corregir.', true);
+    }
+
+    const index = (ref === 'ultimo' || ref === 'último' || ref === 'last')
+        ? 0
+        : parseInt(ref, 10) - 1;
+
+    if (isNaN(index) || index < 0 || index >= ultimos.length) {
+        return sendMessage(chatId, '❌ Ese número no está en `ultimos`. Ej: `categoria 1 comida`.', true);
+    }
+
+    const item = ultimos[index];
+    const row = item.values;
+    const anterior = String(row[4] || 'otro').toLowerCase();
+
+    if (anterior === nuevaCat) {
+        return sendMessage(chatId, `🏷️ Ese movimiento ya está en *${capitalizar(nuevaCat)}*.`, true);
+    }
+
+    const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
+    sheet.getRange(item.rowNumber, 5).setValue(nuevaCat);
+
+    const fecha = formatearFechaTx_(row[0]);
+    const hora = formatearHoraTx_(row[1]);
+    const tipo = String(row[2] || 'gasto').toLowerCase();
+    const desc = String(row[3] || 'Sin descripcion');
+    const monto = parseFloat(row[5]) || 0;
+
+    const d1Ok = actualizarCategoriaD1({
+        chatId: chatId,
+        fecha: fecha,
+        hora: hora,
+        tipo: tipo,
+        desc: desc,
+        oldCat: anterior,
+        cat: nuevaCat,
+        monto: monto,
+    });
+
+    if (tipo === 'gasto') verificarPresupuesto(chatId, nuevaCat);
+
+    return sendMessage(
+        chatId,
+        `🏷️ *Categoria actualizada*\n\n` +
+        `${desc}\n` +
+        `${capitalizar(anterior)} → *${capitalizar(nuevaCat)}*\n` +
+        `S/ ${monto.toFixed(2)}\n\n` +
+        (d1Ok ? `_Actualizado en Sheets y D1._` : `_Actualizado en Sheets. D1 no respondio, revisa el log._`),
+        true
+    );
+}
+
+function obtenerUltimosConFila_(chatId, limit) {
+    const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
+    if (!sheet || sheet.getLastRow() < 2) return [];
+
+    const values = sheet.getDataRange().getValues();
+    const rows = [];
+
+    for (let i = 1; i < values.length; i++) {
+        if (String(values[i][6]) === String(chatId)) {
+            rows.push({ rowNumber: i + 1, values: values[i] });
+        }
+    }
+
+    return rows.slice(-limit).reverse();
+}
+
+function formatearFechaTx_(value) {
+    return Utilities.formatDate(new Date(value), 'America/Lima', 'yyyy-MM-dd');
+}
+
+function formatearHoraTx_(value) {
+    if (Object.prototype.toString.call(value) === '[object Date]') {
+        return Utilities.formatDate(value, 'America/Lima', 'HH:mm');
+    }
+
+    return String(value || '00:00').slice(0, 5);
+}
+
 // ---- PRESUPUESTO MENSUAL -----------------------------------
 // Guarda los presupuestos en la hoja "Presupuestos"
 // Columnas: ChatID | Categoría | Limite

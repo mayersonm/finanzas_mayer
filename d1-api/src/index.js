@@ -2,6 +2,7 @@ const DEFAULT_TZ = 'America/Lima';
 
 const COLORS = {
   comida: '#22c55e',
+  supermercado: '#84cc16',
   transporte: '#3b82f6',
   servicios: '#f59e0b',
   entretenimiento: '#ec4899',
@@ -66,6 +67,12 @@ export default {
         requireAdminKey(request, env);
         const payload = await request.json();
         return json(await insertTransaction(env, payload), 201);
+      }
+
+      if (url.pathname === '/api/transactions/category' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await updateTransactionCategory(env, payload));
       }
 
       if (url.pathname === '/api/receipts' && request.method === 'POST') {
@@ -302,6 +309,120 @@ async function insertTransaction(env, payload) {
   const tx = normalizeTransaction(payload, chatId);
   await upsertTransaction(env, tx);
   return { ok: true, transaction: tx };
+}
+
+async function updateTransactionCategory(env, payload) {
+  const chatId = String(payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const oldId = String(payload.old_id || payload.id || '').trim();
+  const newId = String(payload.new_id || '').trim();
+  const newCategory = normalizeCategory(payload.cat || payload.category || 'otro', payload.desc || payload.description || '');
+
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  if (!newCategory) throw httpError(400, 'categoria requerida');
+
+  const existing = await findTransactionForCategoryUpdate(env, payload, chatId, oldId);
+  if (!existing) throw httpError(404, 'Transaccion no encontrada');
+
+  const targetId = (newId || stableTransactionId({
+    rawId: '',
+    chatId,
+    fecha: existing.tx_date,
+    hora: existing.tx_time,
+    tipo: existing.type,
+    cat: newCategory,
+    monto: existing.amount,
+    desc: existing.description,
+  })).slice(0, 180);
+  const nextSource = existing.source && existing.source !== 'gas' ? existing.source : 'telegram_edit';
+
+  if (targetId !== existing.id) {
+    await env.DB.prepare(`
+      INSERT INTO transactions (
+        id, chat_id, tx_date, tx_time, type, description, category, amount, source, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET
+        category = excluded.category,
+        source = excluded.source,
+        updated_at = CURRENT_TIMESTAMP
+    `).bind(
+      targetId,
+      existing.chat_id,
+      existing.tx_date,
+      existing.tx_time,
+      existing.type,
+      existing.description,
+      newCategory,
+      existing.amount,
+      nextSource,
+      existing.created_at,
+    ).run();
+
+    await env.DB.prepare(`
+      UPDATE receipts
+      SET transaction_id = ?, category = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE transaction_id = ?
+    `).bind(targetId, newCategory, existing.id).run();
+
+    await env.DB.prepare('DELETE FROM transactions WHERE id = ?')
+      .bind(existing.id)
+      .run();
+  } else {
+    await env.DB.prepare(`
+      UPDATE transactions
+      SET category = ?, source = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(newCategory, nextSource, existing.id).run();
+
+    await env.DB.prepare(`
+      UPDATE receipts
+      SET category = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE transaction_id = ?
+    `).bind(newCategory, existing.id).run();
+  }
+
+  return {
+    ok: true,
+    transaction: {
+      id: targetId,
+      oldId: existing.id,
+      cat: newCategory,
+    },
+  };
+}
+
+async function findTransactionForCategoryUpdate(env, payload, chatId, oldId) {
+  if (oldId) {
+    const byId = await env.DB.prepare('SELECT * FROM transactions WHERE id = ? AND chat_id = ?')
+      .bind(oldId, chatId)
+      .first();
+    if (byId) return byId;
+  }
+
+  const fecha = String(payload.fecha || payload.tx_date || '').slice(0, 10);
+  const hora = String(payload.hora || payload.tx_time || '00:00').slice(0, 5);
+  const tipo = String(payload.tipo || payload.type || '').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
+  const desc = String(payload.desc || payload.description || '').trim();
+  const amount = parseAmount(payload.monto || payload.amount || 0);
+  const oldCategory = normalizeCategory(payload.old_cat || payload.oldCategory || payload.previous_category || '', desc);
+
+  if (!fecha || !desc || amount <= 0) return null;
+
+  return env.DB.prepare(`
+    SELECT *
+    FROM transactions
+    WHERE chat_id = ?
+      AND tx_date = ?
+      AND tx_time = ?
+      AND type = ?
+      AND lower(trim(description)) = lower(trim(?))
+      AND ABS(amount - ?) < 0.005
+      AND (? = '' OR category = ?)
+    ORDER BY
+      CASE WHEN source <> 'gas' THEN 0 ELSE 1 END,
+      created_at ASC
+    LIMIT 1
+  `).bind(chatId, fecha, hora, tipo, desc, amount, oldCategory, oldCategory).first();
 }
 
 async function uploadReceipt(env, payload) {
@@ -1118,8 +1239,14 @@ function normalizeCategory(value, description = '') {
     cafe: 'comida',
     restaurant: 'comida',
     restaurante: 'comida',
-    mercado: 'comida',
-    supermercado: 'comida',
+    mercado: 'supermercado',
+    supermercado: 'supermercado',
+    super: 'supermercado',
+    wong: 'supermercado',
+    metro: 'supermercado',
+    tottus: 'supermercado',
+    makro: 'supermercado',
+    vivanda: 'supermercado',
     kfc: 'comida',
     popeyes: 'comida',
     bembos: 'comida',
@@ -1187,7 +1314,8 @@ function normalizeCategory(value, description = '') {
   if (direct[rawCategory]) return direct[rawCategory];
 
   const rules = [
-    { cat: 'comida', words: ['kfc', 'popeyes', 'bembos', 'mcdonalds', 'supermercado', 'mercado', 'pollo', 'pizza', 'almuerzo', 'cena', 'desayuno', 'yogurt', 'leche'] },
+    { cat: 'supermercado', words: ['supermercado', 'mercado', 'wong', 'metro', 'tottus', 'makro', 'vivanda', 'plaza vea'] },
+    { cat: 'comida', words: ['kfc', 'popeyes', 'bembos', 'mcdonalds', 'pollo', 'pizza', 'almuerzo', 'cena', 'desayuno', 'yogurt', 'leche'] },
     { cat: 'transporte', words: ['taxi', 'uber', 'didi', 'indrive', 'gasolina', 'combustible', 'peaje', 'estacionamiento', 'carro'] },
     { cat: 'servicios', words: ['internet', 'alquiler', 'renta', 'luz', 'agua', 'telefono', 'celular', 'recibo de gas'] },
     { cat: 'entretenimiento', words: ['netflix', 'spotify', 'juegos', 'steam', 'cine', 'disney'] },

@@ -23,6 +23,7 @@ const DASH_TZ = 'America/Lima';
 
 const DASH_COLORS = {
   comida: '#22c55e',
+  supermercado: '#84cc16',
   transporte: '#3b82f6',
   servicios: '#f59e0b',
   entretenimiento: '#ec4899',
