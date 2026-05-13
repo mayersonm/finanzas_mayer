@@ -74,16 +74,23 @@ function sendUltimos(chatId) {
     return sendMessage(chatId, '📭 No tienes movimientos registrados aún.');
   }
 
-  const lineas = data.map(row => {
+  const lineas = data.map((row, index) => {
     const tipo  = row[2];
     const desc  = row[3];
+    const cat   = row[4];
     const monto = parseFloat(row[5]).toFixed(2);
     const fecha = row[0];
     const emoji = tipo === 'gasto' ? '🔴' : '🟢';
-    return `${emoji} ${desc} — S/ ${monto} _(${Utilities.formatDate(new Date(fecha), Session.getScriptTimeZone(), 'dd/MM/yyyy')})_`;
+    return `#${index + 1} ${emoji} ${desc} — S/ ${monto} · ${capitalizar(cat)} _(${Utilities.formatDate(new Date(fecha), Session.getScriptTimeZone(), 'dd/MM/yyyy')})_`;
   }).join('\n');
 
-  sendMessage(chatId, `📋 *Últimos movimientos:*\n\n${lineas}`, true);
+  sendMessage(
+    chatId,
+    `📋 *Últimos movimientos:*\n\n${lineas}\n\n` +
+    `_Corrige categoria con:_\n` +
+    '`categoria 1 comida` o `categoria ultimo supermercado`',
+    true
+  );
 }
 // ---- EXPORTAR A CSV
 function cmdExportar(chatId) {
@@ -710,7 +717,7 @@ function procesarFotoRecibo(chatId, msg) {
                 'Analiza este recibo o ticket de compra y extrae la información.\n' +
                 'Responde SOLO con este JSON exacto, sin explicaciones ni markdown:\n' +
                 '{"monto": 45.50, "descripcion": "Almuerzo pollo a la brasa", "categoria": "comida"}\n\n' +
-                'Categorías válidas: comida, transporte, servicios, entretenimiento, salud, ropa, educacion, otro\n' +
+                'Categorías válidas: comida, supermercado, transporte, servicios, entretenimiento, salud, ropa, educacion, otro\n' +
                 'Si no puedes leer el monto exacto, estímalo.\n' +
                 'Si no es un recibo, responde: {"error": "No es un recibo"}'
             }

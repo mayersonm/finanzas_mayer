@@ -102,6 +102,70 @@ function guardarReciboD1(receipt) {
   }
 }
 
+function actualizarCategoriaD1(tx) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiUrl = props.getProperty('d1_api_url');
+    const adminKey = props.getProperty('d1_admin_key');
+
+    if (!apiUrl || !adminKey) {
+      Logger.log('Categoria D1 omitida: faltan d1_api_url o d1_admin_key');
+      return false;
+    }
+
+    const oldPayload = {
+      chatId: tx.chatId,
+      fecha: tx.fecha,
+      hora: tx.hora,
+      tipo: tx.tipo,
+      desc: tx.desc,
+      cat: tx.oldCat || tx.cat,
+      monto: tx.monto,
+    };
+    const newPayload = {
+      chatId: tx.chatId,
+      fecha: tx.fecha,
+      hora: tx.hora,
+      tipo: tx.tipo,
+      desc: tx.desc,
+      cat: tx.cat,
+      monto: tx.monto,
+    };
+
+    const payload = {
+      old_id: crearIdTransaccionD1_(oldPayload),
+      new_id: crearIdTransaccionD1_(newPayload),
+      chat_id: String(tx.chatId),
+      fecha: tx.fecha,
+      hora: tx.hora,
+      tipo: tx.tipo,
+      desc: tx.desc,
+      old_cat: String(tx.oldCat || '').toLowerCase(),
+      cat: String(tx.cat || 'otro').toLowerCase(),
+      monto: Number(tx.monto),
+    };
+
+    const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/transactions/category', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-admin-key': adminKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+
+    const code = resp.getResponseCode();
+    if (code < 200 || code >= 300) {
+      Logger.log('Error categoria D1 HTTP ' + code + ': ' + resp.getContentText());
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    Logger.log('Error actualizarCategoriaD1: ' + err);
+    return false;
+  }
+}
+
 function cmdD1Estado(chatId) {
   if (!esAdminD1_(chatId)) {
     return sendMessage(chatId, 'No autorizado.');

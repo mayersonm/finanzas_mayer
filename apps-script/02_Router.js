@@ -76,6 +76,8 @@ function handleMessage(chatId, text) {
   if (lower.startsWith('pagar fijo '))     return cmdFijos(chatId, lower);
   if (lower.startsWith('eliminar fijo '))  return cmdFijos(chatId, lower);
   if (lower.startsWith('buscar '))         return cmdBuscar(chatId, lower);
+  if (lower.startsWith('categoria '))      return cmdCategoria(chatId, lower);
+  if (lower.startsWith('cat '))            return cmdCategoria(chatId, lower);
   if (lower.startsWith('saltar fijo ')) return cmdFijos(chatId, lower);
   if (lower.startsWith('confirmar eliminar fijo ')) return cmdFijos(chatId, lower);
   if (lower.startsWith('correo '))        return cmdCorreo(chatId, text.trim());
