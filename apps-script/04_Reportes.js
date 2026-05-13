@@ -683,7 +683,11 @@ function procesarFotoRecibo(chatId, msg) {
       return sendMessage(chatId, '❌ Falta configurar la API key de Claude para leer recibos.', true);
     }
 
-    const resp   = UrlFetchApp.fetch('https://api.synterolink.com/v1/messages', {
+    const props = PropertiesService.getScriptProperties();
+    const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
+    const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
+
+    const resp   = UrlFetchApp.fetch(claudeUrl, {
       method : 'post',
       headers: {
         'x-api-key'        : apiKey,
@@ -691,7 +695,7 @@ function procesarFotoRecibo(chatId, msg) {
         'content-type'     : 'application/json'
       },
       payload: JSON.stringify({
-        model     : 'claude-haiku-4-5-20251001',
+        model     : claudeModel,
         max_tokens: 300,
         messages  : [{
           role   : 'user',
@@ -719,7 +723,14 @@ function procesarFotoRecibo(chatId, msg) {
     const rawClaude = resp.getContentText();
     if (resp.getResponseCode() >= 300) {
       Logger.log('Claude error HTTP ' + resp.getResponseCode() + ': ' + rawClaude);
-      return sendMessage(chatId, '❌ La IA no pudo leer el recibo en este momento. Intenta otra foto más clara o agrega el gasto manualmente.', true);
+      return sendMessage(
+        chatId,
+        '❌ La IA no pudo leer el recibo en este momento.\n\n' +
+        '*Detalle:* HTTP ' + resp.getResponseCode() + '\n' +
+        '`' + resumenErrorClaude_(rawClaude) + '`\n\n' +
+        'Intenta otra foto más clara o agrega el gasto manualmente.',
+        true
+      );
     }
 
     const result = parseJsonSeguro_(rawClaude, null);
@@ -845,5 +856,59 @@ function extraerJsonRecibo_(text) {
   if (match) return match[0];
 
   return limpio;
+}
+
+function resumenErrorClaude_(raw) {
+  const body = parseJsonSeguro_(raw, null);
+  const msg = body && body.error
+    ? (body.error.message || JSON.stringify(body.error))
+    : (body && body.message ? body.message : raw);
+
+  return recortarTexto_(String(msg || 'Error desconocido'), 220);
+}
+
+function recortarTexto_(text, max) {
+  const limpio = String(text || '').replace(/\s+/g, ' ').trim();
+  return limpio.length > max ? limpio.slice(0, max - 3) + '...' : limpio;
+}
+
+function diagnosticoClaudeRecibos() {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('claude_api_key');
+  const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
+  const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
+
+  if (!apiKey) throw new Error('Falta claude_api_key');
+
+  const onePixelPng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+  const resp = UrlFetchApp.fetch(claudeUrl, {
+    method: 'post',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json'
+    },
+    payload: JSON.stringify({
+      model: claudeModel,
+      max_tokens: 80,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: 'image/png', data: onePixelPng }
+          },
+          {
+            type: 'text',
+            text: 'Responde solo este JSON: {"ok": true}'
+          }
+        ]
+      }]
+    }),
+    muteHttpExceptions: true
+  });
+
+  Logger.log('Claude diagnostico HTTP ' + resp.getResponseCode() + ': ' + resp.getContentText());
+  return 'HTTP ' + resp.getResponseCode() + ' - ' + resumenErrorClaude_(resp.getContentText());
 }
 
