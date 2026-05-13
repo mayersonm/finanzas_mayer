@@ -26,7 +26,8 @@ function doPost(e) {
 
     // ── Foto de recibo ───────────────────────────────────
     if (msg.photo) {
-      return procesarFotoRecibo(chatId, msg);
+      procesarFotoRecibo(chatId, msg);
+      return ok();
     }
 
     // ── Texto normal ─────────────────────────────────────
