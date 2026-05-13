@@ -537,6 +537,8 @@ async function setAppSetting(env, key, value) {
 }
 
 async function upsertTransaction(env, tx) {
+  await mergeDuplicateTransaction(env, tx);
+
   await env.DB.prepare(`
     INSERT INTO transactions (
       id, chat_id, tx_date, tx_time, type, description, category, amount, source, updated_at
@@ -565,6 +567,50 @@ async function upsertTransaction(env, tx) {
     tx.monto,
     tx.source,
   ).run();
+}
+
+async function mergeDuplicateTransaction(env, tx) {
+  const duplicate = await env.DB.prepare(`
+    SELECT id, source
+    FROM transactions
+    WHERE id <> ?
+      AND chat_id = ?
+      AND tx_date = ?
+      AND tx_time = ?
+      AND type = ?
+      AND lower(trim(description)) = lower(trim(?))
+      AND category = ?
+      AND ABS(amount - ?) < 0.005
+    ORDER BY
+      CASE WHEN source <> 'gas' THEN 0 ELSE 1 END,
+      created_at ASC
+    LIMIT 1
+  `).bind(
+    tx.id,
+    tx.chat_id,
+    tx.fecha,
+    tx.hora,
+    tx.tipo,
+    tx.desc,
+    tx.cat,
+    tx.monto,
+  ).first();
+
+  if (!duplicate) return;
+
+  await env.DB.prepare(`
+    UPDATE receipts
+    SET transaction_id = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE transaction_id = ?
+  `).bind(tx.id, duplicate.id).run();
+
+  if (tx.source === 'gas' && duplicate.source && duplicate.source !== 'gas') {
+    tx.source = duplicate.source;
+  }
+
+  await env.DB.prepare('DELETE FROM transactions WHERE id = ?')
+    .bind(duplicate.id)
+    .run();
 }
 
 async function upsertBudget(env, chatId, raw) {
@@ -971,7 +1017,9 @@ function parseAmount(value) {
 
 function stableTransactionId({ rawId, chatId, fecha, hora, tipo, cat, monto, desc }) {
   const provided = String(rawId || '').trim();
-  if (provided && !/^\d+$/.test(provided)) return provided.slice(0, 180);
+  if (provided && !/^\d+$/.test(provided) && !/^tx_[a-f0-9]{32}$/i.test(provided)) {
+    return provided.slice(0, 180);
+  }
 
   return [
     'tx',
