@@ -19,7 +19,6 @@ npx wrangler login
 ## 2. Crear la base D1
 
 ```powershell
-cd C:\Users\mayer\Documents\Codex\2026-05-09\files-mentioned-by-the-user-09\finanzas-d1-api
 npx wrangler d1 create finanzas_mayeson
 ```
 
