@@ -1,6 +1,9 @@
 import colors from 'tailwindcss/colors';
 import formsPlugin from '@tailwindcss/forms';
 
+const appColorScale = '(?:slate|gray|red|rose|orange|amber|yellow|green|emerald|cyan|sky|blue|violet|fuchsia)';
+const appColorSteps = '(?:50|100|200|300|400|500|600|700|800|900|950)';
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: 'class',
@@ -96,31 +99,25 @@ export default {
   },
   safelist: [
     {
-      pattern:
-        /^(bg-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,
+      pattern: new RegExp(`^(bg-${appColorScale}-${appColorSteps})$`),
       variants: ['hover', 'data-[selected]'],
     },
     {
-      pattern:
-        /^(text-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,
+      pattern: new RegExp(`^(text-${appColorScale}-${appColorSteps})$`),
       variants: ['hover', 'data-[selected]'],
     },
     {
-      pattern:
-        /^(border-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,
+      pattern: new RegExp(`^(border-${appColorScale}-${appColorSteps})$`),
       variants: ['hover', 'data-[selected]'],
     },
     {
-      pattern:
-        /^(ring-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,
+      pattern: new RegExp(`^(ring-${appColorScale}-${appColorSteps})$`),
     },
     {
-      pattern:
-        /^(stroke-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,
+      pattern: new RegExp(`^(stroke-${appColorScale}-${appColorSteps})$`),
     },
     {
-      pattern:
-        /^(fill-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,
+      pattern: new RegExp(`^(fill-${appColorScale}-${appColorSteps})$`),
     },
   ],
   plugins: [formsPlugin],

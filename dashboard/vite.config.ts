@@ -10,6 +10,10 @@ export default defineConfig({
         entryFileNames: '[name]-[hash].js',
         chunkFileNames: '[name]-[hash].js',
         assetFileNames: '[name]-[hash][extname]',
+        manualChunks: {
+          tremor: ['@tremor/react'],
+          icons: ['@remixicon/react'],
+        },
       },
     },
   },

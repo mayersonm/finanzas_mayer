@@ -225,6 +225,7 @@ async function dashboard(env, params) {
       t.description AS desc,
       t.category AS cat,
       t.amount AS monto,
+      t.currency,
       t.payment_method,
       t.payment_due_date,
       t.card_name,
@@ -323,6 +324,7 @@ async function transactions(env, params) {
       t.description AS desc,
       t.category AS cat,
       t.amount AS monto,
+      t.currency,
       t.payment_method,
       t.payment_due_date,
       t.card_name,
@@ -383,11 +385,12 @@ async function updateTransactionCategory(env, payload) {
     await env.DB.prepare(`
       INSERT INTO transactions (
         id, chat_id, tx_date, tx_time, type, description, category, amount,
-        payment_method, payment_due_date, card_name, source, created_at, updated_at
+        currency, payment_method, payment_due_date, card_name, source, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET
         category = excluded.category,
+        currency = excluded.currency,
         payment_method = excluded.payment_method,
         payment_due_date = excluded.payment_due_date,
         card_name = excluded.card_name,
@@ -402,6 +405,7 @@ async function updateTransactionCategory(env, payload) {
       existing.description,
       newCategory,
       existing.amount,
+      normalizeCurrency(existing.currency),
       existing.payment_method || 'debito',
       existing.payment_due_date || null,
       existing.card_name || '',
@@ -595,9 +599,9 @@ async function uploadReceipt(env, payload) {
     INSERT INTO receipts (
       id, transaction_id, chat_id, storage, r2_key, image_base64, file_name, content_type, size,
       telegram_file_id, telegram_file_path, tx_date, tx_time, type,
-      description, category, amount, updated_at
+      description, category, amount, currency, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(transaction_id) DO UPDATE SET
       storage = excluded.storage,
       r2_key = excluded.r2_key,
@@ -613,6 +617,7 @@ async function uploadReceipt(env, payload) {
       description = excluded.description,
       category = excluded.category,
       amount = excluded.amount,
+      currency = excluded.currency,
       updated_at = CURRENT_TIMESTAMP
   `).bind(
     receiptId,
@@ -632,6 +637,7 @@ async function uploadReceipt(env, payload) {
     description,
     category,
     amount || null,
+    normalizeCurrency(payload.currency || payload.moneda),
   ).run();
 
   return {
@@ -791,9 +797,9 @@ async function upsertTransaction(env, tx) {
   await env.DB.prepare(`
     INSERT INTO transactions (
       id, chat_id, tx_date, tx_time, type, description, category, amount,
-      payment_method, payment_due_date, card_name, source, updated_at
+      currency, payment_method, payment_due_date, card_name, source, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(id) DO UPDATE SET
       tx_date = excluded.tx_date,
       tx_time = excluded.tx_time,
@@ -801,6 +807,7 @@ async function upsertTransaction(env, tx) {
       description = excluded.description,
       category = excluded.category,
       amount = excluded.amount,
+      currency = excluded.currency,
       payment_method = excluded.payment_method,
       payment_due_date = excluded.payment_due_date,
       card_name = excluded.card_name,
@@ -818,6 +825,7 @@ async function upsertTransaction(env, tx) {
     tx.desc,
     tx.cat,
     tx.monto,
+    tx.currency,
     tx.payment_method,
     tx.payment_due_date || null,
     tx.card_name,
@@ -1139,6 +1147,7 @@ function normalizeTransaction(raw, chatId) {
   const desc = String(raw.desc || raw.description || 'Sin descripcion').trim();
   const cat = normalizeCategory(raw.cat || raw.category || 'otro', desc);
   const monto = Math.abs(Number(raw.monto || raw.amount || 0));
+  const currency = normalizeCurrency(raw.currency || raw.moneda);
   const rawId = String(raw.id || '').trim();
   const paymentMethod = normalizePaymentMethod(raw.payment_method || raw.paymentMethod || raw.metodo_pago || raw.metodoPago) || 'debito';
   const paymentDueDate = paymentMethod === 'credito'
@@ -1161,6 +1170,7 @@ function normalizeTransaction(raw, chatId) {
       tipo,
       cat,
       monto,
+      currency,
       desc,
     }),
     chat_id: chatId,
@@ -1170,6 +1180,7 @@ function normalizeTransaction(raw, chatId) {
     desc,
     cat,
     monto: round(monto),
+    currency,
     payment_method: paymentMethod,
     payment_due_date: paymentDueDate,
     card_name: cardName,
@@ -1186,6 +1197,7 @@ function txShape(row) {
     desc: row.desc,
     cat: row.cat,
     monto: round(row.monto),
+    currency: normalizeCurrency(row.currency),
     paymentMethod: row.payment_method || 'debito',
     paymentDueDate: row.payment_due_date || '',
     cardName: row.card_name || '',
@@ -1520,7 +1532,7 @@ function parseAmount(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function stableTransactionId({ rawId, chatId, fecha, hora, tipo, cat, monto, desc }) {
+function stableTransactionId({ rawId, chatId, fecha, hora, tipo, cat, monto, currency, desc }) {
   const provided = String(rawId || '').trim();
   if (provided && !/^\d+$/.test(provided) && !/^tx_[a-f0-9]{32}$/i.test(provided)) {
     return provided.slice(0, 180);
@@ -1534,6 +1546,7 @@ function stableTransactionId({ rawId, chatId, fecha, hora, tipo, cat, monto, des
     tipo,
     cat,
     round(monto),
+    normalizeCurrency(currency),
     desc,
   ].join(':').slice(0, 180);
 }
@@ -1621,6 +1634,13 @@ function normalizeDateOnly(value) {
   const text = String(value || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
   return '';
+}
+
+function normalizeCurrency(value) {
+  const currency = String(value || 'PEN').trim().toUpperCase();
+  if (currency === 'USD') return 'USD';
+  if (currency === 'PEN') return 'PEN';
+  throw httpError(400, 'Moneda invalida. Solo se acepta PEN o USD.');
 }
 
 function localDateKey(date) {

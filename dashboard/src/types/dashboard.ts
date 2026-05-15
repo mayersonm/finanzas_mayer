@@ -1,6 +1,7 @@
 import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
+export type Currency = 'PEN' | 'USD';
 export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'analisis' | 'metas';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
@@ -12,6 +13,7 @@ export interface Transaction {
   desc: string;
   cat: string;
   monto: number;
+  currency?: Currency | string;
   paymentMethod?: 'debito' | 'credito' | string;
   paymentDueDate?: string;
   cardName?: string;

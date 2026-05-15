@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiEndpoint } from './app/api';
 import { isApiConfigured, SESSION_STORAGE_KEY } from './app/config';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -6,13 +6,16 @@ import { PasswordPanel } from './components/auth/PasswordPanel';
 import { AppHeader } from './components/layout/AppHeader';
 import { DashboardTabs } from './components/layout/DashboardTabs';
 import { MOCK_DASHBOARD } from './data/mockDashboard';
-import { AnalysisSection } from './features/analysis/AnalysisSection';
-import { CommitmentsSection } from './features/commitments/CommitmentsSection';
-import { GoalsSection } from './features/goals/GoalsSection';
-import { MovementsSection } from './features/movements/MovementsSection';
-import { OverviewSection } from './features/overview/OverviewSection';
 import { getRealExpenses } from './lib/finance';
 import type { ApiStatus, DashboardData, TabId } from './types/dashboard';
+
+const AnalysisSection = lazy(() => import('./features/analysis/AnalysisSection').then((mod) => ({ default: mod.AnalysisSection })));
+const CommitmentsSection = lazy(() => import('./features/commitments/CommitmentsSection').then((mod) => ({ default: mod.CommitmentsSection })));
+const GoalsSection = lazy(() => import('./features/goals/GoalsSection').then((mod) => ({ default: mod.GoalsSection })));
+const MovementsSection = lazy(() => import('./features/movements/MovementsSection').then((mod) => ({ default: mod.MovementsSection })));
+const OverviewSection = lazy(() => import('./features/overview/OverviewSection').then((mod) => ({ default: mod.OverviewSection })));
+
+type Theme = 'light' | 'dark';
 
 interface FetchOptions {
   sync?: boolean;
@@ -34,6 +37,11 @@ export default function App() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = window.localStorage.getItem('finanzas_theme');
+    if (stored === 'light' || stored === 'dark') return stored;
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  });
 
   const configured = isApiConfigured();
   const realExpenses = useMemo(() => getRealExpenses(data), [data]);
@@ -206,6 +214,12 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [fetchData, configured, token]);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    window.localStorage.setItem('finanzas_theme', theme);
+  }, [theme]);
+
   if (configured && !token) {
     return (
       <LoginScreen
@@ -226,6 +240,8 @@ export default function App() {
         status={status}
         isConfigured={configured}
         onRefresh={() => void fetchData(undefined, { sync: true })}
+        theme={theme}
+        onToggleTheme={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
         onTogglePasswordPanel={() => {
           setPasswordError('');
           setPasswordSuccess('');
@@ -252,11 +268,13 @@ export default function App() {
 
       <DashboardTabs activeTab={tab} onTabChange={setTab} />
 
-      {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} /> : null}
-      {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} /> : null}
-      {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
-      {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
-      {tab === 'metas' ? <GoalsSection data={data} /> : null}
+      <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
+        {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} /> : null}
+        {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} /> : null}
+        {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
+        {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
+        {tab === 'metas' ? <GoalsSection data={data} /> : null}
+      </Suspense>
     </main>
   );
 }

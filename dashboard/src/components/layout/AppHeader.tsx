@@ -1,5 +1,5 @@
 import { Badge, Button, Card, Text, Title } from '@tremor/react';
-import { RiLockPasswordLine, RiLogoutBoxRLine, RiRefreshLine } from '@remixicon/react';
+import { RiLockPasswordLine, RiLogoutBoxRLine, RiMoonLine, RiRefreshLine, RiSunLine } from '@remixicon/react';
 import { formatUpdatedAt } from '../../lib/formatters';
 import { statusColor } from '../../lib/tremorColors';
 import type { ApiStatus, DashboardData } from '../../types/dashboard';
@@ -10,6 +10,8 @@ export function AppHeader({
   status,
   isConfigured,
   onRefresh,
+  theme,
+  onToggleTheme,
   onTogglePasswordPanel,
   onLogout,
 }: {
@@ -18,6 +20,8 @@ export function AppHeader({
   status: ApiStatus;
   isConfigured: boolean;
   onRefresh: () => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
   onTogglePasswordPanel: () => void;
   onLogout: () => void;
 }) {
@@ -35,9 +39,12 @@ export function AppHeader({
           <Text className="mt-1 text-xs sm:text-sm">Ultima actualizacion: {loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)}</Text>
         </div>
 
-        <div className="grid gap-2 min-[420px]:grid-cols-3 sm:flex sm:flex-wrap">
+        <div className="grid gap-2 min-[420px]:grid-cols-4 sm:flex sm:flex-wrap">
           <Button className="min-w-0" icon={RiRefreshLine} color="emerald" loading={loading} loadingText="Actualizando" onClick={onRefresh}>
             Actualizar
+          </Button>
+          <Button className="min-w-0" icon={theme === 'dark' ? RiSunLine : RiMoonLine} variant="secondary" color="slate" onClick={onToggleTheme}>
+            {theme === 'dark' ? 'Claro' : 'Oscuro'}
           </Button>
           {isConfigured ? (
             <>

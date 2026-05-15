@@ -3,10 +3,15 @@
 function registrarMovimiento(chatId, match, originalText) {
     const tipo = match[1];
     const monto = parseFloat(match[2].replace(',', '.'));
+    const monedaDirecta = normalizarMoneda_(match[3]);
+    const catTexto = match[4];
+    const descTexto = match[5] || '';
+    const monedaInfo = extraerMonedaDeTexto_(descTexto);
+    const moneda = monedaDirecta || monedaInfo.moneda;
     const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
     const hora = Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm');
-    const pago = resolverPagoMovimiento_(tipo, match[4] || '', fecha);
-    const cat = normalizarCat(match[3], pago.descripcion || match[4]);
+    const pago = resolverPagoMovimiento_(tipo, monedaInfo.texto || '', fecha);
+    const cat = normalizarCat(catTexto, pago.descripcion || monedaInfo.texto);
     const desc = pago.descripcion
         ? capitalizar(pago.descripcion)
         : capitalizar(cat);
@@ -15,11 +20,15 @@ function registrarMovimiento(chatId, match, originalText) {
         return sendMessage(chatId, '❌ El monto debe ser un número positivo. Ej: *gasto 45.50 comida almuerzo*', true);
     }
 
+    if (monedaInfo.error || !moneda) {
+        return sendMessage(chatId, monedaInfo.error || '❌ Solo acepto moneda *PEN* o *USD*.', true);
+    }
+
     const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones')
         || crearHojaTransacciones();
 
     asegurarColumnasPagoTransacciones_(sheet);
-    sheet.appendRow([fecha, hora, tipo, desc, cat.toLowerCase(), monto, chatId, pago.metodo, pago.fechaPago, pago.tarjeta]);
+    sheet.appendRow([fecha, hora, tipo, desc, cat.toLowerCase(), monto, chatId, pago.metodo, pago.fechaPago, pago.tarjeta, moneda]);
     const d1Ok = guardarTransaccionD1({
         chatId: chatId,
         fecha: fecha,
@@ -28,6 +37,7 @@ function registrarMovimiento(chatId, match, originalText) {
         desc: desc,
         cat: cat,
         monto: monto,
+        currency: moneda,
         paymentMethod: pago.metodo,
         paymentDueDate: pago.fechaPago,
         cardName: pago.tarjeta,
@@ -44,7 +54,7 @@ function registrarMovimiento(chatId, match, originalText) {
 ` +
         `${color} ${desc}
 ` +
-        `💵 S/ ${monto.toFixed(2)}
+        `💵 ${formatoMoneda_(monto, moneda)}
 ` +
         `🏷️ ${capitalizar(cat)}
 ` +
@@ -111,6 +121,7 @@ function cmdCategoria(chatId, text) {
     const tipo = String(row[2] || 'gasto').toLowerCase();
     const desc = String(row[3] || 'Sin descripcion');
     const monto = parseFloat(row[5]) || 0;
+    const moneda = normalizarMoneda_(row[10]) || 'PEN';
 
     const d1Ok = actualizarCategoriaD1({
         chatId: chatId,
@@ -121,6 +132,7 @@ function cmdCategoria(chatId, text) {
         oldCat: anterior,
         cat: nuevaCat,
         monto: monto,
+        currency: moneda,
     });
 
     if (tipo === 'gasto') verificarPresupuesto(chatId, nuevaCat);
@@ -130,7 +142,7 @@ function cmdCategoria(chatId, text) {
         `🏷️ *Categoria actualizada*\n\n` +
         `${desc}\n` +
         `${capitalizar(anterior)} → *${capitalizar(nuevaCat)}*\n` +
-        `S/ ${monto.toFixed(2)}\n\n` +
+        `${formatoMoneda_(monto, moneda)}\n\n` +
         (d1Ok ? `_Actualizado en Sheets y D1._` : `_Actualizado en Sheets. D1 no respondio, revisa el log._`),
         true
     );

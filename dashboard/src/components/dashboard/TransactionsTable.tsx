@@ -137,7 +137,7 @@ export function TransactionsTable({
                   </TableCell>
                   <TableCell className={`text-right font-mono font-semibold ${isIncome ? 'text-emerald-300' : 'text-rose-300'}`}>
                     {isIncome ? '+' : '-'}
-                    {formatMoney(tx.monto)}
+                    {formatMoney(tx.monto, tx.currency)}
                   </TableCell>
                 </TableRow>
               );

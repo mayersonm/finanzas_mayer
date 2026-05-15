@@ -1,6 +1,7 @@
-export function formatMoney(value: number): string {
+export function formatMoney(value: number, currency = 'PEN'): string {
   const sign = value < 0 ? '-' : '';
-  return `${sign}S/ ${Math.abs(value).toLocaleString('es-PE', {
+  const symbol = String(currency).toUpperCase() === 'USD' ? 'US$' : 'S/';
+  return `${sign}${symbol} ${Math.abs(value).toLocaleString('es-PE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
