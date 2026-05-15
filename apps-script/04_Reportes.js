@@ -716,8 +716,9 @@ function procesarFotoRecibo(chatId, msg) {
               text:
                 'Analiza este recibo o ticket de compra y extrae la información.\n' +
                 'Responde SOLO con este JSON exacto, sin explicaciones ni markdown:\n' +
-                '{"monto": 45.50, "descripcion": "Almuerzo pollo a la brasa", "categoria": "comida"}\n\n' +
+                '{"monto": 45.50, "descripcion": "Almuerzo pollo a la brasa", "categoria": "comida", "metodo_pago": "debito"}\n\n' +
                 'Categorías válidas: comida, supermercado, transporte, servicios, entretenimiento, salud, ropa, educacion, otro\n' +
+                'metodo_pago valido: debito, credito o desconocido. Si ves tarjeta de credito, usa credito.\n' +
                 'Si no puedes leer el monto exacto, estímalo.\n' +
                 'Si no es un recibo, responde: {"error": "No es un recibo"}'
             }
@@ -780,8 +781,10 @@ function procesarFotoRecibo(chatId, msg) {
 
     const desc = capitalizar(datos.descripcion || datos.categoria || 'Recibo');
     const cat  = normalizarCat(datos.categoria || 'otro', datos.descripcion || desc);
+    const pago = resolverPagoRecibo_(datos, fecha);
 
-    sheet.appendRow([fecha, hora, 'gasto', desc, cat, monto, chatId]);
+    asegurarColumnasPagoTransacciones_(sheet);
+    sheet.appendRow([fecha, hora, 'gasto', desc, cat, monto, chatId, pago.metodo, pago.fechaPago, pago.tarjeta]);
 
     const txD1 = {
       chatId: chatId,
@@ -791,6 +794,9 @@ function procesarFotoRecibo(chatId, msg) {
       desc: desc,
       cat: cat,
       monto: monto,
+      paymentMethod: pago.metodo,
+      paymentDueDate: pago.fechaPago,
+      cardName: pago.tarjeta,
       source: 'telegram_receipt',
     };
     const transactionId = guardarTransaccionD1(txD1);
@@ -822,6 +828,7 @@ function procesarFotoRecibo(chatId, msg) {
       `🔴 ${desc}\n` +
       `💵 S/ ${monto.toFixed(2)}\n` +
       `🏷️ ${capitalizar(cat)}\n` +
+      `${lineasPagoMensaje_(pago)}\n` +
       `📅 ${fecha}\n\n` +
       (reciboGuardado ? `🧾 Foto guardada en el dashboard\n\n` : `⚠️ El gasto se registró, pero la foto no se pudo adjuntar al dashboard.\n\n`) +
       `_¿El dato es incorrecto? Elimínalo con \`ultimos\` y agrégalo manualmente._`,
@@ -837,7 +844,9 @@ function procesarFotoRecibo(chatId, msg) {
 function elegirFotoRecibo_(photos) {
   if (!photos || !photos.length) throw new Error('Mensaje sin photos');
 
-  const maxBytes = 2 * 1024 * 1024;
+  const props = PropertiesService.getScriptProperties();
+  const configuredMax = parseInt(props.getProperty('receipt_image_max_bytes') || '', 10);
+  const maxBytes = configuredMax > 0 ? configuredMax : 900 * 1024;
   const candidatas = photos
     .filter(function (p) { return !p.file_size || p.file_size <= maxBytes; })
     .sort(function (a, b) {

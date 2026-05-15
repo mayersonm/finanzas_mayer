@@ -1,14 +1,12 @@
-
 // ---- HELPERS -----------------------------------------------
 function obtenerTransacciones(chatId) {
   try {
-
     const sheet = SpreadsheetApp
       .openById(SHEET_ID)
       .getSheetByName('Transacciones');
 
     if (!sheet) return [];
-    
+
     const data = sheet.getDataRange().getValues();
 
     return data
@@ -26,9 +24,22 @@ function obtenerTransacciones(chatId) {
 function crearHojaTransacciones() {
   const ss    = SpreadsheetApp.openById(SHEET_ID);
   const sheet = ss.insertSheet('Transacciones');
-  sheet.appendRow(['Fecha', 'Hora', 'Tipo', 'Descripción', 'Categoría', 'Monto', 'ChatID']);
-  sheet.getRange(1, 1, 1, 7).setFontWeight('bold');
+  sheet.appendRow(['Fecha', 'Hora', 'Tipo', 'Descripcion', 'Categoria', 'Monto', 'ChatID', 'MetodoPago', 'FechaPago', 'Tarjeta']);
+  sheet.getRange(1, 1, 1, 10).setFontWeight('bold');
   return sheet;
+}
+
+function asegurarColumnasPagoTransacciones_(sheet) {
+  if (!sheet) return;
+
+  const headers = ['MetodoPago', 'FechaPago', 'Tarjeta'];
+  for (let i = 0; i < headers.length; i++) {
+    const col = 8 + i;
+    const value = String(sheet.getRange(1, col).getValue() || '').trim();
+    if (!value) sheet.getRange(1, col).setValue(headers[i]);
+  }
+
+  sheet.getRange(1, 1, 1, 10).setFontWeight('bold');
 }
 
 // ---- NUEVA: crear hoja si no existe ----------------

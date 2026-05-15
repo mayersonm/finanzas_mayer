@@ -66,6 +66,10 @@ function handleMessage(chatId, text) {
 
     case 'd1 configurar':
     case 'configurar d1': return cmdConfigurarD1(chatId);
+
+    case 'credito':
+    case 'crédito':
+    case 'tarjeta': return cmdCredito(chatId, text.trim());
   }
 
   // ── COMANDOS CON PARÁMETROS ──────────────────────────────
@@ -78,6 +82,12 @@ function handleMessage(chatId, text) {
   if (lower.startsWith('buscar '))         return cmdBuscar(chatId, lower);
   if (lower.startsWith('categoria '))      return cmdCategoria(chatId, lower);
   if (lower.startsWith('cat '))            return cmdCategoria(chatId, lower);
+  if (lower.startsWith('pago '))           return cmdPago(chatId, lower);
+  if (lower.startsWith('metodo '))         return cmdPago(chatId, lower);
+  if (lower.startsWith('método '))         return cmdPago(chatId, lower);
+  if (lower.startsWith('credito '))        return cmdCredito(chatId, text.trim());
+  if (lower.startsWith('crédito '))        return cmdCredito(chatId, text.trim());
+  if (lower.startsWith('tarjeta '))        return cmdCredito(chatId, text.trim());
   if (lower.startsWith('saltar fijo ')) return cmdFijos(chatId, lower);
   if (lower.startsWith('confirmar eliminar fijo ')) return cmdFijos(chatId, lower);
   if (lower.startsWith('correo '))        return cmdCorreo(chatId, text.trim());

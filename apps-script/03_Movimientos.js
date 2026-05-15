@@ -3,22 +3,23 @@
 function registrarMovimiento(chatId, match, originalText) {
     const tipo = match[1];
     const monto = parseFloat(match[2].replace(',', '.'));
-    const cat = normalizarCat(match[3], match[4]);
-    const desc = match[4]
-        ? capitalizar(match[4])
+    const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
+    const hora = Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm');
+    const pago = resolverPagoMovimiento_(tipo, match[4] || '', fecha);
+    const cat = normalizarCat(match[3], pago.descripcion || match[4]);
+    const desc = pago.descripcion
+        ? capitalizar(pago.descripcion)
         : capitalizar(cat);
 
     if (isNaN(monto) || monto <= 0) {
         return sendMessage(chatId, '❌ El monto debe ser un número positivo. Ej: *gasto 45.50 comida almuerzo*', true);
     }
 
-    const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
-    const hora = Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm');
-
     const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones')
         || crearHojaTransacciones();
 
-    sheet.appendRow([fecha, hora, tipo, desc, cat.toLowerCase(), monto, chatId]);
+    asegurarColumnasPagoTransacciones_(sheet);
+    sheet.appendRow([fecha, hora, tipo, desc, cat.toLowerCase(), monto, chatId, pago.metodo, pago.fechaPago, pago.tarjeta]);
     const d1Ok = guardarTransaccionD1({
         chatId: chatId,
         fecha: fecha,
@@ -27,6 +28,9 @@ function registrarMovimiento(chatId, match, originalText) {
         desc: desc,
         cat: cat,
         monto: monto,
+        paymentMethod: pago.metodo,
+        paymentDueDate: pago.fechaPago,
+        cardName: pago.tarjeta,
         source: 'telegram_text',
     });
     
@@ -43,6 +47,8 @@ function registrarMovimiento(chatId, match, originalText) {
         `💵 S/ ${monto.toFixed(2)}
 ` +
         `🏷️ ${capitalizar(cat)}
+` +
+        `${lineasPagoMensaje_(pago)}
 ` +
         `📅 ${fecha}
 

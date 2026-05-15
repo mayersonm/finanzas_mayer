@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RiCloseLine, RiImageLine } from '@remixicon/react';
+import { RiBankCardLine, RiCloseLine, RiImageLine } from '@remixicon/react';
 import {
   Badge,
   Table,
@@ -75,12 +75,13 @@ export function TransactionsTable({
   return (
     <>
       <div className="-mx-4 mt-3 overflow-x-auto px-4 sm:mx-0 sm:mt-4 sm:px-0">
-        <Table className="min-w-[44rem]">
+        <Table className="min-w-[54rem]">
           <TableHead>
             <TableRow>
               <TableHeaderCell>Fecha</TableHeaderCell>
               <TableHeaderCell>Detalle</TableHeaderCell>
               <TableHeaderCell>Categoria</TableHeaderCell>
+              <TableHeaderCell>Pago</TableHeaderCell>
               <TableHeaderCell>Foto</TableHeaderCell>
               <TableHeaderCell className="text-right">Monto</TableHeaderCell>
             </TableRow>
@@ -106,6 +107,19 @@ export function TransactionsTable({
                     </div>
                   </TableCell>
                   <TableCell className="capitalize">{tx.cat}</TableCell>
+                  <TableCell>
+                    <div className="min-w-[8rem]">
+                      <Badge color={tx.paymentMethod === 'credito' ? 'amber' : 'emerald'}>
+                        <RiBankCardLine className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                        {tx.paymentMethod === 'credito' ? 'credito' : 'debito'}
+                      </Badge>
+                      {tx.paymentMethod === 'credito' ? (
+                        <p className="mt-1 text-xs text-amber-200">
+                          Pagar: {tx.paymentDueDate ? formatDate(tx.paymentDueDate) : 'configurar'}
+                        </p>
+                      ) : null}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {tx.receipt ? (
                       <button

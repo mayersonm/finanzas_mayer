@@ -25,6 +25,9 @@ function guardarTransaccionD1(tx) {
       desc: tx.desc,
       cat: String(tx.cat || 'otro').toLowerCase(),
       monto: Number(tx.monto),
+      payment_method: tx.paymentMethod || tx.payment_method || 'debito',
+      payment_due_date: tx.paymentDueDate || tx.payment_due_date || '',
+      card_name: tx.cardName || tx.card_name || '',
       source: tx.source || 'telegram',
     };
 
@@ -162,6 +165,52 @@ function actualizarCategoriaD1(tx) {
     return true;
   } catch (err) {
     Logger.log('Error actualizarCategoriaD1: ' + err);
+    return false;
+  }
+}
+
+function actualizarPagoD1(tx) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiUrl = props.getProperty('d1_api_url');
+    const adminKey = props.getProperty('d1_admin_key');
+
+    if (!apiUrl || !adminKey) {
+      Logger.log('Pago D1 omitido: faltan d1_api_url o d1_admin_key');
+      return false;
+    }
+
+    const payload = {
+      id: crearIdTransaccionD1_(tx),
+      chat_id: String(tx.chatId),
+      fecha: tx.fecha,
+      hora: tx.hora,
+      tipo: tx.tipo,
+      desc: tx.desc,
+      cat: String(tx.cat || 'otro').toLowerCase(),
+      monto: Number(tx.monto),
+      payment_method: tx.paymentMethod || tx.payment_method || 'debito',
+      payment_due_date: tx.paymentDueDate || tx.payment_due_date || '',
+      card_name: tx.cardName || tx.card_name || '',
+    };
+
+    const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/transactions/payment', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-admin-key': adminKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+
+    const code = resp.getResponseCode();
+    if (code < 200 || code >= 300) {
+      Logger.log('Error pago D1 HTTP ' + code + ': ' + resp.getContentText());
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    Logger.log('Error actualizarPagoD1: ' + err);
     return false;
   }
 }
