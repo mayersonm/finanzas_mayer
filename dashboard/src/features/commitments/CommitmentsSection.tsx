@@ -1,5 +1,6 @@
 import { Badge, Card, Text, Title } from '@tremor/react';
 import { BudgetProgress } from '../../components/dashboard/BudgetProgress';
+import { DebtRow } from '../../components/dashboard/DebtRow';
 import { EmailPanel } from '../../components/dashboard/EmailPanel';
 import { FixedExpenseRow } from '../../components/dashboard/FixedExpenseRow';
 import { EmptyState } from '../../components/common/EmptyState';
@@ -14,6 +15,10 @@ export function CommitmentsSection({
   realExpenses: RealExpenses;
 }) {
   const fixedExpenses = data.fijos || [];
+  const debts = data.deudas || [];
+  const activeDebtTotal = debts
+    .filter((item) => item.estado !== 'pagada')
+    .reduce((total, item) => total + item.pendiente, 0);
 
   return (
     <section className="grid gap-3 sm:gap-4 lg:grid-cols-2">
@@ -30,6 +35,23 @@ export function CommitmentsSection({
             fixedExpenses.map((item) => <FixedExpenseRow key={item.nombre} item={item} />)
           ) : (
             <EmptyState>Sin gastos fijos registrados.</EmptyState>
+          )}
+        </div>
+      </Card>
+
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Title>Deudas</Title>
+            <Text>{debts.filter((item) => item.estado !== 'pagada').length} activas</Text>
+          </div>
+          <Badge color="rose">{formatMoney(activeDebtTotal)}</Badge>
+        </div>
+        <div className="mt-4 sm:mt-5">
+          {debts.length ? (
+            debts.map((item) => <DebtRow key={item.id || item.nombre} item={item} />)
+          ) : (
+            <EmptyState>Sin deudas registradas.</EmptyState>
           )}
         </div>
       </Card>

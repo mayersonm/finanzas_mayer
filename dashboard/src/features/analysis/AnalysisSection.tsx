@@ -1,4 +1,4 @@
-import { AreaChart, Card, ProgressBar, Text, Title } from '@tremor/react';
+import { AreaChart, Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
 import { EmptyState } from '../../components/common/EmptyState';
 import { percent } from '../../lib/finance';
 import { formatMoney } from '../../lib/formatters';
@@ -7,6 +7,13 @@ import type { DashboardData } from '../../types/dashboard';
 
 export function AnalysisSection({ data }: { data: DashboardData }) {
   const totalCategorias = data.categorias.reduce((total, item) => total + item.monto, 0);
+  const alerts = data.alertas || [];
+  const insights = data.insights || [];
+  const alertColor = (level: string): Color => {
+    if (level === 'danger') return 'rose';
+    if (level === 'warning') return 'amber';
+    return 'sky';
+  };
 
   return (
     <section className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.6fr)]">
@@ -25,6 +32,50 @@ export function AnalysisSection({ data }: { data: DashboardData }) {
           showGradient
           showLegend
         />
+      </Card>
+
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6 lg:col-span-2">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Title>Alertas inteligentes</Title>
+            <Text>Riesgos y vencimientos que conviene mirar primero</Text>
+          </div>
+          <Badge color={alerts.length ? 'amber' : 'emerald'}>{alerts.length || 'OK'}</Badge>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {alerts.length ? (
+            alerts.map((item) => (
+              <div key={`${item.title}-${item.message}`} className="rounded-tremor-default border border-slate-800 bg-slate-900/60 p-3">
+                <Badge color={alertColor(item.level)}>{item.level}</Badge>
+                <Text className="mt-2 font-semibold text-slate-100">{item.title}</Text>
+                <Text className="mt-1">{item.message}</Text>
+              </div>
+            ))
+          ) : (
+            <div className="sm:col-span-2 lg:col-span-3">
+              <EmptyState>Sin alertas fuertes por ahora.</EmptyState>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6 lg:col-span-2">
+        <Title>Insights</Title>
+        <Text>Lecturas accionables sobre el mes actual</Text>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {insights.length ? (
+            insights.map((item) => (
+              <div key={`${item.title}-${item.message}`} className="rounded-tremor-default border border-slate-800 bg-slate-900/60 p-3">
+                <Text className="font-semibold text-slate-100">{item.title}</Text>
+                <Text className="mt-1">{item.message}</Text>
+              </div>
+            ))
+          ) : (
+            <div className="sm:col-span-2 lg:col-span-3">
+              <EmptyState>Sin insights suficientes todavia.</EmptyState>
+            </div>
+          )}
+        </div>
       </Card>
 
       <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">

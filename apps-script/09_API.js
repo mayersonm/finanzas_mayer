@@ -18,6 +18,7 @@
 //   Transacciones: Fecha | Hora | Tipo | Descripcion | Categoria | Monto | ChatID
 //   Presupuestos : ChatID | Categoria | Limite
 //   Metas        : ChatID | Nombre | Objetivo | Ahorrado | Creada
+//   Deudas       : ChatID | Nombre | Total | Pagado | Vencimiento | Estado | Notas
 
 const DASH_TZ = 'America/Lima';
 
@@ -93,6 +94,10 @@ function dashDashboardData_(params) {
   const categorias = dashCategories_(monthTxs);
   const presupuestos = dashReadBudgets_(params, categorias);
   const fijos = dashReadFixedExpenses_(params, monthTxs, monthKey);
+  const deudas = dashReadDebts_(params);
+  const meses = dashLastMonths_(allTxs, now);
+  const alertas = dashSmartAlerts_(allTxs, presupuestos, fijos, deudas, monthKey);
+  const insights = dashSmartInsights_(monthTxs, categorias, presupuestos, deudas, meses);
 
   return {
     ok: true,
@@ -107,11 +112,14 @@ function dashDashboardData_(params) {
     mesKey: monthKey,
     transacciones: allTxs.slice(-20).reverse(),
     categorias: categorias,
-    meses: dashLastMonths_(allTxs, now),
+    meses: meses,
     presupuestos: presupuestos,
     fijos: fijos,
+    deudas: deudas,
     gastosReales: dashRealExpenses_(fijos, presupuestos),
     metas: dashReadGoals_(params),
+    alertas: alertas,
+    insights: insights,
     emailConfig: dashEmailConfig_(),
     updatedAt: Utilities.formatDate(now, DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
   };
@@ -164,6 +172,7 @@ function dashHealth_() {
       presupuestos: Boolean(ss.getSheetByName('Presupuestos')),
       metas: Boolean(ss.getSheetByName('Metas')),
       fijos: Boolean(ss.getSheetByName('Fijos')),
+      deudas: Boolean(ss.getSheetByName('Deudas')),
       cierresMensuales: Boolean(ss.getSheetByName('CierresMensuales')),
     },
     emailConfig: dashEmailConfig_(),
@@ -300,6 +309,40 @@ function dashReadFixedExpenses_(params, monthTxs, monthKey) {
     });
 }
 
+function dashReadDebts_(params) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName('Deudas');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+
+  const chatId = dashDashboardChatId_(params);
+
+  return sheet.getDataRange().getValues().slice(1)
+    .filter(function (row) {
+      return !chatId || String(row[0]).trim() === chatId;
+    })
+    .map(function (row) {
+      const total = parseFloat(row[2]) || 0;
+      const pagado = parseFloat(row[3]) || 0;
+      if (!row[1] || total <= 0) return null;
+
+      const pendiente = Math.max(total - pagado, 0);
+      return {
+        nombre: dashTitle_(row[1]),
+        total: dashRound_(total),
+        pagado: dashRound_(pagado),
+        pendiente: dashRound_(pendiente),
+        vencimiento: dashPlainDate_(row[4]),
+        estado: String(row[5] || (pendiente > 0 ? 'activa' : 'pagada')).toLowerCase(),
+        notas: String(row[6] || ''),
+      };
+    })
+    .filter(Boolean)
+    .sort(function (a, b) {
+      if (a.estado !== b.estado) return a.estado === 'activa' ? -1 : 1;
+      return b.pendiente - a.pendiente;
+    });
+}
+
 function dashRealExpenses_(fijos, presupuestos) {
   const totalFijos = fijos.reduce(function (total, item) {
     return total + item.monto;
@@ -375,6 +418,94 @@ function dashLastMonths_(txs, now) {
   }
 
   return months;
+}
+
+function dashSmartAlerts_(allTxs, presupuestos, fijos, deudas, monthKey) {
+  const hoy = Utilities.formatDate(new Date(), DASH_TZ, 'yyyy-MM-dd');
+  const alertas = [];
+
+  presupuestos.forEach(function (item) {
+    const pct = item.limite > 0 ? Math.round((item.gasto / item.limite) * 100) : 0;
+    if (pct >= 100) {
+      alertas.push({ level: 'danger', title: 'Presupuesto superado: ' + item.cat, message: 'Vas en S/ ' + item.gasto.toFixed(2) + ' de S/ ' + item.limite.toFixed(2) + ' (' + pct + '%).' });
+    } else if (pct >= 80) {
+      alertas.push({ level: 'warning', title: 'Presupuesto cerca del limite: ' + item.cat, message: 'Ya usaste ' + pct + '% del presupuesto.' });
+    }
+  });
+
+  fijos.filter(function (item) { return item.estado === 'pendiente'; }).slice(0, 3)
+    .forEach(function (item) {
+      alertas.push({ level: 'info', title: 'Gasto fijo pendiente: ' + item.nombre, message: 'Falta marcar S/ ' + item.monto.toFixed(2) + ' como pagado o saltado.' });
+    });
+
+  deudas.filter(function (item) { return item.estado === 'activa' && item.vencimiento; })
+    .forEach(function (item) {
+      const dias = dashDaysBetween_(hoy, item.vencimiento);
+      if (dias < 0) {
+        alertas.push({ level: 'danger', title: 'Deuda vencida: ' + item.nombre, message: 'Pendiente S/ ' + item.pendiente.toFixed(2) + ' desde ' + item.vencimiento + '.' });
+      } else if (dias <= 7) {
+        alertas.push({ level: 'warning', title: 'Deuda por vencer: ' + item.nombre, message: 'Vence en ' + dias + ' dia' + (dias === 1 ? '' : 's') + ' y queda S/ ' + item.pendiente.toFixed(2) + '.' });
+      }
+    });
+
+  allTxs.filter(function (tx) {
+    return tx.tipo === 'gasto' && tx.paymentMethod === 'credito' && tx.paymentDueDate;
+  }).slice(-20).forEach(function (tx) {
+    const dias = dashDaysBetween_(hoy, tx.paymentDueDate);
+    if (dias >= 0 && dias <= 5) {
+      alertas.push({ level: 'warning', title: 'Pago de credito cercano', message: tx.desc + ': S/ ' + tx.monto.toFixed(2) + ' vence el ' + tx.paymentDueDate + '.' });
+    }
+  });
+
+  const monthTxs = allTxs.filter(function (tx) { return tx.fecha.indexOf(monthKey) === 0; });
+  const ingresosMes = dashSum_(monthTxs, 'ingreso');
+  const gastosMes = dashSum_(monthTxs, 'gasto');
+  if (ingresosMes > 0 && gastosMes > ingresosMes) {
+    alertas.push({ level: 'danger', title: 'Gastos sobre ingresos', message: 'Este mes gastaste S/ ' + gastosMes.toFixed(2) + ' contra S/ ' + ingresosMes.toFixed(2) + ' de ingresos.' });
+  }
+
+  return alertas.slice(0, 8);
+}
+
+function dashSmartInsights_(monthTxs, categorias, presupuestos, deudas, meses) {
+  const gastosMes = dashSum_(monthTxs, 'gasto');
+  const ingresosMes = dashSum_(monthTxs, 'ingreso');
+  const insights = [];
+  const top = categorias[0];
+
+  if (top && gastosMes > 0) {
+    insights.push({
+      title: 'Mayor fuga: ' + top.cat,
+      message: 'Representa ' + Math.round((top.monto / gastosMes) * 100) + '% del gasto del mes.',
+    });
+  }
+
+  if (meses.length >= 2 && meses[meses.length - 2].gastos > 0) {
+    const prev = meses[meses.length - 2];
+    const curr = meses[meses.length - 1];
+    const delta = Math.round(((curr.gastos - prev.gastos) / prev.gastos) * 100);
+    insights.push({
+      title: delta >= 0 ? 'Gasto acelerado' : 'Gasto mas controlado',
+      message: 'Vas ' + Math.abs(delta) + '% ' + (delta >= 0 ? 'por encima' : 'por debajo') + ' del mes anterior.',
+    });
+  }
+
+  const deudaTotal = deudas
+    .filter(function (item) { return item.estado === 'activa'; })
+    .reduce(function (total, item) { return total + item.pendiente; }, 0);
+  if (deudaTotal > 0) {
+    insights.push({ title: 'Deuda pendiente', message: 'Tienes S/ ' + deudaTotal.toFixed(2) + ' pendiente. Prioriza lo que vence primero.' });
+  }
+
+  if (ingresosMes > 0) {
+    const margen = Math.round(((ingresosMes - gastosMes) / ingresosMes) * 100);
+    insights.push({
+      title: margen >= 20 ? 'Buen margen de ahorro' : 'Margen ajustado',
+      message: 'Tu margen del mes es ' + margen + '%.',
+    });
+  }
+
+  return insights.slice(0, 6);
 }
 
 function dashSum_(txs, type) {
@@ -476,4 +607,11 @@ function dashRound_(value) {
 function dashInt_(value, fallback) {
   const parsed = parseInt(value, 10);
   return parsed > 0 ? parsed : fallback;
+}
+
+function dashDaysBetween_(from, to) {
+  const a = new Date(from + 'T00:00:00Z').getTime();
+  const b = new Date(to + 'T00:00:00Z').getTime();
+  if (isNaN(a) || isNaN(b)) return 9999;
+  return Math.round((b - a) / 86400000);
 }

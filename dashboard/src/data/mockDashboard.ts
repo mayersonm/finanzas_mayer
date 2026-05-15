@@ -41,6 +41,10 @@ export const MOCK_DASHBOARD: DashboardData = {
     { nombre: 'Alquiler', monto: 1500, cat: 'Servicios', color: '#f59e0b', estado: 'pendiente' },
     { nombre: 'Internet', monto: 120, cat: 'Servicios', color: '#f59e0b', estado: 'pagado', pagadoMes: true },
   ],
+  deudas: [
+    { nombre: 'Laptop', total: 2500, pagado: 700, pendiente: 1800, vencimiento: '2026-06-30', estado: 'activa' },
+    { nombre: 'Tarjeta BCP', total: 900, pagado: 300, pendiente: 600, vencimiento: '2026-05-20', estado: 'activa' },
+  ],
   gastosReales: {
     totalFijos: 1620,
     totalPresupuesto: 950,
@@ -56,5 +60,13 @@ export const MOCK_DASHBOARD: DashboardData = {
     monthly: 'ma***@gmail.com',
     yearly: 'ma***@gmail.com',
   },
+  alertas: [
+    { level: 'warning', title: 'Deuda por vencer: Tarjeta BCP', message: 'Vence pronto y queda S/ 600.00.' },
+    { level: 'info', title: 'Gasto fijo pendiente: Alquiler', message: 'Falta marcar S/ 1500.00 como pagado o saltado.' },
+  ],
+  insights: [
+    { title: 'Mayor fuga: Comida', message: 'Representa 37% del gasto del mes.' },
+    { title: 'Deuda pendiente', message: 'Tienes S/ 2400.00 pendiente. Prioriza lo que vence primero.' },
+  ],
   source: 'demo',
 };
