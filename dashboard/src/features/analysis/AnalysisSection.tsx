@@ -34,6 +34,32 @@ export function AnalysisSection({ data }: { data: DashboardData }) {
         />
       </Card>
 
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+        <Title>Categorias</Title>
+        <Text>Distribucion del gasto actual</Text>
+        <div className="mt-4 space-y-3 sm:mt-5 sm:space-y-4">
+          {data.categorias.length ? (
+            data.categorias.map((item, index) => {
+              const pct = percent(item.monto, totalCategorias);
+              const color = categoryColors[index % categoryColors.length];
+
+              return (
+                <div key={item.cat}>
+                  <div className="flex items-center justify-between gap-4">
+                    <Text className="truncate font-semibold text-slate-200">{item.cat}</Text>
+                    <span className="font-mono text-sm text-slate-100">{formatMoney(item.monto)}</span>
+                  </div>
+                  <ProgressBar className="mt-2" value={pct} color={color} />
+                  <Text className="mt-1">{pct}% del total</Text>
+                </div>
+              );
+            })
+          ) : (
+            <EmptyState>Sin categorias para analizar.</EmptyState>
+          )}
+        </div>
+      </Card>
+
       <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6 lg:col-span-2">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -78,31 +104,7 @@ export function AnalysisSection({ data }: { data: DashboardData }) {
         </div>
       </Card>
 
-      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-        <Title>Categorias</Title>
-        <Text>Distribucion del gasto actual</Text>
-        <div className="mt-4 space-y-3 sm:mt-5 sm:space-y-4">
-          {data.categorias.length ? (
-            data.categorias.map((item, index) => {
-              const pct = percent(item.monto, totalCategorias);
-              const color = categoryColors[index % categoryColors.length];
-
-              return (
-                <div key={item.cat}>
-                  <div className="flex items-center justify-between gap-4">
-                    <Text className="truncate font-semibold text-slate-200">{item.cat}</Text>
-                    <span className="font-mono text-sm text-slate-100">{formatMoney(item.monto)}</span>
-                  </div>
-                  <ProgressBar className="mt-2" value={pct} color={color} />
-                  <Text className="mt-1">{pct}% del total</Text>
-                </div>
-              );
-            })
-          ) : (
-            <EmptyState>Sin categorias para analizar.</EmptyState>
-          )}
-        </div>
-      </Card>
+      
     </section>
   );
 }
