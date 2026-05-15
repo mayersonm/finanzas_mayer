@@ -70,6 +70,15 @@ function handleMessage(chatId, text) {
     case 'credito':
     case 'crédito':
     case 'tarjeta': return cmdCredito(chatId, text.trim());
+
+    case 'deuda':
+    case 'deudas': return cmdDeudas(chatId, text.trim());
+
+    case 'alertas':
+    case 'alertas inteligentes': return cmdAlertasInteligentes(chatId);
+
+    case 'insights':
+    case 'insights ia': return cmdInsightsIA(chatId);
   }
 
   // ── COMANDOS CON PARÁMETROS ──────────────────────────────
@@ -88,6 +97,8 @@ function handleMessage(chatId, text) {
   if (lower.startsWith('credito '))        return cmdCredito(chatId, text.trim());
   if (lower.startsWith('crédito '))        return cmdCredito(chatId, text.trim());
   if (lower.startsWith('tarjeta '))        return cmdCredito(chatId, text.trim());
+  if (lower.startsWith('deuda '))          return cmdDeudas(chatId, text.trim());
+  if (lower.startsWith('pagar deuda '))    return cmdDeudas(chatId, text.trim());
   if (lower.startsWith('saltar fijo ')) return cmdFijos(chatId, lower);
   if (lower.startsWith('confirmar eliminar fijo ')) return cmdFijos(chatId, lower);
   if (lower.startsWith('correo '))        return cmdCorreo(chatId, text.trim());

@@ -61,6 +61,28 @@ export interface FixedExpense {
   estado?: 'pagado' | 'pendiente' | 'saltado' | string;
 }
 
+export interface Debt {
+  id?: string;
+  nombre: string;
+  total: number;
+  pagado: number;
+  pendiente: number;
+  vencimiento?: string;
+  estado?: 'activa' | 'pagada' | string;
+  notas?: string;
+}
+
+export interface SmartAlert {
+  level: 'info' | 'warning' | 'danger' | string;
+  title: string;
+  message: string;
+}
+
+export interface SmartInsight {
+  title: string;
+  message: string;
+}
+
 export interface RealExpenses {
   totalFijos: number;
   totalPresupuesto: number;
@@ -91,8 +113,11 @@ export interface DashboardData {
   meses: MonthTotal[];
   presupuestos: Budget[];
   fijos?: FixedExpense[];
+  deudas?: Debt[];
   gastosReales?: RealExpenses;
   metas: Goal[];
+  alertas?: SmartAlert[];
+  insights?: SmartInsight[];
   emailConfig?: EmailConfig;
   source?: string;
   updatedAt?: string;

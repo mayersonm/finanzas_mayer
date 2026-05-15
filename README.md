@@ -95,3 +95,13 @@ gasto 120 supermercado metro credito
 pago ultimo credito
 pago 1 debito
 ```
+
+## Deudas, alertas e insights
+
+```text
+deuda laptop 2500 vence 2026-06-30
+pagar deuda laptop 300
+deudas
+alertas
+insights
+```

@@ -105,6 +105,54 @@ function guardarReciboD1(receipt) {
   }
 }
 
+function guardarDeudaD1(debt) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiUrl = props.getProperty('d1_api_url');
+    const adminKey = props.getProperty('d1_admin_key');
+
+    if (!apiUrl || !adminKey) {
+      Logger.log('Deuda D1 omitida: faltan d1_api_url o d1_admin_key');
+      return false;
+    }
+
+    if (!debt || !debt.nombre || !debt.total) {
+      Logger.log('Deuda D1 omitida: faltan nombre o total');
+      return false;
+    }
+
+    const payload = {
+      id: debt.id || '',
+      chat_id: String(debt.chatId),
+      nombre: debt.nombre,
+      total: Number(debt.total || 0),
+      pagado: Number(debt.pagado || 0),
+      vencimiento: debt.vencimiento || '',
+      estado: debt.estado || 'activa',
+      notas: debt.notas || '',
+    };
+
+    const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/debts', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-admin-key': adminKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+
+    const code = resp.getResponseCode();
+    if (code < 200 || code >= 300) {
+      Logger.log('Error deuda D1 HTTP ' + code + ': ' + resp.getContentText());
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    Logger.log('Error guardarDeudaD1: ' + err);
+    return false;
+  }
+}
+
 function actualizarCategoriaD1(tx) {
   try {
     const props = PropertiesService.getScriptProperties();

@@ -81,6 +81,12 @@ export default {
         return json(await updateTransactionPayment(env, payload));
       }
 
+      if (url.pathname === '/api/debts' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await upsertDebtFromPayload(env, payload), 201);
+      }
+
       if (url.pathname === '/api/receipts' && request.method === 'POST') {
         requireAdminKey(request, env);
         const payload = await request.json();
@@ -114,6 +120,7 @@ async function health(env) {
   const row = await env.DB.prepare('SELECT COUNT(*) AS total FROM transactions').first();
   const fixed = await env.DB.prepare('SELECT COUNT(*) AS total FROM fixed_expenses WHERE active = 1').first();
   const receipts = await env.DB.prepare('SELECT COUNT(*) AS total FROM receipts').first();
+  const debts = await env.DB.prepare("SELECT COUNT(*) AS total FROM debts WHERE status = 'activa'").first();
 
   return {
     ok: true,
@@ -121,6 +128,7 @@ async function health(env) {
     transactions: row?.total || 0,
     fixedExpenses: fixed?.total || 0,
     receipts: receipts?.total || 0,
+    debts: debts?.total || 0,
     checkedAt: new Date().toISOString(),
   };
 }
@@ -243,6 +251,7 @@ async function dashboard(env, params) {
   const months = await lastMonths(env, chatId, now);
   const budgets = await budgetsWithSpending(env, chatId, monthKey);
   const fixedExpenses = await fixedExpensesList(env, chatId, monthKey);
+  const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
   const emailConfig = await emailConfigFromGas(env);
 
@@ -250,6 +259,26 @@ async function dashboard(env, params) {
   const gastos = Number(totals?.gastos || 0);
   const ingresosMes = Number(monthTotals?.ingresosMes || 0);
   const gastosMes = Number(monthTotals?.gastosMes || 0);
+
+  const alerts = smartAlerts({
+    now,
+    monthKey,
+    ingresosMes,
+    gastosMes,
+    budgets,
+    fixedExpenses,
+    debts,
+    latest: (latest.results || []).map(txShape),
+  });
+  const insights = smartInsights({
+    ingresosMes,
+    gastosMes,
+    balanceMes: ingresosMes - gastosMes,
+    categories: categories.results || [],
+    budgets,
+    debts,
+    months,
+  });
 
   return {
     ok: true,
@@ -271,8 +300,11 @@ async function dashboard(env, params) {
     meses: months,
     presupuestos: budgets,
     fijos: fixedExpenses,
+    deudas: debts,
     gastosReales: realExpenses(fixedExpenses, budgets),
     metas: goals,
+    alertas: alerts,
+    insights: insights,
     emailConfig,
     source: 'd1',
     updatedAt: localIso(now),
@@ -693,11 +725,16 @@ async function syncFromGas(env, params) {
     fixedCount++;
   }
 
+  let debtCount = 0;
+  for (const raw of dashData.deudas || dashData.debts || []) {
+    if (await upsertDebt(env, chatId, raw)) debtCount++;
+  }
+
   const runId = crypto.randomUUID();
   await env.DB.prepare(`
     INSERT INTO sync_runs (id, source, status, details)
     VALUES (?, 'gas', 'ok', ?)
-  `).bind(runId, JSON.stringify({ txCount, budgetCount, goalCount, fixedCount })).run();
+  `).bind(runId, JSON.stringify({ txCount, budgetCount, goalCount, fixedCount, debtCount })).run();
 
   return {
     ok: true,
@@ -706,6 +743,7 @@ async function syncFromGas(env, params) {
     budgets: budgetCount,
     goals: goalCount,
     fixedExpenses: fixedCount,
+    debts: debtCount,
     syncedAt: new Date().toISOString(),
   };
 }
@@ -880,6 +918,77 @@ async function upsertFixedExpense(env, chatId, raw) {
   `).bind(`fixed:${chatId}:${name}`, chatId, name, amount, category).run();
 }
 
+async function upsertDebtFromPayload(env, payload) {
+  const chatId = String(payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+
+  const debt = normalizeDebt(payload, chatId);
+  if (!debt) throw httpError(400, 'Deuda invalida');
+  await saveDebt(env, debt);
+
+  return {
+    ok: true,
+    debt: debtShape(debt),
+  };
+}
+
+async function upsertDebt(env, chatId, raw) {
+  const debt = normalizeDebt(raw, chatId);
+  if (!debt) return false;
+  await saveDebt(env, debt);
+  return true;
+}
+
+function normalizeDebt(raw, chatId) {
+  const name = normalizeKey(raw.nombre || raw.name || '');
+  const totalAmount = parseAmount(raw.total || raw.total_amount || raw.totalAmount || raw.monto || raw.amount || 0);
+  const paidAmount = parseAmount(raw.pagado || raw.paid_amount || raw.paidAmount || 0);
+  const dueDate = normalizeDateOnly(raw.vencimiento || raw.due_date || raw.dueDate || raw.fecha || '');
+  const statusRaw = normalizeKey(raw.estado || raw.status || '');
+  const status = statusRaw === 'pagada' || statusRaw === 'pagado' || paidAmount >= totalAmount
+    ? 'pagada'
+    : 'activa';
+  const notes = String(raw.notas || raw.notes || '').trim().slice(0, 240);
+
+  if (!name || totalAmount <= 0) return null;
+
+  return {
+    id: String(raw.id || `debt:${chatId}:${name}`).slice(0, 180),
+    chat_id: chatId,
+    name,
+    total_amount: round(totalAmount),
+    paid_amount: round(Math.min(Math.max(paidAmount, 0), totalAmount)),
+    due_date: dueDate,
+    status,
+    notes,
+  };
+}
+
+async function saveDebt(env, debt) {
+  await env.DB.prepare(`
+    INSERT INTO debts (
+      id, chat_id, name, total_amount, paid_amount, due_date, status, notes, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(chat_id, name) DO UPDATE SET
+      total_amount = excluded.total_amount,
+      paid_amount = excluded.paid_amount,
+      due_date = excluded.due_date,
+      status = excluded.status,
+      notes = excluded.notes,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(
+    debt.id,
+    debt.chat_id,
+    debt.name,
+    debt.total_amount,
+    debt.paid_amount,
+    debt.due_date || null,
+    debt.status,
+    debt.notes,
+  ).run();
+}
+
 async function lastMonths(env, chatId, now) {
   const result = [];
   const shortNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -958,6 +1067,38 @@ async function fixedExpensesList(env, chatId, monthKey) {
     saltadoMes: false,
     estado: row.pagadoMes ? 'pagado' : 'pendiente',
   }));
+}
+
+async function debtsList(env, chatId) {
+  const rows = await env.DB.prepare(`
+    SELECT id, name, total_amount, paid_amount, due_date, status, notes
+    FROM debts
+    WHERE chat_id = ?
+    ORDER BY
+      CASE WHEN status = 'activa' THEN 0 ELSE 1 END,
+      CASE WHEN due_date IS NULL OR due_date = '' THEN 1 ELSE 0 END,
+      due_date ASC,
+      total_amount - paid_amount DESC
+  `).bind(chatId).all();
+
+  return (rows.results || []).map(debtShape);
+}
+
+function debtShape(row) {
+  const total = round(row.total_amount);
+  const paid = round(row.paid_amount);
+  const pending = round(Math.max(total - paid, 0));
+
+  return {
+    id: row.id,
+    nombre: title(row.name),
+    total: total,
+    pagado: paid,
+    pendiente: pending,
+    vencimiento: row.due_date || '',
+    estado: row.status || (pending > 0 ? 'activa' : 'pagada'),
+    notas: row.notes || '',
+  };
 }
 
 function realExpenses(fixedExpenses, budgets) {
@@ -1056,6 +1197,139 @@ function txShape(row) {
       uploadedAt: row.receipt_uploaded_at || '',
     } : undefined,
   };
+}
+
+function smartAlerts({ now, ingresosMes, gastosMes, budgets, fixedExpenses, debts, latest }) {
+  const alerts = [];
+  const today = localDateKey(now);
+
+  budgets.forEach((item) => {
+    const spent = Number(item.gasto || 0);
+    const limit = Number(item.limite || 0);
+    if (limit <= 0) return;
+
+    const pct = Math.round((spent / limit) * 100);
+    if (pct >= 100) {
+      alerts.push({
+        level: 'danger',
+        title: `Presupuesto superado: ${item.cat}`,
+        message: `Vas en S/ ${round(spent)} de S/ ${round(limit)} (${pct}%).`,
+      });
+    } else if (pct >= 80) {
+      alerts.push({
+        level: 'warning',
+        title: `Presupuesto cerca del limite: ${item.cat}`,
+        message: `Ya usaste ${pct}% del presupuesto.`,
+      });
+    }
+  });
+
+  fixedExpenses
+    .filter((item) => item.estado === 'pendiente')
+    .slice(0, 3)
+    .forEach((item) => {
+      alerts.push({
+        level: 'info',
+        title: `Gasto fijo pendiente: ${item.nombre}`,
+        message: `Falta marcar S/ ${round(item.monto)} como pagado o saltado este mes.`,
+      });
+    });
+
+  debts
+    .filter((item) => item.estado === 'activa' && item.vencimiento)
+    .forEach((item) => {
+      const days = daysBetween(today, item.vencimiento);
+      if (days < 0) {
+        alerts.push({
+          level: 'danger',
+          title: `Deuda vencida: ${item.nombre}`,
+          message: `Pendiente S/ ${round(item.pendiente)} desde ${item.vencimiento}.`,
+        });
+      } else if (days <= 7) {
+        alerts.push({
+          level: 'warning',
+          title: `Deuda por vencer: ${item.nombre}`,
+          message: `Vence en ${days} dia${days === 1 ? '' : 's'} y queda S/ ${round(item.pendiente)}.`,
+        });
+      }
+    });
+
+  latest
+    .filter((tx) => tx.tipo === 'gasto' && tx.paymentMethod === 'credito' && tx.paymentDueDate)
+    .forEach((tx) => {
+      const days = daysBetween(today, tx.paymentDueDate);
+      if (days >= 0 && days <= 5) {
+        alerts.push({
+          level: 'warning',
+          title: 'Pago de credito cercano',
+          message: `${tx.desc}: S/ ${round(tx.monto)} vence el ${tx.paymentDueDate}.`,
+        });
+      }
+    });
+
+  if (ingresosMes > 0 && gastosMes > ingresosMes) {
+    alerts.push({
+      level: 'danger',
+      title: 'Gastos sobre ingresos',
+      message: `Este mes gastaste S/ ${round(gastosMes)} contra S/ ${round(ingresosMes)} de ingresos.`,
+    });
+  }
+
+  return alerts.slice(0, 8);
+}
+
+function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets, debts, months }) {
+  const insights = [];
+  const totalDebt = debts
+    .filter((item) => item.estado === 'activa')
+    .reduce((total, item) => total + Number(item.pendiente || 0), 0);
+  const topCategory = [...categories].sort((a, b) => Number(b.monto || 0) - Number(a.monto || 0))[0];
+  const prev = months.length >= 2 ? months[months.length - 2] : null;
+  const current = months.length ? months[months.length - 1] : null;
+
+  if (topCategory && gastosMes > 0) {
+    const pct = Math.round((Number(topCategory.monto || 0) / gastosMes) * 100);
+    insights.push({
+      title: `Mayor fuga: ${title(topCategory.cat)}`,
+      message: `Representa ${pct}% del gasto del mes. Revisa si ese ritmo sigue siendo intencional.`,
+    });
+  }
+
+  if (prev && current && Number(prev.gastos || 0) > 0) {
+    const delta = Math.round(((Number(current.gastos || 0) - Number(prev.gastos || 0)) / Number(prev.gastos || 1)) * 100);
+    insights.push({
+      title: delta >= 0 ? 'Gasto acelerado' : 'Gasto mas controlado',
+      message: `Vas ${Math.abs(delta)}% ${delta >= 0 ? 'por encima' : 'por debajo'} del mes anterior.`,
+    });
+  }
+
+  const riskyBudget = budgets
+    .filter((item) => Number(item.limite || 0) > 0)
+    .map((item) => ({ ...item, pct: Math.round((Number(item.gasto || 0) / Number(item.limite || 1)) * 100) }))
+    .sort((a, b) => b.pct - a.pct)[0];
+  if (riskyBudget && riskyBudget.pct >= 70) {
+    insights.push({
+      title: `Presupuesto sensible: ${riskyBudget.cat}`,
+      message: `Esta categoria ya va en ${riskyBudget.pct}% del limite.`,
+    });
+  }
+
+  if (totalDebt > 0) {
+    insights.push({
+      title: 'Deuda pendiente',
+      message: `Tienes S/ ${round(totalDebt)} pendiente. Prioriza lo que vence primero.`,
+    });
+  }
+
+  if (ingresosMes > 0) {
+    const savingsRate = Math.round((balanceMes / ingresosMes) * 100);
+    insights.push({
+      title: savingsRate >= 20 ? 'Buen margen de ahorro' : 'Margen ajustado',
+      message: `Tu margen del mes es ${savingsRate}%. ${savingsRate >= 20 ? 'Buen espacio para metas.' : 'Conviene proteger caja.'}`,
+    });
+  }
+
+  return insights.slice(0, 6);
 }
 
 async function requireDashboardAccess(request, env) {
@@ -1347,6 +1621,22 @@ function normalizeDateOnly(value) {
   const text = String(value || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
   return '';
+}
+
+function localDateKey(date) {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: DEFAULT_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function daysBetween(fromDateKey, toDateKey) {
+  const from = Date.parse(`${fromDateKey}T00:00:00Z`);
+  const to = Date.parse(`${toDateKey}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return 9999;
+  return Math.round((to - from) / 86400000);
 }
 
 function normalizeCategory(value, description = '') {
