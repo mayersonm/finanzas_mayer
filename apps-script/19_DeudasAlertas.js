@@ -130,7 +130,20 @@ function cmdAlertasInteligentes(chatId) {
 }
 
 function cmdInsightsIA(chatId) {
-  const resumen = resumenFinancieroParaIA_(chatId);
+  const contexto = contextoInsightsIA_(chatId);
+  sendMessage(
+    chatId,
+    `🧠 *Preparando insights IA...*\n\n` +
+    `Estoy leyendo:\n` +
+    `• ${contexto.movimientosMes} movimientos de este mes\n` +
+    `• ${contexto.categoriasCount} categorias con gasto\n` +
+    `• ${contexto.deudasActivas} deudas activas\n` +
+    `• ${contexto.alertasCount} alertas inteligentes\n\n` +
+    `_Dame unos segundos._`,
+    true
+  );
+
+  const resumen = contexto.resumen;
   const prompt = [
     'Eres un asesor financiero personal para Mayeson en Peru.',
     'Da insights accionables, breves y concretos. No des teoria.',
@@ -195,6 +208,24 @@ function cmdInsightsIA(chatId) {
     Logger.log('Error cmdInsightsIA: ' + err);
     return sendMessage(chatId, '❌ Error generando insights IA.', true);
   }
+}
+
+function contextoInsightsIA_(chatId) {
+  const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
+  const txs = obtenerTransacciones(chatId).filter(r =>
+    Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes
+  );
+  const gastosCat = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {};
+  const deudas = leerDeudas_(chatId).filter(d => d.estado !== 'pagada' && d.pendiente > 0);
+  const alertas = calcularAlertasInteligentes_(chatId);
+
+  return {
+    movimientosMes: txs.length,
+    categoriasCount: Object.keys(gastosCat).length,
+    deudasActivas: deudas.length,
+    alertasCount: alertas.length,
+    resumen: resumenFinancieroParaIA_(chatId),
+  };
 }
 
 function calcularAlertasInteligentes_(chatId) {
