@@ -363,7 +363,7 @@ function cmdProyeccion(chatId) {
 // Archivo → Propiedades del proyecto → claude_api_key
 function cmdAnalisisIA(chatId) {
   // chatId = 1538086276;
-  sendMessage(chatId, '🤖 Analizando tus finanzas...', true);
+  sendMessage(chatId, '🤖 Analizando tus finanzas...\n\nEstoy revisando ingresos, gastos, categorias, presupuestos, metas y proyeccion del mes.', true);
  
   const hoy       = new Date();
   const mesActual = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM');
