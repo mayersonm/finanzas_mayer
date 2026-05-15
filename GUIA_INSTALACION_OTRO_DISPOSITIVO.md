@@ -31,7 +31,6 @@ cd finanzas_mayer
 Opcion empaquetada desde esta PC:
 
 ```powershell
-cd C:\Users\mayer\Documents\Codex\2026-05-09\files-mentioned-by-the-user-09\finanzas-mayeson
 git archive --format=zip --output ..\finanzas_mayeson_fuentes.zip HEAD
 ```
 
