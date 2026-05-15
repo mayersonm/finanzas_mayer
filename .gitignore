@@ -9,6 +9,7 @@ dist/
 .env
 .env.*
 !.env.example
+!dashboard/.env.production
 .clasp.json
 .wrangler/
 
