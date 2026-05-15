@@ -714,8 +714,9 @@ function procesarFotoRecibo(chatId, msg) {
     const promptRecibo =
       'Analiza este recibo o ticket de compra y extrae la información.\n' +
       'Responde SOLO con este JSON exacto, sin explicaciones ni markdown:\n' +
-      '{"monto": 45.50, "descripcion": "Almuerzo pollo a la brasa", "categoria": "comida", "metodo_pago": "debito"}\n\n' +
+      '{"monto": 45.50, "moneda": "PEN", "descripcion": "Almuerzo pollo a la brasa", "categoria": "comida", "metodo_pago": "debito"}\n\n' +
       'Categorías válidas: comida, supermercado, transporte, servicios, entretenimiento, salud, ropa, educacion, otro\n' +
+      'moneda valida: PEN o USD. Si no ves moneda clara, usa PEN.\n' +
       'metodo_pago valido: debito, credito o desconocido. Si ves tarjeta de credito, usa credito.\n' +
       'Si no puedes leer el monto exacto, estímalo.\n' +
       'Si no es un recibo, responde: {"error": "No es un recibo"}';
@@ -813,7 +814,8 @@ function procesarFotoRecibo(chatId, msg) {
     const pago = resolverPagoRecibo_(datos, fecha);
 
     asegurarColumnasPagoTransacciones_(sheet);
-    sheet.appendRow([fecha, hora, 'gasto', desc, cat, monto, chatId, pago.metodo, pago.fechaPago, pago.tarjeta]);
+    const moneda = normalizarMoneda_(datos.moneda || datos.currency) || 'PEN';
+    sheet.appendRow([fecha, hora, 'gasto', desc, cat, monto, chatId, pago.metodo, pago.fechaPago, pago.tarjeta, moneda]);
 
     const txD1 = {
       chatId: chatId,
@@ -823,6 +825,7 @@ function procesarFotoRecibo(chatId, msg) {
       desc: desc,
       cat: cat,
       monto: monto,
+      currency: moneda,
       paymentMethod: pago.metodo,
       paymentDueDate: pago.fechaPago,
       cardName: pago.tarjeta,
@@ -846,6 +849,7 @@ function procesarFotoRecibo(chatId, msg) {
         desc: desc,
         cat: cat,
         monto: monto,
+        currency: moneda,
       });
     }
 
@@ -855,7 +859,7 @@ function procesarFotoRecibo(chatId, msg) {
     sendMessage(chatId,
       `📸 *¡Recibo registrado!*\n\n` +
       `🔴 ${desc}\n` +
-      `💵 S/ ${monto.toFixed(2)}\n` +
+      `💵 ${formatoMoneda_(monto, moneda)}\n` +
       `🏷️ ${capitalizar(cat)}\n` +
       `${lineasPagoMensaje_(pago)}\n` +
       `📅 ${fecha}\n\n` +

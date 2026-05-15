@@ -106,7 +106,7 @@ function handleMessage(chatId, text) {
   
 
   // ── REGISTRAR MOVIMIENTO (siempre al final) ──────────────
-  const match = lower.match(/^(gasto|ingreso)\s+([\d]+(?:[.,]\d{1,2})?)\s+(\w+)(?:\s+(.+))?$/);
+  const match = lower.match(/^(gasto|ingreso)\s+([\d]+(?:[.,]\d{1,2})?)(?:\s+(pen|usd))?\s+(\w+)(?:\s+(.+))?$/);
   if (match) return registrarMovimiento(chatId, match, text);
 
   // ── NO RECONOCIDO ────────────────────────────────────────

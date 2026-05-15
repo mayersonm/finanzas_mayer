@@ -11,11 +11,11 @@ export const MOCK_DASHBOARD: DashboardData = {
   mes: 'Mayo',
   mesKey: '2026-05',
   transacciones: [
-    { fecha: '2026-05-08', hora: '09:00', tipo: 'ingreso', desc: 'Salario', cat: 'salario', monto: 6500 },
-    { fecha: '2026-05-08', hora: '13:20', tipo: 'gasto', desc: 'Almuerzo', cat: 'comida', monto: 60, paymentMethod: 'debito' },
-    { fecha: '2026-05-07', hora: '18:30', tipo: 'gasto', desc: 'Metro', cat: 'supermercado', monto: 135, paymentMethod: 'credito', paymentDueDate: '2026-06-10' },
-    { fecha: '2026-05-06', hora: '20:10', tipo: 'gasto', desc: 'Internet', cat: 'servicios', monto: 120, paymentMethod: 'debito' },
-    { fecha: '2026-05-04', hora: '21:00', tipo: 'gasto', desc: 'Netflix', cat: 'entretenimiento', monto: 45 },
+    { fecha: '2026-05-08', hora: '09:00', tipo: 'ingreso', desc: 'Salario', cat: 'salario', monto: 6500, currency: 'PEN' },
+    { fecha: '2026-05-08', hora: '13:20', tipo: 'gasto', desc: 'Almuerzo', cat: 'comida', monto: 60, currency: 'PEN', paymentMethod: 'debito' },
+    { fecha: '2026-05-07', hora: '18:30', tipo: 'gasto', desc: 'Metro', cat: 'supermercado', monto: 135, currency: 'PEN', paymentMethod: 'credito', paymentDueDate: '2026-06-10' },
+    { fecha: '2026-05-06', hora: '20:10', tipo: 'gasto', desc: 'Internet', cat: 'servicios', monto: 120, currency: 'PEN', paymentMethod: 'debito' },
+    { fecha: '2026-05-04', hora: '21:00', tipo: 'gasto', desc: 'Netflix', cat: 'entretenimiento', monto: 45, currency: 'USD' },
   ],
   categorias: [
     { cat: 'Comida', monto: 420, color: '#22c55e' },

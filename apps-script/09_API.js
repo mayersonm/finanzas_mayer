@@ -204,6 +204,7 @@ function dashReadTransactions_(params) {
         desc: String(row[3] || 'Sin descripcion'),
         cat: String(row[4] || 'otro').toLowerCase(),
         monto: dashRound_(Math.abs(parseFloat(row[5]) || 0)),
+        currency: normalizarMoneda_(row[10]) || 'PEN',
         paymentMethod: dashPaymentMethod_(row[7]),
         paymentDueDate: dashPlainDate_(row[8]),
         cardName: String(row[9] || ''),

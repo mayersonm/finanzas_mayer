@@ -25,6 +25,7 @@ function guardarTransaccionD1(tx) {
       desc: tx.desc,
       cat: String(tx.cat || 'otro').toLowerCase(),
       monto: Number(tx.monto),
+      currency: normalizarMoneda_(tx.currency || tx.moneda) || 'PEN',
       payment_method: tx.paymentMethod || tx.payment_method || 'debito',
       payment_due_date: tx.paymentDueDate || tx.payment_due_date || '',
       card_name: tx.cardName || tx.card_name || '',
@@ -82,6 +83,7 @@ function guardarReciboD1(receipt) {
       desc: receipt.desc || '',
       cat: receipt.cat || 'otro',
       monto: Number(receipt.monto || 0),
+      currency: normalizarMoneda_(receipt.currency || receipt.moneda) || 'PEN',
     };
 
     const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/receipts', {
@@ -194,6 +196,7 @@ function actualizarCategoriaD1(tx) {
       old_cat: String(tx.oldCat || '').toLowerCase(),
       cat: String(tx.cat || 'otro').toLowerCase(),
       monto: Number(tx.monto),
+      currency: normalizarMoneda_(tx.currency || tx.moneda) || 'PEN',
     };
 
     const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/transactions/category', {
