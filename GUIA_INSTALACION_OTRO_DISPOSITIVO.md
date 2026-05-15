@@ -39,29 +39,116 @@ cd finanzas_mayer
 
 Este comando descarga el repositorio y entra a la carpeta principal del proyecto.
 
-## 3. Instalar dependencias
+## 3. Entender las dependencias del proyecto
+
+El proyecto tiene tres partes:
+
+```text
+apps-script  -> Bot de Telegram en Google Apps Script
+d1-api       -> Cloudflare Worker + D1 + R2
+dashboard    -> Dashboard React + TypeScript + Vite
+```
+
+Cada parte necesita herramientas distintas:
+
+```text
+Git          -> descargar y subir codigo
+Node.js/npm  -> instalar paquetes JavaScript
+Wrangler     -> desplegar Cloudflare Worker y Pages
+clasp        -> subir codigo a Google Apps Script
+```
+
+No instales paquetes manualmente uno por uno. El repo ya trae `package.json` y `package-lock.json`. Eso permite instalar todo con `npm ci`.
+
+## 4. Instalar dependencias globales
+
+Estas dependencias se instalan una vez en la computadora.
+
+Instala `clasp`, que sirve para subir archivos a Google Apps Script:
+
+```powershell
+npm install -g @google/clasp
+```
+
+Verifica que funciona:
+
+```powershell
+clasp --version
+```
+
+Wrangler no hace falta instalarlo globalmente porque se ejecuta con `npx wrangler`. Verifica que `npx` puede ejecutarlo:
+
+```powershell
+npx wrangler --version
+```
+
+Si alguno de esos comandos falla, revisa que Node.js y npm esten instalados correctamente.
+
+## 5. Instalar dependencias del dashboard
 
 El proyecto tiene dos partes con Node.js: el dashboard y el Worker.
 
-Instala dependencias del dashboard:
+Primero instala las dependencias del dashboard:
 
 ```powershell
 cd dashboard
 npm ci
+```
+
+Esto instala, entre otros:
+
+```text
+React
+React DOM
+TypeScript
+Vite
+Tremor
+Headless UI
+Tailwind CSS
+```
+
+Verifica que el dashboard puede compilar:
+
+```powershell
+npm run build
+```
+
+Vuelve a la raiz:
+
+```powershell
 cd ..
 ```
 
-Instala dependencias del Worker:
+## 6. Instalar dependencias del Worker
+
+Instala las dependencias del Worker:
 
 ```powershell
 cd d1-api
 npm ci
+```
+
+Esto instala Wrangler para desplegar Cloudflare:
+
+```text
+wrangler
+```
+
+Verifica que Wrangler responde dentro del proyecto:
+
+```powershell
+npx wrangler --version
+```
+
+Vuelve a la raiz:
+
+```powershell
 cd ..
 ```
 
 `npm ci` instala exactamente las versiones guardadas en `package-lock.json`.
 
-## 4. Configurar el dashboard local
+## 7. Configurar el dashboard local
 
 El dashboard necesita saber donde esta la API del Worker. Sin esta variable, el dashboard abre en modo demo y no muestra login.
 
@@ -109,7 +196,7 @@ Vuelve a la raiz del proyecto:
 cd ..
 ```
 
-## 5. Configurar Cloudflare
+## 8. Configurar Cloudflare
 
 Inicia sesion en Cloudflare con Wrangler:
 
@@ -161,7 +248,7 @@ Vuelve a la raiz:
 cd ..
 ```
 
-## 6. Desplegar el dashboard en Cloudflare Pages
+## 9. Desplegar el dashboard en Cloudflare Pages
 
 Entra al dashboard:
 
@@ -200,9 +287,11 @@ Vuelve a la raiz:
 cd ..
 ```
 
-## 7. Configurar Apps Script
+## 10. Configurar Apps Script
 
-Instala clasp:
+Si ya instalaste `clasp` en el paso de dependencias globales, no necesitas instalarlo otra vez.
+
+Si todavia no lo instalaste:
 
 ```powershell
 npm install -g @google/clasp
@@ -275,7 +364,7 @@ Vuelve a la raiz:
 cd ..
 ```
 
-## 8. Configurar Script Properties
+## 11. Configurar Script Properties
 
 En Google Apps Script abre:
 
@@ -327,7 +416,7 @@ Para credito puedes configurarlo desde Telegram:
 credito configurar corte 25 pago 10
 ```
 
-## 9. Probar Telegram
+## 12. Probar Telegram
 
 En Telegram prueba:
 
@@ -345,7 +434,7 @@ insights
 
 Para probar recibos, envia una foto clara de un ticket. El bot debe responder primero que esta analizando.
 
-## 10. Probar dashboard
+## 13. Probar dashboard
 
 Abre la URL de Cloudflare Pages.
 
@@ -361,7 +450,7 @@ Revisa Deudas
 Revisa Analisis
 ```
 
-## 11. Comandos rapidos
+## 14. Comandos rapidos
 
 Dashboard local:
 
@@ -413,7 +502,7 @@ git commit -m "mensaje del cambio"
 git push origin main
 ```
 
-## 12. Problemas comunes
+## 15. Problemas comunes
 
 Dashboard sin login:
 
@@ -457,4 +546,3 @@ Solucion:
 Revisa claude_api_url, claude_api_key y claude_model.
 Si usas proveedor proxy, confirma permisos para /v1/messages o /v1/chat/completions.
 ```
-
