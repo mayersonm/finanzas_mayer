@@ -469,7 +469,10 @@ function cmdAnalisisIA(chatId) {
         '❌ No hay API key configurada.\nRevisa las propiedades del script.', true);
     }
  
-    const resp = UrlFetchApp.fetch('https://api.synterolink.com/v1/messages', {
+    const props = PropertiesService.getScriptProperties();
+    const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
+    const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
+    let resp = UrlFetchApp.fetch(claudeUrl, {
       method : 'post',
       headers: {
         'x-api-key'        : apiKey,
@@ -477,14 +480,26 @@ function cmdAnalisisIA(chatId) {
         'content-type'     : 'application/json'
       },
       payload: JSON.stringify({
-        model     : 'claude-haiku-4-5-20251001',
+        model     : claudeModel,
         max_tokens: 700,
         messages  : [{ role: 'user', content: prompt }]
       }),
       muteHttpExceptions: true
     });
  
-    const result = JSON.parse(resp.getContentText());
+    let raw = resp.getContentText();
+    let responseCode = resp.getResponseCode();
+    let chatCompletionsFallback = false;
+
+    if (debeReintentarChatCompletions_(responseCode, raw, claudeUrl)) {
+      Logger.log('Analisis /v1/messages bloqueado; reintentando /v1/chat/completions.');
+      resp = llamarIAChatCompletions_(apiKey, claudeUrl, claudeModel, 700, prompt, '', '');
+      raw = resp.getContentText();
+      responseCode = resp.getResponseCode();
+      chatCompletionsFallback = responseCode < 300;
+    }
+
+    const result = JSON.parse(raw);
  
     if (result.error) {
       Logger.log('Error API: ' + JSON.stringify(result.error));
@@ -492,7 +507,9 @@ function cmdAnalisisIA(chatId) {
         `❌ Error de la API: ${result.error.message || 'desconocido'}`, true);
     }
  
-    const consejo = result.content?.find(b => b.type === 'text')?.text;
+    const consejo = chatCompletionsFallback
+      ? result.choices?.[0]?.message?.content
+      : result.content?.find(b => b.type === 'text')?.text;
  
     if (!consejo) {
       Logger.log('Respuesta inesperada: ' + JSON.stringify(result));
@@ -694,7 +711,16 @@ function procesarFotoRecibo(chatId, msg) {
     const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
     const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
 
-    const resp   = UrlFetchApp.fetch(claudeUrl, {
+    const promptRecibo =
+      'Analiza este recibo o ticket de compra y extrae la información.\n' +
+      'Responde SOLO con este JSON exacto, sin explicaciones ni markdown:\n' +
+      '{"monto": 45.50, "descripcion": "Almuerzo pollo a la brasa", "categoria": "comida", "metodo_pago": "debito"}\n\n' +
+      'Categorías válidas: comida, supermercado, transporte, servicios, entretenimiento, salud, ropa, educacion, otro\n' +
+      'metodo_pago valido: debito, credito o desconocido. Si ves tarjeta de credito, usa credito.\n' +
+      'Si no puedes leer el monto exacto, estímalo.\n' +
+      'Si no es un recibo, responde: {"error": "No es un recibo"}';
+
+    let resp = UrlFetchApp.fetch(claudeUrl, {
       method : 'post',
       headers: {
         'x-api-key'        : apiKey,
@@ -713,14 +739,7 @@ function procesarFotoRecibo(chatId, msg) {
             },
             {
               type: 'text',
-              text:
-                'Analiza este recibo o ticket de compra y extrae la información.\n' +
-                'Responde SOLO con este JSON exacto, sin explicaciones ni markdown:\n' +
-                '{"monto": 45.50, "descripcion": "Almuerzo pollo a la brasa", "categoria": "comida", "metodo_pago": "debito"}\n\n' +
-                'Categorías válidas: comida, supermercado, transporte, servicios, entretenimiento, salud, ropa, educacion, otro\n' +
-                'metodo_pago valido: debito, credito o desconocido. Si ves tarjeta de credito, usa credito.\n' +
-                'Si no puedes leer el monto exacto, estímalo.\n' +
-                'Si no es un recibo, responde: {"error": "No es un recibo"}'
+              text: promptRecibo
             }
           ]
         }]
@@ -728,12 +747,23 @@ function procesarFotoRecibo(chatId, msg) {
       muteHttpExceptions: true
     });
 
-    const rawClaude = resp.getContentText();
-    if (resp.getResponseCode() >= 300) {
-      Logger.log('Claude error HTTP ' + resp.getResponseCode() + ': ' + rawClaude);
+    let rawClaude = resp.getContentText();
+    let responseCode = resp.getResponseCode();
+    let chatCompletionsFallback = false;
+
+    if (debeReintentarChatCompletions_(responseCode, rawClaude, claudeUrl)) {
+      Logger.log('Claude /v1/messages bloqueado; reintentando /v1/chat/completions.');
+      resp = llamarIAChatCompletions_(apiKey, claudeUrl, claudeModel, 300, promptRecibo, imageB64, mimeType);
+      rawClaude = resp.getContentText();
+      responseCode = resp.getResponseCode();
+      chatCompletionsFallback = responseCode < 300;
+    }
+
+    if (responseCode >= 300) {
+      Logger.log('Claude error HTTP ' + responseCode + ': ' + rawClaude);
       return sendMessage(
         chatId,
-        mensajeErrorClaudeUsuario_(resp.getResponseCode(), rawClaude, 'recibo'),
+        mensajeErrorClaudeUsuario_(responseCode, rawClaude, 'recibo'),
         true
       );
     }
@@ -744,7 +774,9 @@ function procesarFotoRecibo(chatId, msg) {
       return sendMessage(chatId, '❌ La respuesta de IA no fue válida. Intenta nuevamente con una foto más clara.', true);
     }
 
-    const texto  = result.content?.find(b => b.type === 'text')?.text?.trim();
+    const texto = chatCompletionsFallback
+      ? result.choices?.[0]?.message?.content?.trim()
+      : result.content?.find(b => b.type === 'text')?.text?.trim();
 
     if (!texto) {
       Logger.log('Claude sin texto util: ' + rawClaude);
@@ -901,6 +933,41 @@ function mensajeErrorClaudeUsuario_(status, raw, contexto) {
     (contexto === 'recibo'
       ? 'Intenta otra foto más clara o agrega el gasto manualmente.'
       : 'Intenta nuevamente más tarde.');
+}
+
+function debeReintentarChatCompletions_(status, raw, claudeUrl) {
+  return status === 403 &&
+    /\/v1\/messages/i.test(String(claudeUrl || '')) &&
+    /does not allow\s+\/v1\/messages\s+dispatch/i.test(resumenErrorClaude_(raw));
+}
+
+function llamarIAChatCompletions_(apiKey, messagesUrl, model, maxTokens, text, imageB64, mimeType) {
+  const chatUrl = String(messagesUrl || '').replace(/\/v1\/messages\/?$/i, '/v1/chat/completions');
+  const content = [{ type: 'text', text: text }];
+
+  if (imageB64) {
+    content.push({
+      type: 'image_url',
+      image_url: {
+        url: 'data:' + (mimeType || 'image/jpeg') + ';base64,' + imageB64,
+      },
+    });
+  }
+
+  return UrlFetchApp.fetch(chatUrl, {
+    method: 'post',
+    headers: {
+      'authorization': 'Bearer ' + apiKey,
+      'x-api-key': apiKey,
+      'content-type': 'application/json',
+    },
+    payload: JSON.stringify({
+      model: model,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: content }],
+    }),
+    muteHttpExceptions: true,
+  });
 }
 
 function recortarTexto_(text, max) {

@@ -152,7 +152,9 @@ function cmdInsightsIA(chatId) {
     const apiKey = props.getProperty('claude_api_key');
     if (!apiKey) return sendMessage(chatId, '❌ Falta configurar `claude_api_key` para insights IA.', true);
 
-    const resp = UrlFetchApp.fetch(props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages', {
+    const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
+    const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
+    let resp = UrlFetchApp.fetch(claudeUrl, {
       method: 'post',
       headers: {
         'x-api-key': apiKey,
@@ -160,21 +162,35 @@ function cmdInsightsIA(chatId) {
         'content-type': 'application/json',
       },
       payload: JSON.stringify({
-        model: props.getProperty('claude_model') || 'claude-haiku-4-5-20251001',
+        model: claudeModel,
         max_tokens: 450,
         messages: [{ role: 'user', content: prompt }],
       }),
       muteHttpExceptions: true,
     });
 
-    const result = parseJsonSeguro_(resp.getContentText(), null);
-    const text = result && result.content && result.content.find(b => b.type === 'text');
-    if (resp.getResponseCode() >= 300 || !text) {
-      Logger.log('Insights IA error: ' + resp.getContentText());
-      return sendMessage(chatId, mensajeErrorClaudeUsuario_(resp.getResponseCode(), resp.getContentText(), 'insights'), true);
+    let raw = resp.getContentText();
+    let responseCode = resp.getResponseCode();
+    let chatCompletionsFallback = false;
+
+    if (debeReintentarChatCompletions_(responseCode, raw, claudeUrl)) {
+      Logger.log('Insights /v1/messages bloqueado; reintentando /v1/chat/completions.');
+      resp = llamarIAChatCompletions_(apiKey, claudeUrl, claudeModel, 450, prompt, '', '');
+      raw = resp.getContentText();
+      responseCode = resp.getResponseCode();
+      chatCompletionsFallback = responseCode < 300;
     }
 
-    return sendMessage(chatId, text.text, true);
+    const result = parseJsonSeguro_(raw, null);
+    const text = chatCompletionsFallback
+      ? result && result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content
+      : result && result.content && result.content.find(b => b.type === 'text');
+    if (responseCode >= 300 || !text) {
+      Logger.log('Insights IA error: ' + raw);
+      return sendMessage(chatId, mensajeErrorClaudeUsuario_(responseCode, raw, 'insights'), true);
+    }
+
+    return sendMessage(chatId, chatCompletionsFallback ? text : text.text, true);
   } catch (err) {
     Logger.log('Error cmdInsightsIA: ' + err);
     return sendMessage(chatId, '❌ Error generando insights IA.', true);
