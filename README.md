@@ -20,6 +20,8 @@ worker_url
 dashboard_api_key
 dashboard_chat_id
 claude_api_key
+claude_api_url
+claude_model
 d1_api_url
 d1_admin_key
 finance_email_to
@@ -31,6 +33,14 @@ credit_due_day
 credit_card_name
 receipt_image_max_bytes
 ```
+
+Para Anthropic directo:
+
+```text
+claude_api_url=https://api.anthropic.com/v1/messages
+```
+
+Si usas un proveedor proxy, confirma que tu grupo/cuenta permita despachar a `/v1/messages`.
 
 ### Dashboard
 

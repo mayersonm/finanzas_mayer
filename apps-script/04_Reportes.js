@@ -733,10 +733,7 @@ function procesarFotoRecibo(chatId, msg) {
       Logger.log('Claude error HTTP ' + resp.getResponseCode() + ': ' + rawClaude);
       return sendMessage(
         chatId,
-        '❌ La IA no pudo leer el recibo en este momento.\n\n' +
-        '*Detalle:* HTTP ' + resp.getResponseCode() + '\n' +
-        '`' + resumenErrorClaude_(rawClaude) + '`\n\n' +
-        'Intenta otra foto más clara o agrega el gasto manualmente.',
+        mensajeErrorClaudeUsuario_(resp.getResponseCode(), rawClaude, 'recibo'),
         true
       );
     }
@@ -881,6 +878,29 @@ function resumenErrorClaude_(raw) {
     : (body && body.message ? body.message : raw);
 
   return recortarTexto_(String(msg || 'Error desconocido'), 220);
+}
+
+function mensajeErrorClaudeUsuario_(status, raw, contexto) {
+  const detalle = resumenErrorClaude_(raw);
+  const bloqueoMensajes = status === 403 && /does not allow\s+\/v1\/messages\s+dispatch/i.test(detalle);
+
+  if (bloqueoMensajes) {
+    return '❌ La IA está bloqueada por configuración del proveedor.\n\n' +
+      '*Detalle:* HTTP 403\n' +
+      '`' + detalle + '`\n\n' +
+      'No es problema de la foto. Revisa en Script Properties:\n' +
+      '• `claude_api_url`\n' +
+      '• `claude_api_key`\n' +
+      '• `claude_model`\n\n' +
+      'Si usas SynteroLink, ese grupo debe permitir `/v1/messages`. Si usas Anthropic directo, configura `claude_api_url` con `https://api.anthropic.com/v1/messages`.';
+  }
+
+  return '❌ La IA no pudo procesar ' + (contexto === 'recibo' ? 'el recibo' : 'la solicitud') + ' en este momento.\n\n' +
+    '*Detalle:* HTTP ' + status + '\n' +
+    '`' + detalle + '`\n\n' +
+    (contexto === 'recibo'
+      ? 'Intenta otra foto más clara o agrega el gasto manualmente.'
+      : 'Intenta nuevamente más tarde.');
 }
 
 function recortarTexto_(text, max) {
