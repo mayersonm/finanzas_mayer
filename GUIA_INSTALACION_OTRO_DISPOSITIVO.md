@@ -1,16 +1,24 @@
-# Guia para levantar Finanzas Mayeson en otro dispositivo
+# Guia para instalar Finanzas Mayeson en cualquier dispositivo
 
-Esta guia deja el proyecto listo en una PC nueva sin copiar secretos al repo.
+Esta guia sirve para levantar el proyecto desde cero en otra computadora, sin copiar secretos al repositorio y sin depender de rutas locales.
 
-## 1. Instalar programas base
+La idea general es:
 
-En el nuevo dispositivo instala:
+1. Descargar el codigo desde GitHub.
+2. Instalar dependencias.
+3. Configurar secretos en cada plataforma.
+4. Desplegar Apps Script, Worker y Dashboard.
+5. Probar Telegram y el dashboard.
 
-- Git: https://git-scm.com/downloads
-- Node.js LTS 20 o superior: https://nodejs.org/
-- Visual Studio Code, opcional pero recomendado.
+## 1. Instalar herramientas
 
-Verifica en PowerShell:
+Instala estas herramientas antes de empezar:
+
+- Git
+- Node.js LTS 20 o superior
+- Visual Studio Code, opcional
+
+Verifica que quedaron instaladas:
 
 ```powershell
 git --version
@@ -18,104 +26,107 @@ node --version
 npm --version
 ```
 
-## 2. Descargar las fuentes
+Si esos comandos muestran versiones, ya puedes continuar.
 
-Opcion recomendada, desde GitHub:
+## 2. Descargar el proyecto
+
+Elige una carpeta cualquiera para tus proyectos y ejecuta:
 
 ```powershell
-cd C:\Users\TU_USUARIO\Desktop
 git clone https://github.com/mayersonm/finanzas_mayer.git
 cd finanzas_mayer
 ```
 
-Opcion empaquetada desde esta PC:
+Este comando descarga el repositorio y entra a la carpeta principal del proyecto.
+
+## 3. Instalar dependencias
+
+El proyecto tiene dos partes con Node.js: el dashboard y el Worker.
+
+Instala dependencias del dashboard:
 
 ```powershell
-git archive --format=zip --output ..\finanzas_mayeson_fuentes.zip HEAD
+cd dashboard
+npm ci
+cd ..
 ```
 
-Luego copia `finanzas_mayeson_fuentes.zip` al otro equipo y descomprime.
-
-## 3. Levantar el dashboard React + TypeScript
-
-En la nueva PC:
+Instala dependencias del Worker:
 
 ```powershell
-cd C:\RUTA\finanzas_mayer\dashboard
+cd d1-api
 npm ci
+cd ..
+```
+
+`npm ci` instala exactamente las versiones guardadas en `package-lock.json`.
+
+## 4. Configurar el dashboard local
+
+El dashboard necesita saber donde esta la API del Worker. Sin esta variable, el dashboard abre en modo demo y no muestra login.
+
+Entra al dashboard:
+
+```powershell
+cd dashboard
+```
+
+Crea el archivo local de variables:
+
+```powershell
 Copy-Item .env.example .env.local
+```
+
+Abre el archivo:
+
+```powershell
 notepad .env.local
 ```
 
-Configura `.env.local` asi:
+Coloca este valor:
 
 ```env
 VITE_GAS_API_URL=https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard
 ```
 
-Ejecuta local:
+Levanta el dashboard en modo desarrollo:
 
 ```powershell
 npm run dev
 ```
 
-Abre la URL que muestre Vite, normalmente:
+Abre la URL que muestre Vite. Normalmente es:
 
 ```text
 http://localhost:5173
 ```
 
-Compilar para produccion:
+Si aparece la pantalla de login, la configuracion esta bien.
+
+Vuelve a la raiz del proyecto:
 
 ```powershell
-npm run build
+cd ..
 ```
 
-## 4. Desplegar dashboard en Cloudflare Pages
+## 5. Configurar Cloudflare
 
-Primero inicia sesion:
+Inicia sesion en Cloudflare con Wrangler:
 
 ```powershell
+cd d1-api
 npx wrangler login
 ```
 
-Despliegue manual:
-
-```powershell
-cd C:\RUTA\finanzas_mayer\dashboard
-npm run build
-npx wrangler pages deploy dist --project-name finanzas-dashboard --branch main
-```
-
-Si usas Cloudflare Pages conectado a GitHub:
-
-- Framework: Vite.
-- Root directory: `dashboard`.
-- Build command: `npm run build`.
-- Build output: `dist`.
-- Variable de entorno: `VITE_GAS_API_URL`.
-
-## 5. Levantar Worker + D1 + R2
-
-Entra a la API:
-
-```powershell
-cd C:\RUTA\finanzas_mayer\d1-api
-npm ci
-npx wrangler login
-```
-
-Revisa `wrangler.toml`:
-
-- `database_name = "finanzas_mayeson"`
-- `database_id` debe ser el ID real de D1.
-- `bucket_name = "finanzas-mayeson-receipts"`
+El navegador pedira autorizar Wrangler. Acepta con la cuenta de Cloudflare donde esta el proyecto.
 
 Aplica migraciones en D1 remoto:
 
 ```powershell
 npx wrangler d1 migrations apply finanzas_mayeson --remote
 ```
+
+Esto crea o actualiza las tablas de D1, incluyendo transacciones, recibos, ajustes y deudas.
 
 Configura secretos del Worker:
 
@@ -128,37 +139,94 @@ npx wrangler secret put LOGIN_PASSWORD
 npx wrangler secret put SESSION_SECRET
 ```
 
-Despliega:
+Cada comando pedira escribir el valor secreto. Esos valores no se guardan en Git.
+
+Despliega el Worker:
 
 ```powershell
 npm run deploy
 ```
 
-Prueba salud:
+Prueba que el Worker responde:
 
 ```powershell
 Invoke-WebRequest -UseBasicParsing https://finanzas-d1-api.mayersonm.workers.dev/health
 ```
 
-## 6. Configurar Apps Script en otra PC
+Si ves `"ok":true`, el Worker esta funcionando.
+
+Vuelve a la raiz:
+
+```powershell
+cd ..
+```
+
+## 6. Desplegar el dashboard en Cloudflare Pages
+
+Entra al dashboard:
+
+```powershell
+cd dashboard
+```
+
+Compila con la URL real del Worker. Este paso es importante para que aparezca el login:
+
+```powershell
+$env:VITE_GAS_API_URL="https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard"
+npm run build
+```
+
+Despliega a Pages:
+
+```powershell
+npx wrangler pages deploy dist --project-name finanzas-dashboard --branch main
+```
+
+Wrangler mostrara una URL de Pages. Abrela y confirma que aparece la pantalla de login.
+
+Si Pages esta conectado a GitHub, configura en Cloudflare Pages:
+
+```text
+Framework preset: Vite
+Root directory: dashboard
+Build command: npm run build
+Build output directory: dist
+Variable: VITE_GAS_API_URL=https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard
+```
+
+Vuelve a la raiz:
+
+```powershell
+cd ..
+```
+
+## 7. Configurar Apps Script
 
 Instala clasp:
 
 ```powershell
 npm install -g @google/clasp
+```
+
+Inicia sesion en Google:
+
+```powershell
 clasp login
 ```
 
-En Google Apps Script abre tu proyecto y copia el `Script ID` desde Configuracion del proyecto.
-
-En la carpeta `apps-script`, crea `.clasp.json`:
+Entra a la carpeta de Apps Script:
 
 ```powershell
-cd C:\RUTA\finanzas_mayer\apps-script
+cd apps-script
+```
+
+Crea el archivo local de configuracion:
+
+```powershell
 notepad .clasp.json
 ```
 
-Contenido:
+Pega este contenido y reemplaza `TU_SCRIPT_ID` por el Script ID real del proyecto:
 
 ```json
 {
@@ -167,22 +235,55 @@ Contenido:
 }
 ```
 
-Sube fuentes:
+El `Script ID` se encuentra en Google Apps Script, dentro de Project Settings.
+
+Sube el codigo:
 
 ```powershell
 npx clasp push -f
 ```
 
-Publica una version nueva sobre el Web App actual:
+Lista los deployments disponibles:
 
 ```powershell
 npx clasp deployments
-npx clasp deploy -i TU_DEPLOYMENT_ID -d "deploy desde nuevo dispositivo"
 ```
 
-## 7. Script Properties necesarias
+Busca el deployment actual del Web App. Para mantener la misma URL, no crees uno nuevo; actualiza el deployment existente:
 
-En Apps Script > Project Settings > Script Properties configura:
+```powershell
+npx clasp deploy -i TU_DEPLOYMENT_ID -d "actualizacion"
+```
+
+`TU_DEPLOYMENT_ID` es el ID que aparece en `npx clasp deployments`.
+
+Prueba el Web App:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "TU_WEB_APP_URL"
+```
+
+Debe responder:
+
+```text
+BOT ACTIVO
+```
+
+Vuelve a la raiz:
+
+```powershell
+cd ..
+```
+
+## 8. Configurar Script Properties
+
+En Google Apps Script abre:
+
+```text
+Project Settings > Script Properties
+```
+
+Agrega estas propiedades:
 
 ```text
 telegram_bot_token
@@ -192,6 +293,8 @@ worker_url
 dashboard_api_key
 dashboard_chat_id
 claude_api_key
+claude_api_url
+claude_model
 d1_api_url
 d1_admin_key
 finance_email_to
@@ -204,21 +307,29 @@ credit_card_name
 receipt_image_max_bytes
 ```
 
-Para credito, puedes configurarlo desde Telegram:
+Para la IA, si usas Anthropic directo:
+
+```text
+claude_api_url=https://api.anthropic.com/v1/messages
+```
+
+Si usas SynteroLink u otro proveedor compatible, confirma que permita `/v1/messages` o `/v1/chat/completions`.
+
+Para imagenes de recibos, valor recomendado:
+
+```text
+receipt_image_max_bytes=921600
+```
+
+Para credito puedes configurarlo desde Telegram:
 
 ```text
 credito configurar corte 25 pago 10
 ```
 
-Para imagenes, el valor recomendado es:
+## 9. Probar Telegram
 
-```text
-receipt_image_max_bytes = 921600
-```
-
-## 8. Pruebas finales
-
-En Telegram:
+En Telegram prueba:
 
 ```text
 ayuda
@@ -226,30 +337,53 @@ credito
 gasto 10 supermercado prueba credito
 ultimos
 pago ultimo debito
+deuda laptop 2500 vence 2026-06-30
+deudas
+alertas
+insights
 ```
 
-En dashboard:
+Para probar recibos, envia una foto clara de un ticket. El bot debe responder primero que esta analizando.
 
-- Inicia sesion.
-- Pulsa Actualizar.
-- Revisa que el movimiento muestre forma de pago.
-- Si es credito, revisa que aparezca fecha de pago.
+## 10. Probar dashboard
 
-En Worker:
+Abre la URL de Cloudflare Pages.
 
-```powershell
-Invoke-WebRequest -UseBasicParsing https://finanzas-d1-api.mayersonm.workers.dev/health
+Debe aparecer el login. Si aparece modo demo, falta configurar `VITE_GAS_API_URL` en el build o en Cloudflare Pages.
+
+Despues de entrar:
+
+```text
+Pulsa Actualizar
+Revisa Movimientos
+Revisa Compromisos
+Revisa Deudas
+Revisa Analisis
 ```
 
-## 9. Comandos rapidos
+## 11. Comandos rapidos
 
-Dashboard:
+Dashboard local:
 
 ```powershell
 cd dashboard
 npm ci
 npm run dev
+```
+
+Build del dashboard con login:
+
+```powershell
+cd dashboard
+$env:VITE_GAS_API_URL="https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard"
 npm run build
+```
+
+Deploy dashboard:
+
+```powershell
+cd dashboard
+npx wrangler pages deploy dist --project-name finanzas-dashboard --branch main
 ```
 
 Worker:
@@ -266,5 +400,61 @@ Apps Script:
 ```powershell
 cd apps-script
 npx clasp push -f
+npx clasp deployments
 npx clasp deploy -i TU_DEPLOYMENT_ID -d "actualizacion"
 ```
+
+Git:
+
+```powershell
+git status
+git add .
+git commit -m "mensaje del cambio"
+git push origin main
+```
+
+## 12. Problemas comunes
+
+Dashboard sin login:
+
+```text
+Falta VITE_GAS_API_URL en el build.
+```
+
+Solucion:
+
+```powershell
+cd dashboard
+$env:VITE_GAS_API_URL="https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard"
+npm run build
+npx wrangler pages deploy dist --project-name finanzas-dashboard --branch main
+```
+
+Apps Script no sube:
+
+```text
+Falta .clasp.json o el Script ID es incorrecto.
+```
+
+Solucion:
+
+```powershell
+cd apps-script
+npx clasp deployments
+```
+
+Si ese comando no encuentra el proyecto, revisa `.clasp.json`.
+
+IA bloqueada por proveedor:
+
+```text
+This group does not allow /v1/messages dispatch
+```
+
+Solucion:
+
+```text
+Revisa claude_api_url, claude_api_key y claude_model.
+Si usas proveedor proxy, confirma permisos para /v1/messages o /v1/chat/completions.
+```
+
