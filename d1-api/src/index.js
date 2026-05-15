@@ -75,6 +75,12 @@ export default {
         return json(await updateTransactionCategory(env, payload));
       }
 
+      if (url.pathname === '/api/transactions/payment' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await updateTransactionPayment(env, payload));
+      }
+
       if (url.pathname === '/api/receipts' && request.method === 'POST') {
         requireAdminKey(request, env);
         const payload = await request.json();
@@ -211,6 +217,9 @@ async function dashboard(env, params) {
       t.description AS desc,
       t.category AS cat,
       t.amount AS monto,
+      t.payment_method,
+      t.payment_due_date,
+      t.card_name,
       r.id AS receipt_id,
       r.file_name AS receipt_file_name,
       r.content_type AS receipt_content_type,
@@ -282,6 +291,9 @@ async function transactions(env, params) {
       t.description AS desc,
       t.category AS cat,
       t.amount AS monto,
+      t.payment_method,
+      t.payment_due_date,
+      t.card_name,
       r.id AS receipt_id,
       r.file_name AS receipt_file_name,
       r.content_type AS receipt_content_type,
@@ -338,11 +350,15 @@ async function updateTransactionCategory(env, payload) {
   if (targetId !== existing.id) {
     await env.DB.prepare(`
       INSERT INTO transactions (
-        id, chat_id, tx_date, tx_time, type, description, category, amount, source, created_at, updated_at
+        id, chat_id, tx_date, tx_time, type, description, category, amount,
+        payment_method, payment_due_date, card_name, source, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET
         category = excluded.category,
+        payment_method = excluded.payment_method,
+        payment_due_date = excluded.payment_due_date,
+        card_name = excluded.card_name,
         source = excluded.source,
         updated_at = CURRENT_TIMESTAMP
     `).bind(
@@ -354,6 +370,9 @@ async function updateTransactionCategory(env, payload) {
       existing.description,
       newCategory,
       existing.amount,
+      existing.payment_method || 'debito',
+      existing.payment_due_date || null,
+      existing.card_name || '',
       nextSource,
       existing.created_at,
     ).run();
@@ -423,6 +442,77 @@ async function findTransactionForCategoryUpdate(env, payload, chatId, oldId) {
       created_at ASC
     LIMIT 1
   `).bind(chatId, fecha, hora, tipo, desc, amount, oldCategory, oldCategory).first();
+}
+
+async function updateTransactionPayment(env, payload) {
+  const chatId = String(payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const method = normalizePaymentMethod(payload.payment_method || payload.paymentMethod || payload.metodo_pago || payload.metodoPago);
+  const dueDate = method === 'credito'
+    ? normalizeDateOnly(payload.payment_due_date || payload.paymentDueDate || payload.fecha_pago || payload.fechaPago)
+    : '';
+  const cardName = method === 'credito'
+    ? String(payload.card_name || payload.cardName || payload.tarjeta || '').trim().slice(0, 80)
+    : '';
+
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  if (!method) throw httpError(400, 'payment_method requerido');
+
+  const existing = await findTransactionForPaymentUpdate(env, payload, chatId);
+  if (!existing) throw httpError(404, 'Transaccion no encontrada');
+
+  await env.DB.prepare(`
+    UPDATE transactions
+    SET payment_method = ?,
+        payment_due_date = ?,
+        card_name = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(method, dueDate || null, cardName, existing.id).run();
+
+  return {
+    ok: true,
+    transaction: {
+      id: existing.id,
+      paymentMethod: method,
+      paymentDueDate: dueDate,
+      cardName,
+    },
+  };
+}
+
+async function findTransactionForPaymentUpdate(env, payload, chatId) {
+  const id = String(payload.id || payload.transaction_id || payload.transactionId || '').trim();
+  if (id) {
+    const byId = await env.DB.prepare('SELECT * FROM transactions WHERE id = ? AND chat_id = ?')
+      .bind(id, chatId)
+      .first();
+    if (byId) return byId;
+  }
+
+  const fecha = String(payload.fecha || payload.tx_date || '').slice(0, 10);
+  const hora = String(payload.hora || payload.tx_time || '00:00').slice(0, 5);
+  const tipo = String(payload.tipo || payload.type || '').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
+  const desc = String(payload.desc || payload.description || '').trim();
+  const amount = parseAmount(payload.monto || payload.amount || 0);
+  const category = normalizeCategory(payload.cat || payload.category || 'otro', desc);
+
+  if (!fecha || !desc || amount <= 0) return null;
+
+  return env.DB.prepare(`
+    SELECT *
+    FROM transactions
+    WHERE chat_id = ?
+      AND tx_date = ?
+      AND tx_time = ?
+      AND type = ?
+      AND lower(trim(description)) = lower(trim(?))
+      AND category = ?
+      AND ABS(amount - ?) < 0.005
+    ORDER BY
+      CASE WHEN source <> 'gas' THEN 0 ELSE 1 END,
+      created_at ASC
+    LIMIT 1
+  `).bind(chatId, fecha, hora, tipo, desc, category, amount).first();
 }
 
 async function uploadReceipt(env, payload) {
@@ -662,9 +752,10 @@ async function upsertTransaction(env, tx) {
 
   await env.DB.prepare(`
     INSERT INTO transactions (
-      id, chat_id, tx_date, tx_time, type, description, category, amount, source, updated_at
+      id, chat_id, tx_date, tx_time, type, description, category, amount,
+      payment_method, payment_due_date, card_name, source, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(id) DO UPDATE SET
       tx_date = excluded.tx_date,
       tx_time = excluded.tx_time,
@@ -672,6 +763,9 @@ async function upsertTransaction(env, tx) {
       description = excluded.description,
       category = excluded.category,
       amount = excluded.amount,
+      payment_method = excluded.payment_method,
+      payment_due_date = excluded.payment_due_date,
+      card_name = excluded.card_name,
       source = CASE
         WHEN excluded.source = 'gas' AND transactions.source <> 'gas' THEN transactions.source
         ELSE excluded.source
@@ -686,6 +780,9 @@ async function upsertTransaction(env, tx) {
     tx.desc,
     tx.cat,
     tx.monto,
+    tx.payment_method,
+    tx.payment_due_date || null,
+    tx.card_name,
     tx.source,
   ).run();
 }
@@ -902,6 +999,13 @@ function normalizeTransaction(raw, chatId) {
   const cat = normalizeCategory(raw.cat || raw.category || 'otro', desc);
   const monto = Math.abs(Number(raw.monto || raw.amount || 0));
   const rawId = String(raw.id || '').trim();
+  const paymentMethod = normalizePaymentMethod(raw.payment_method || raw.paymentMethod || raw.metodo_pago || raw.metodoPago) || 'debito';
+  const paymentDueDate = paymentMethod === 'credito'
+    ? normalizeDateOnly(raw.payment_due_date || raw.paymentDueDate || raw.fecha_pago || raw.fechaPago)
+    : '';
+  const cardName = paymentMethod === 'credito'
+    ? String(raw.card_name || raw.cardName || raw.tarjeta || '').trim().slice(0, 80)
+    : '';
 
   if (!fecha || monto <= 0) {
     throw httpError(400, 'Transaccion invalida');
@@ -925,6 +1029,9 @@ function normalizeTransaction(raw, chatId) {
     desc,
     cat,
     monto: round(monto),
+    payment_method: paymentMethod,
+    payment_due_date: paymentDueDate,
+    card_name: cardName,
     source: String(raw.source || 'gas').slice(0, 40),
   };
 }
@@ -938,6 +1045,9 @@ function txShape(row) {
     desc: row.desc,
     cat: row.cat,
     monto: round(row.monto),
+    paymentMethod: row.payment_method || 'debito',
+    paymentDueDate: row.payment_due_date || '',
+    cardName: row.card_name || '',
     receipt: row.receipt_id ? {
       id: row.receipt_id,
       fileName: row.receipt_file_name || 'recibo',
@@ -1221,6 +1331,22 @@ function normalizeKey(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizePaymentMethod(value) {
+  const key = normalizeKey(value);
+  if (!key || key === 'desconocido' || key === 'unknown') return '';
+
+  if (/\b(credito|credit|tc)\b/.test(key)) return 'credito';
+  if (/\b(debito|debit|td|efectivo|cash|yape|plin|transferencia)\b/.test(key)) return 'debito';
+
+  return '';
+}
+
+function normalizeDateOnly(value) {
+  const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  return '';
 }
 
 function normalizeCategory(value, description = '') {

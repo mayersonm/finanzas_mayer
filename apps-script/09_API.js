@@ -195,6 +195,9 @@ function dashReadTransactions_(params) {
         desc: String(row[3] || 'Sin descripcion'),
         cat: String(row[4] || 'otro').toLowerCase(),
         monto: dashRound_(Math.abs(parseFloat(row[5]) || 0)),
+        paymentMethod: dashPaymentMethod_(row[7]),
+        paymentDueDate: dashPlainDate_(row[8]),
+        cardName: String(row[9] || ''),
       };
     })
     .filter(Boolean)
@@ -408,6 +411,22 @@ function dashDate_(value, format) {
 
   if (isNaN(date.getTime())) return '';
   return Utilities.formatDate(date, DASH_TZ, format);
+}
+
+function dashPlainDate_(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    return Utilities.formatDate(value, DASH_TZ, 'yyyy-MM-dd');
+  }
+
+  const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  return dashDate_(value, 'yyyy-MM-dd');
+}
+
+function dashPaymentMethod_(value) {
+  const method = String(value || '').toLowerCase().trim();
+  return method === 'credito' ? 'credito' : 'debito';
 }
 
 function dashTitle_(value) {

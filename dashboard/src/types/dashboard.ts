@@ -12,6 +12,9 @@ export interface Transaction {
   desc: string;
   cat: string;
   monto: number;
+  paymentMethod?: 'debito' | 'credito' | string;
+  paymentDueDate?: string;
+  cardName?: string;
   receipt?: TransactionReceipt;
 }
 

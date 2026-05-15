@@ -26,6 +26,10 @@ finance_email_to
 daily_email_to
 monthly_email_to
 yearly_email_to
+credit_cutoff_day
+credit_due_day
+credit_card_name
+receipt_image_max_bytes
 ```
 
 ### Dashboard
@@ -74,4 +78,20 @@ Apps Script:
 ```powershell
 cd apps-script
 clasp push
+```
+
+## Pagos con debito/credito
+
+Configura la tarjeta desde Telegram:
+
+```text
+credito configurar corte 25 pago 10
+```
+
+Registra o corrige movimientos:
+
+```text
+gasto 120 supermercado metro credito
+pago ultimo credito
+pago 1 debito
 ```

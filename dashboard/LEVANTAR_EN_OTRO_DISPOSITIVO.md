@@ -1,5 +1,7 @@
 # Levantar Mayeson Finanzas en otro dispositivo
 
+Guia completa del sistema entero: `../GUIA_INSTALACION_OTRO_DISPOSITIVO.md`.
+
 Esta guia es para ejecutar el dashboard React + TypeScript en otra PC.
 
 ## 1. Requisitos
