@@ -171,7 +171,7 @@ function cmdInsightsIA(chatId) {
     const text = result && result.content && result.content.find(b => b.type === 'text');
     if (resp.getResponseCode() >= 300 || !text) {
       Logger.log('Insights IA error: ' + resp.getContentText());
-      return sendMessage(chatId, '❌ No pude generar insights IA ahora. Intenta mas tarde.', true);
+      return sendMessage(chatId, mensajeErrorClaudeUsuario_(resp.getResponseCode(), resp.getContentText(), 'insights'), true);
     }
 
     return sendMessage(chatId, text.text, true);
