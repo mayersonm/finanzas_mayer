@@ -234,47 +234,54 @@ export default function App() {
 
   return (
     <main className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-6 sm:py-5 lg:px-8">
-      <AppHeader
-        data={data}
-        loading={loading}
-        status={status}
-        isConfigured={configured}
-        onRefresh={() => void fetchData(undefined, { sync: true })}
-        theme={theme}
-        onToggleTheme={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
-        onTogglePasswordPanel={() => {
-          setPasswordError('');
-          setPasswordSuccess('');
-          setShowPasswordPanel((value) => !value);
-        }}
-        onLogout={handleLogout}
-      />
-
-      {showPasswordPanel ? (
-        <PasswordPanel
-          currentPassword={currentPassword}
-          newPassword={newPassword}
-          confirmPassword={confirmPassword}
-          error={passwordError}
-          success={passwordSuccess}
-          loading={passwordLoading}
-          onCurrentPasswordChange={setCurrentPassword}
-          onNewPasswordChange={setNewPassword}
-          onConfirmPasswordChange={setConfirmPassword}
-          onSubmit={handleChangePassword}
-          onClose={() => setShowPasswordPanel(false)}
+      <div  className={showPasswordPanel ? 'pointer-events-none blur-sm' : ''}>
+         <AppHeader
+          data         ={data}
+          loading      ={loading}
+          status       ={status}
+          isConfigured ={configured}
+          onRefresh    ={() => void fetchData(undefined, { sync: true })}
+          theme        ={theme}
+          onToggleTheme={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
+          onTogglePasswordPanel={() => {
+            setPasswordError('');
+            setPasswordSuccess('');
+            setShowPasswordPanel(true);
+          }}
+          onLogout={handleLogout}
         />
+
+        <DashboardTabs activeTab={tab} onTabChange={setTab} />
+
+        <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
+          {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} /> : null}
+          {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} onDeleted={() => void fetchData()} /> : null}
+          {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
+          {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
+          {tab === 'metas' ? <GoalsSection data={data} /> : null}
+        </Suspense>
+      </div>
+     
+      {showPasswordPanel ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-xl">
+            <PasswordPanel
+              currentPassword={currentPassword}
+              newPassword={newPassword}
+              confirmPassword={confirmPassword}
+              error={passwordError}
+              success={passwordSuccess}
+              loading={passwordLoading}
+              onCurrentPasswordChange={setCurrentPassword}
+              onNewPasswordChange={setNewPassword}
+              onConfirmPasswordChange={setConfirmPassword}
+              onSubmit={handleChangePassword}
+              onClose={() => setShowPasswordPanel(false)}
+            />
+          </div>
+        </div>
       ) : null}
 
-      <DashboardTabs activeTab={tab} onTabChange={setTab} />
-
-      <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
-        {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} /> : null}
-      {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} onDeleted={() => void fetchData()} /> : null}
-        {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
-        {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
-        {tab === 'metas' ? <GoalsSection data={data} /> : null}
-      </Suspense>
     </main>
   );
 }
