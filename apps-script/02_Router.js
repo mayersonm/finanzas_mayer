@@ -79,6 +79,9 @@ function handleMessage(chatId, text) {
 
     case 'insights':
     case 'insights ia': return cmdInsightsIA(chatId);
+
+    case 'regla':
+    case 'reglas': return cmdReglas(chatId, text.trim());
   }
 
   // ── COMANDOS CON PARÁMETROS ──────────────────────────────
@@ -105,6 +108,7 @@ function handleMessage(chatId, text) {
   if (lower.startsWith('borrar '))         return cmdEliminarMovimiento(chatId, lower);
   if (lower.startsWith('correo '))        return cmdCorreo(chatId, text.trim());
   if (lower.startsWith('email '))         return cmdCorreo(chatId, text.trim().replace(/^email/i, 'correo'));
+  if (lower.startsWith('regla '))         return cmdReglas(chatId, text.trim());
   
 
   // ── REGISTRAR MOVIMIENTO (siempre al final) ──────────────

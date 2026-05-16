@@ -810,7 +810,7 @@ function procesarFotoRecibo(chatId, msg) {
       || crearHojaTransacciones();
 
     const desc = capitalizar(datos.descripcion || datos.categoria || 'Recibo');
-    const cat  = normalizarCat(datos.categoria || 'otro', datos.descripcion || desc);
+    const cat  = normalizarCat(datos.categoria || 'otro', datos.descripcion || desc, chatId);
     const pago = resolverPagoRecibo_(datos, fecha);
 
     asegurarColumnasPagoTransacciones_(sheet);

@@ -244,7 +244,7 @@ function agruparGastosPorCategoriaEmail_(txs) {
 
   txs.forEach(function (r) {
     if (r[2] !== 'gasto') return;
-    const cat = normalizarCat(r[4] || 'otro', r[3]);
+    const cat = normalizarCat(r[4] || 'otro', r[3], r[6]);
     map[cat] = (map[cat] || 0) + (parseFloat(r[5]) || 0);
   });
 
@@ -272,7 +272,7 @@ function obtenerPresupuestosEmail_(chatId, mesKey) {
       return {
         cat: cat,
         limite: parseFloat(r[2]) || 0,
-        gasto: gastoPresupuestoPorCategoria_(gastos, cat),
+        gasto: gastoPresupuestoPorCategoria_(gastos, cat, chatId),
       };
     })
     .filter(function (p) {

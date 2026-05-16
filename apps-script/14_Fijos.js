@@ -32,7 +32,7 @@ function cmdFijos(chatId, text) {
 function guardarFijo_(chatId, parts) {
   const nombre = parts[1];
   const monto = parseFloat(parts[2]);
-  const cat = normalizarCat(parts[3] || 'servicios', nombre);
+  const cat = normalizarCat(parts[3] || 'servicios', nombre, chatId);
 
   if (!nombre || isNaN(monto) || monto <= 0) {
     return sendMessage(chatId,
@@ -206,7 +206,7 @@ function leerTodosLosFijos_() {
       chatId: String(r[0] || ''),
       nombre: String(r[1] || '').trim(),
       monto: parseFloat(r[2]) || 0,
-      cat: normalizarCat(r[3] || 'servicios', r[1]),
+      cat: normalizarCat(r[3] || 'servicios', r[1], r[0]),
     }))
     .filter(fijo => fijo.chatId && fijo.nombre && fijo.monto > 0);
 }
@@ -237,7 +237,7 @@ function registrarFijoComoTransaccion_(chatId, fijo, source) {
   const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
   const hora = Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm');
   const desc = capitalizar(fijo.nombre);
-  const cat = normalizarCat(fijo.cat, fijo.nombre);
+  const cat = normalizarCat(fijo.cat, fijo.nombre, chatId);
 
   txSheet.appendRow([fecha, hora, 'gasto', desc, cat, fijo.monto, chatId]);
   guardarTransaccionD1({

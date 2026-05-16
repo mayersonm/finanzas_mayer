@@ -14,7 +14,7 @@ function cmdGastosReales(chatId) {
   let totalPresupuesto = 0;
   const lineasPresupuesto = presupuestos.length
     ? presupuestos.map(item => {
-        const gastado = gastoPresupuestoPorCategoria_(gastosCat, item.cat);
+        const gastado = gastoPresupuestoPorCategoria_(gastosCat, item.cat, chatId);
         const considerado = gastado > 0 ? gastado : item.limite;
         const nota = gastado > 0
           ? `gastado S/ ${gastado.toFixed(2)}`
@@ -48,7 +48,7 @@ function leerFijosReales_(chatId) {
     .map(r => ({
       nombre: String(r[1] || ''),
       monto: parseFloat(r[2]) || 0,
-      cat: normalizarCat(r[3] || 'servicios', r[1]),
+      cat: normalizarCat(r[3] || 'servicios', r[1], chatId),
     }))
     .filter(item => item.nombre && item.monto > 0);
 }
@@ -59,7 +59,7 @@ function leerPresupuestosReales_(chatId) {
   return sheet.getDataRange().getValues().slice(1)
     .filter(r => String(r[0]) === String(chatId))
     .map(r => ({
-      cat: normalizarCat(r[1] || 'otro'),
+      cat: normalizarCat(r[1] || 'otro', '', chatId),
       limite: parseFloat(r[2]) || 0,
     }))
     .filter(item => item.cat && item.limite > 0);

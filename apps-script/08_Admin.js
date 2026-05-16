@@ -209,7 +209,7 @@ function normalizarCategoriasHistoricas() {
 
   const normalizada = data.map(function (row) {
     const actual = String(row[4] || '').toLowerCase();
-    const nueva = normalizarCat(actual, row[3]);
+    const nueva = normalizarCat(actual, row[3], row[6]);
 
     if (nueva && nueva !== actual) {
       row[4] = nueva;
