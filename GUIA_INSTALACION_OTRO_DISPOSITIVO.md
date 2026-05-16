@@ -1,24 +1,130 @@
-# Guia para instalar Finanzas Mayeson en cualquier dispositivo
+# Guia de instalacion completa de Finanzas Mayeson
 
-Esta guia sirve para levantar el proyecto desde cero en otra computadora, sin copiar secretos al repositorio y sin depender de rutas locales.
+Esta guia es para instalar Finanzas Mayeson en cualquier dispositivo sin depender de rutas locales. Sigue los pasos en orden: Telegram, Google Sheets, Apps Script, Cloudflare Worker, D1, R2 y dashboard.
 
-La idea general es:
+Hay dos escenarios:
 
-1. Descargar el codigo desde GitHub.
-2. Instalar dependencias.
-3. Configurar secretos en cada plataforma.
-4. Desplegar Apps Script, Worker y Dashboard.
-5. Probar Telegram y el dashboard.
+- Mismo proyecto en otro dispositivo: usas el repo, el mismo Apps Script, el mismo Worker, el mismo D1, el mismo R2 y el mismo dashboard.
+- Instalacion desde cero: creas Telegram Bot, Google Sheet, Apps Script, Worker, D1, R2 y Pages desde una cuenta nueva.
 
-## 1. Instalar herramientas
+Nunca subas tokens, claves API, contrasenas ni archivos `.env` a Git.
 
-Instala estas herramientas antes de empezar:
+## 1. Crear el bot en Telegram
+
+Abre Telegram y busca el bot oficial:
+
+```text
+@BotFather
+```
+
+Crea un bot nuevo:
+
+```text
+/newbot
+```
+
+BotFather pedira:
+
+```text
+Nombre visible del bot
+Usuario del bot terminado en bot
+```
+
+Ejemplo:
+
+```text
+Finanzas Mayeson
+finanzas_mayeson_bot
+```
+
+BotFather entregara un token parecido a este formato:
+
+```text
+123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Guarda ese valor como:
+
+```text
+telegram_bot_token
+```
+
+No lo publiques y no lo pegues en Git.
+
+## 2. Obtener tu Chat ID de Telegram
+
+Primero abre tu bot en Telegram y envia cualquier mensaje, por ejemplo:
+
+```text
+hola
+```
+
+Luego ejecuta este comando reemplazando `TU_TOKEN_TELEGRAM`:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "https://api.telegram.org/botTU_TOKEN_TELEGRAM/getUpdates" | Select-Object -ExpandProperty Content
+```
+
+Busca un bloque parecido a este:
+
+```json
+"chat":{"id":123456789
+```
+
+Ese numero es tu Chat ID. Guardalo como:
+
+```text
+dashboard_chat_id
+DEFAULT_CHAT_ID
+```
+
+Si `getUpdates` no muestra nada, envia otro mensaje al bot y vuelve a ejecutar el comando. Si el bot ya tiene webhook activo, primero revisa el webhook con:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "https://api.telegram.org/botTU_TOKEN_TELEGRAM/getWebhookInfo" | Select-Object -ExpandProperty Content
+```
+
+## 3. Crear el Google Sheet
+
+Entra a Google Sheets y crea una hoja nueva.
+
+Ponle un nombre claro, por ejemplo:
+
+```text
+Finanzas Mayeson
+```
+
+Copia el ID del Sheet desde la URL.
+
+Ejemplo de URL:
+
+```text
+https://docs.google.com/spreadsheets/d/1ABCDEF1234567890/edit
+```
+
+El Sheet ID seria:
+
+```text
+1ABCDEF1234567890
+```
+
+Guardalo como:
+
+```text
+sheet_id
+```
+
+No necesitas crear las pestanas manualmente si el codigo ya las crea al registrar movimientos, pero si algo falla, la primera prueba desde Telegram debe ayudarte a inicializarlas.
+
+## 4. Preparar la computadora
+
+Instala estas herramientas:
 
 - Git
 - Node.js LTS 20 o superior
 - Visual Studio Code, opcional
 
-Verifica que quedaron instaladas:
+Verifica la instalacion:
 
 ```powershell
 git --version
@@ -26,22 +132,30 @@ node --version
 npm --version
 ```
 
-Si esos comandos muestran versiones, ya puedes continuar.
+Instala `clasp`, que sirve para subir codigo a Google Apps Script:
 
-## 2. Descargar el proyecto
+```powershell
+npm install -g @google/clasp
+```
 
-Elige una carpeta cualquiera para tus proyectos y ejecuta:
+Verifica `clasp`:
+
+```powershell
+clasp --version
+```
+
+Wrangler no necesita instalarse globalmente; se ejecuta con `npx wrangler` dentro del proyecto.
+
+## 5. Descargar el proyecto desde GitHub
+
+Elige cualquier carpeta de tu computadora y ejecuta:
 
 ```powershell
 git clone https://github.com/mayersonm/finanzas_mayer.git
 cd finanzas_mayer
 ```
 
-Este comando descarga el repositorio y entra a la carpeta principal del proyecto.
-
-## 3. Entender las dependencias del proyecto
-
-El proyecto tiene tres partes:
+La estructura principal es:
 
 ```text
 apps-script  -> Bot de Telegram en Google Apps Script
@@ -49,95 +163,128 @@ d1-api       -> Cloudflare Worker + D1 + R2
 dashboard    -> Dashboard React + TypeScript + Vite
 ```
 
-Cada parte necesita herramientas distintas:
-
-```text
-Git          -> descargar y subir codigo
-Node.js/npm  -> instalar paquetes JavaScript
-Wrangler     -> desplegar Cloudflare Worker y Pages
-clasp        -> subir codigo a Google Apps Script
-```
-
-No instales paquetes manualmente uno por uno. El repo ya trae `package.json` y `package-lock.json`. Eso permite instalar todo con `npm ci`.
-
-## 4. Instalar dependencias globales
-
-Estas dependencias se instalan una vez en la computadora.
-
-Instala `clasp`, que sirve para subir archivos a Google Apps Script:
-
-```powershell
-npm install -g @google/clasp
-```
-
-Verifica que funciona:
-
-```powershell
-clasp --version
-```
-
-Wrangler no hace falta instalarlo globalmente porque se ejecuta con `npx wrangler`. Verifica que `npx` puede ejecutarlo:
-
-```powershell
-npx wrangler --version
-```
-
-Si alguno de esos comandos falla, revisa que Node.js y npm esten instalados correctamente.
-
-## 5. Instalar dependencias del dashboard
-
-El proyecto tiene dos partes con Node.js: el dashboard y el Worker.
-
-Primero instala las dependencias del dashboard:
-
-```powershell
-cd dashboard
-npm ci
-```
-
-Esto instala, entre otros:
-
-```text
-React
-React DOM
-TypeScript
-Vite
-Tremor
-Headless UI
-Tailwind CSS
-```
-
-Verifica que el dashboard puede compilar:
-
-```powershell
-npm run build
-```
-
-Vuelve a la raiz:
-
-```powershell
-cd ..
-```
-
-## 6. Instalar dependencias del Worker
-
-Instala las dependencias del Worker:
+Instala dependencias del Worker:
 
 ```powershell
 cd d1-api
 npm ci
+cd ..
 ```
 
-Esto instala Wrangler para desplegar Cloudflare:
-
-```text
-wrangler
-```
-
-Verifica que Wrangler responde dentro del proyecto:
+Instala dependencias del dashboard:
 
 ```powershell
-npx wrangler --version
+cd dashboard
+npm ci
+cd ..
+```
+
+## 6. Crear o conectar Google Apps Script
+
+Primero habilita la API de Apps Script en tu cuenta de Google:
+
+```text
+https://script.google.com/home/usersettings
+```
+
+Activa:
+
+```text
+Google Apps Script API
+```
+
+Inicia sesion con clasp:
+
+```powershell
+clasp login
+```
+
+### Opcion A: usar el Apps Script existente
+
+Usa esta opcion si estas instalando el mismo proyecto en otro dispositivo.
+
+Entra a la carpeta:
+
+```powershell
+cd apps-script
+```
+
+Crea o revisa el archivo `.clasp.json`:
+
+```powershell
+notepad .clasp.json
+```
+
+Debe tener este formato:
+
+```json
+{
+  "scriptId": "TU_SCRIPT_ID",
+  "rootDir": "."
+}
+```
+
+Para este proyecto, el Script ID actual es:
+
+```text
+1u9FmF_DZ16_g6jvOSgjEeNccCTvugcKosXquSWmdnWQyxicQjPnvttU8
+```
+
+Sube el codigo:
+
+```powershell
+npx clasp push -f
+```
+
+Lista los deployments:
+
+```powershell
+npx clasp deployments
+```
+
+Actualiza el deployment existente para no romper la URL publicada:
+
+```powershell
+npx clasp deploy -i TU_DEPLOYMENT_ID -d "actualizacion"
+```
+
+No crees un deployment nuevo si quieres mantener el mismo webhook de Telegram.
+
+Vuelve a la raiz:
+
+```powershell
+cd ..
+```
+
+### Opcion B: crear un Apps Script nuevo
+
+Usa esta opcion si estas montando todo desde cero.
+
+```powershell
+cd apps-script
+clasp create --type webapp --title "Finanzas Mayeson"
+npx clasp push -f
+```
+
+Luego abre Apps Script desde el enlace que muestra `clasp` o desde:
+
+```text
+https://script.google.com
+```
+
+Crea el despliegue Web App desde la interfaz:
+
+```text
+Deploy > New deployment > Web app
+Execute as: Me
+Who has access: Anyone
+```
+
+Copia la URL terminada en `/exec`. Guardala como:
+
+```text
+webapp_url
+GAS_API_URL
 ```
 
 Vuelve a la raiz:
@@ -146,11 +293,236 @@ Vuelve a la raiz:
 cd ..
 ```
 
-`npm ci` instala exactamente las versiones guardadas en `package-lock.json`.
+## 7. Configurar Script Properties en Apps Script
 
-## 7. Configurar el dashboard local
+En Google Apps Script entra a:
 
-El dashboard necesita saber donde esta la API del Worker. Sin esta variable, el dashboard abre en modo demo y no muestra login.
+```text
+Project Settings > Script Properties
+```
+
+Agrega estas propiedades. Los valores con `TU_` debes reemplazarlos.
+
+```text
+telegram_bot_token=TU_TOKEN_TELEGRAM
+webapp_url=TU_URL_WEB_APP_EXEC
+sheet_id=TU_SHEET_ID
+worker_url=https://TU_WORKER.TU_SUBDOMINIO.workers.dev
+dashboard_api_key=TU_DASHBOARD_API_KEY
+dashboard_chat_id=TU_CHAT_ID
+claude_api_key=TU_API_KEY_IA
+claude_api_url=https://api.anthropic.com/v1/messages
+claude_model=TU_MODELO_IA
+d1_api_url=https://TU_WORKER.TU_SUBDOMINIO.workers.dev
+d1_admin_key=TU_D1_ADMIN_KEY
+finance_email_to=TU_CORREO
+daily_email_to=TU_CORREO
+monthly_email_to=TU_CORREO
+yearly_email_to=TU_CORREO
+credit_cutoff_day=25
+credit_due_day=10
+credit_card_name=Tarjeta
+receipt_image_max_bytes=921600
+```
+
+Genera claves largas para `dashboard_api_key`, `d1_admin_key` y `SESSION_SECRET` con:
+
+```powershell
+[guid]::NewGuid().ToString("N")
+```
+
+Ejecuta ese comando tres veces y usa un valor distinto para cada secreto.
+
+Sobre la IA:
+
+- Si usas Anthropic directo, usa `https://api.anthropic.com/v1/messages`.
+- Si usas SynteroLink u otro proveedor, la key debe pertenecer a un grupo que permita `/v1/messages`.
+- Para Claude por AWS/proxy, normalmente debe estar en un grupo tipo `AWS Claude API`.
+- Si ves `This group does not allow /v1/messages dispatch`, no es problema de la foto: es configuracion del proveedor.
+
+## 8. Conectar Telegram con Apps Script
+
+Cuando ya tengas la URL del Web App, configura el webhook de Telegram.
+
+Reemplaza `TU_TOKEN_TELEGRAM` y `TU_URL_WEB_APP_EXEC`:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "https://api.telegram.org/botTU_TOKEN_TELEGRAM/setWebhook?url=TU_URL_WEB_APP_EXEC" | Select-Object -ExpandProperty Content
+```
+
+Verifica el webhook:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "https://api.telegram.org/botTU_TOKEN_TELEGRAM/getWebhookInfo" | Select-Object -ExpandProperty Content
+```
+
+Debe aparecer tu URL `/exec`.
+
+Prueba en Telegram:
+
+```text
+ayuda
+```
+
+Si el bot responde, Telegram y Apps Script ya estan conectados.
+
+## 9. Crear Cloudflare Worker, D1 y R2
+
+Entra a Cloudflare y crea una cuenta si no tienes una.
+
+Desde la terminal inicia sesion:
+
+```powershell
+cd d1-api
+npx wrangler login
+```
+
+El navegador pedira autorizar Wrangler.
+
+### Opcion A: usar el Cloudflare existente
+
+Si estas usando este mismo proyecto, revisa que `d1-api/wrangler.toml` tenga los bindings:
+
+```toml
+name = "finanzas-d1-api"
+main = "src/index.js"
+compatibility_date = "2026-05-09"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "finanzas_mayeson"
+database_id = "7964ac92-2d13-4103-8b63-d9235e8cd526"
+
+[[r2_buckets]]
+binding = "RECEIPTS_BUCKET"
+bucket_name = "finanzas-mayeson-receipts"
+```
+
+Si esos datos siguen iguales, no tienes que crear D1 ni R2 otra vez.
+
+### Opcion B: crear D1 desde cero
+
+Crea la base D1:
+
+```powershell
+npx wrangler d1 create finanzas_mayeson
+```
+
+Wrangler mostrara un bloque con `database_id`. Copia ese ID y abre:
+
+```powershell
+notepad wrangler.toml
+```
+
+Actualiza esta parte:
+
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "finanzas_mayeson"
+database_id = "TU_DATABASE_ID"
+```
+
+Aplica migraciones en remoto:
+
+```powershell
+npx wrangler d1 migrations apply finanzas_mayeson --remote
+```
+
+Las migraciones crean tablas para movimientos, recibos, pagos, deudas, monedas PEN/USD y reglas inteligentes.
+
+### Opcion C: crear R2 desde cero
+
+Crea el bucket R2:
+
+```powershell
+npx wrangler r2 bucket create finanzas-mayeson-receipts
+```
+
+Verifica que `wrangler.toml` tenga el binding:
+
+```toml
+[[r2_buckets]]
+binding = "RECEIPTS_BUCKET"
+bucket_name = "finanzas-mayeson-receipts"
+```
+
+Ese binding es lo que adjunta R2 al Worker. Sin esto, el gasto puede registrarse pero la foto no se vera en el dashboard.
+
+## 10. Configurar secretos del Worker
+
+En la carpeta `d1-api`, configura los secretos.
+
+```powershell
+npx wrangler secret put ADMIN_KEY
+npx wrangler secret put DEFAULT_CHAT_ID
+npx wrangler secret put GAS_API_URL
+npx wrangler secret put GAS_API_KEY
+npx wrangler secret put LOGIN_PASSWORD
+npx wrangler secret put SESSION_SECRET
+```
+
+Que valor poner en cada uno:
+
+```text
+ADMIN_KEY       -> mismo valor que d1_admin_key en Apps Script
+DEFAULT_CHAT_ID -> tu Chat ID de Telegram
+GAS_API_URL     -> URL /exec del Apps Script
+GAS_API_KEY     -> mismo valor que dashboard_api_key en Apps Script
+LOGIN_PASSWORD  -> contrasena para entrar al dashboard
+SESSION_SECRET  -> clave larga generada con PowerShell
+```
+
+Si cambias cualquiera de estos valores despues, vuelve a ejecutar el comando `secret put` correspondiente.
+
+## 11. Desplegar el Worker
+
+Desde `d1-api` ejecuta:
+
+```powershell
+npx wrangler deploy
+```
+
+Prueba salud del Worker reemplazando la URL:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "https://TU_WORKER.TU_SUBDOMINIO.workers.dev/health" | Select-Object -ExpandProperty Content
+```
+
+Debe responder algo como:
+
+```json
+{"ok":true}
+```
+
+Cuando tengas la URL real del Worker, vuelve a Apps Script y confirma estas propiedades:
+
+```text
+worker_url=https://TU_WORKER.TU_SUBDOMINIO.workers.dev
+d1_api_url=https://TU_WORKER.TU_SUBDOMINIO.workers.dev
+d1_admin_key=TU_D1_ADMIN_KEY
+```
+
+Vuelve a la raiz:
+
+```powershell
+cd ..
+```
+
+## 12. Sincronizar datos hacia D1
+
+El bot registra en Google Sheets y tambien envia datos a D1 si `d1_api_url` y `d1_admin_key` estan bien configurados.
+
+Para forzar sincronizacion desde el Worker:
+
+```powershell
+$headers = @{ "x-admin-key" = "TU_D1_ADMIN_KEY" }
+Invoke-WebRequest -UseBasicParsing -Method POST -Headers $headers -Uri "https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/sync/gas" | Select-Object -ExpandProperty Content
+```
+
+Usa esto cuando quieras que el dashboard local tenga la data actualizada desde Google Sheets.
+
+## 13. Levantar el dashboard local
 
 Entra al dashboard:
 
@@ -158,7 +530,7 @@ Entra al dashboard:
 cd dashboard
 ```
 
-Crea el archivo local de variables:
+Crea el archivo local de entorno:
 
 ```powershell
 Copy-Item .env.example .env.local
@@ -170,115 +542,68 @@ Abre el archivo:
 notepad .env.local
 ```
 
-Coloca este valor:
+Coloca la URL del Worker con `/api/dashboard`:
 
 ```env
-VITE_GAS_API_URL=https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard
+VITE_GAS_API_URL=https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/dashboard
 ```
 
-Levanta el dashboard en modo desarrollo:
+Levanta el dashboard:
 
 ```powershell
 npm run dev
 ```
 
-Abre la URL que muestre Vite. Normalmente es:
+Abre la URL que muestra Vite, normalmente:
 
 ```text
 http://localhost:5173
 ```
 
-Si aparece la pantalla de login, la configuracion esta bien.
+Debe aparecer el login. Entra con el valor que configuraste en `LOGIN_PASSWORD`.
 
-Vuelve a la raiz del proyecto:
+Si no aparece login y se ve modo demo, falta `VITE_GAS_API_URL` o el build se hizo sin esa variable.
 
-```powershell
-cd ..
-```
+## 14. Desplegar el dashboard en Cloudflare Pages
 
-## 8. Configurar Cloudflare
-
-Inicia sesion en Cloudflare con Wrangler:
+Desde `dashboard`, compila con la API real:
 
 ```powershell
-cd d1-api
-npx wrangler login
-```
-
-El navegador pedira autorizar Wrangler. Acepta con la cuenta de Cloudflare donde esta el proyecto.
-
-Aplica migraciones en D1 remoto:
-
-```powershell
-npx wrangler d1 migrations apply finanzas_mayeson --remote
-```
-
-Esto crea o actualiza las tablas de D1, incluyendo transacciones, recibos, ajustes y deudas.
-
-Configura secretos del Worker:
-
-```powershell
-npx wrangler secret put ADMIN_KEY
-npx wrangler secret put DEFAULT_CHAT_ID
-npx wrangler secret put GAS_API_URL
-npx wrangler secret put GAS_API_KEY
-npx wrangler secret put LOGIN_PASSWORD
-npx wrangler secret put SESSION_SECRET
-```
-
-Cada comando pedira escribir el valor secreto. Esos valores no se guardan en Git.
-
-Despliega el Worker:
-
-```powershell
-npm run deploy
-```
-
-Prueba que el Worker responde:
-
-```powershell
-Invoke-WebRequest -UseBasicParsing https://finanzas-d1-api.mayersonm.workers.dev/health
-```
-
-Si ves `"ok":true`, el Worker esta funcionando.
-
-Vuelve a la raiz:
-
-```powershell
-cd ..
-```
-
-## 9. Desplegar el dashboard en Cloudflare Pages
-
-Entra al dashboard:
-
-```powershell
-cd dashboard
-```
-
-Compila con la URL real del Worker. Este paso es importante para que aparezca el login:
-
-```powershell
-$env:VITE_GAS_API_URL="https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard"
+$env:VITE_GAS_API_URL="https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/dashboard"
 npm run build
 ```
 
-Despliega a Pages:
+Despliega en Pages:
 
 ```powershell
 npx wrangler pages deploy dist --project-name finanzas-dashboard --branch main
 ```
 
-Wrangler mostrara una URL de Pages. Abrela y confirma que aparece la pantalla de login.
+Wrangler mostrara una URL parecida a:
 
-Si Pages esta conectado a GitHub, configura en Cloudflare Pages:
+```text
+https://TU_VERSION.finanzas-dashboard.pages.dev
+```
+
+Abrela y verifica:
+
+```text
+Debe salir login
+Debe cargar Inicio
+Debe cargar Movimientos
+Debe cargar Compromisos
+Debe cargar Analisis
+Debe cargar Metas
+```
+
+Si quieres conectar Pages a GitHub desde Cloudflare, usa esta configuracion:
 
 ```text
 Framework preset: Vite
 Root directory: dashboard
 Build command: npm run build
 Build output directory: dist
-Variable: VITE_GAS_API_URL=https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard
+Environment variable: VITE_GAS_API_URL=https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/dashboard
 ```
 
 Vuelve a la raiz:
@@ -287,262 +612,267 @@ Vuelve a la raiz:
 cd ..
 ```
 
-## 10. Configurar Apps Script
+## 15. Pruebas finales en Telegram
 
-Si ya instalaste `clasp` en el paso de dependencias globales, no necesitas instalarlo otra vez.
-
-Si todavia no lo instalaste:
-
-```powershell
-npm install -g @google/clasp
-```
-
-Inicia sesion en Google:
-
-```powershell
-clasp login
-```
-
-Entra a la carpeta de Apps Script:
-
-```powershell
-cd apps-script
-```
-
-Crea el archivo local de configuracion:
-
-```powershell
-notepad .clasp.json
-```
-
-Pega este contenido y reemplaza `TU_SCRIPT_ID` por el Script ID real del proyecto:
-
-```json
-{
-  "scriptId": "TU_SCRIPT_ID",
-  "rootDir": "."
-}
-```
-
-El `Script ID` se encuentra en Google Apps Script, dentro de Project Settings.
-
-Sube el codigo:
-
-```powershell
-npx clasp push -f
-```
-
-Lista los deployments disponibles:
-
-```powershell
-npx clasp deployments
-```
-
-Busca el deployment actual del Web App. Para mantener la misma URL, no crees uno nuevo; actualiza el deployment existente:
-
-```powershell
-npx clasp deploy -i TU_DEPLOYMENT_ID -d "actualizacion"
-```
-
-`TU_DEPLOYMENT_ID` es el ID que aparece en `npx clasp deployments`.
-
-Prueba el Web App:
-
-```powershell
-Invoke-WebRequest -UseBasicParsing "TU_WEB_APP_URL"
-```
-
-Debe responder:
-
-```text
-BOT ACTIVO
-```
-
-Vuelve a la raiz:
-
-```powershell
-cd ..
-```
-
-## 11. Configurar Script Properties
-
-En Google Apps Script abre:
-
-```text
-Project Settings > Script Properties
-```
-
-Agrega estas propiedades:
-
-```text
-telegram_bot_token
-webapp_url
-sheet_id
-worker_url
-dashboard_api_key
-dashboard_chat_id
-claude_api_key
-claude_api_url
-claude_model
-d1_api_url
-d1_admin_key
-finance_email_to
-daily_email_to
-monthly_email_to
-yearly_email_to
-credit_cutoff_day
-credit_due_day
-credit_card_name
-receipt_image_max_bytes
-```
-
-Para la IA, si usas Anthropic directo:
-
-```text
-claude_api_url=https://api.anthropic.com/v1/messages
-```
-
-Si usas SynteroLink u otro proveedor compatible, confirma que permita `/v1/messages` o `/v1/chat/completions`.
-
-Para imagenes de recibos, valor recomendado:
-
-```text
-receipt_image_max_bytes=921600
-```
-
-Para credito puedes configurarlo desde Telegram:
-
-```text
-credito configurar corte 25 pago 10
-```
-
-## 12. Probar Telegram
-
-En Telegram prueba:
+Envia estos comandos al bot:
 
 ```text
 ayuda
-credito
-gasto 10 supermercado prueba credito
+credito configurar corte 25 pago 10
+gasto 10 supermercado prueba debito
+gasto 12 USD comida cafe
+gasto 120 supermercado metro credito
 ultimos
-pago ultimo debito
+pago ultimo credito
+pago 1 debito
+eliminar ultimo
 deuda laptop 2500 vence 2026-06-30
 deudas
 alertas
 insights
+reglas
+regla kfc entretenimiento
+regla presupuesto comida incluye supermercado
 ```
 
-Para probar recibos, envia una foto clara de un ticket. El bot debe responder primero que esta analizando.
+Luego envia una foto clara de un recibo.
 
-## 13. Probar dashboard
-
-Abre la URL de Cloudflare Pages.
-
-Debe aparecer el login. Si aparece modo demo, falta configurar `VITE_GAS_API_URL` en el build o en Cloudflare Pages.
-
-Despues de entrar:
+El flujo correcto es:
 
 ```text
-Pulsa Actualizar
-Revisa Movimientos
-Revisa Compromisos
-Revisa Deudas
-Revisa Analisis
+El bot avisa que la IA esta analizando
+La IA lee comercio, monto, categoria, fecha, moneda y metodo de pago
+El movimiento se registra
+La foto se adjunta al dashboard por R2
+El dashboard muestra el movimiento al actualizar
 ```
 
-## 14. Comandos rapidos
+## 16. Pruebas finales en dashboard
 
-Dashboard local:
+Entra al dashboard y revisa:
 
-```powershell
-cd dashboard
-npm ci
-npm run dev
+```text
+Login
+Inicio
+Movimientos
+Compromisos
+Analisis
+Metas
+Tema claro y oscuro
+Eliminar movimiento
+Categorias y presupuestos
+Recibos adjuntos
 ```
 
-Build del dashboard con login:
+Pulsa `Actualizar` para traer datos recientes.
 
-```powershell
-cd dashboard
-$env:VITE_GAS_API_URL="https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard"
-npm run build
+Si estas en local, el dashboard tambien usa la data real siempre que `.env.local` apunte a:
+
+```text
+https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/dashboard
 ```
 
-Deploy dashboard:
+No necesitas copiar manualmente la base D1 a tu computadora para ver data actualizada. Para desarrollo normal, usa el Worker remoto.
 
-```powershell
-cd dashboard
-npx wrangler pages deploy dist --project-name finanzas-dashboard --branch main
-```
+## 17. Comandos rapidos
 
-Worker:
+Instalar dependencias:
 
 ```powershell
 cd d1-api
 npm ci
-npx wrangler d1 migrations apply finanzas_mayeson --remote
-npm run deploy
+cd ..
+cd dashboard
+npm ci
+cd ..
 ```
 
-Apps Script:
+Subir Apps Script manteniendo deployment:
 
 ```powershell
 cd apps-script
 npx clasp push -f
 npx clasp deployments
 npx clasp deploy -i TU_DEPLOYMENT_ID -d "actualizacion"
+cd ..
 ```
 
-Git:
+Migrar D1 remoto:
+
+```powershell
+cd d1-api
+npx wrangler d1 migrations apply finanzas_mayeson --remote
+cd ..
+```
+
+Desplegar Worker:
+
+```powershell
+cd d1-api
+npx wrangler deploy
+cd ..
+```
+
+Levantar dashboard local:
+
+```powershell
+cd dashboard
+npm run dev
+```
+
+Compilar dashboard:
+
+```powershell
+cd dashboard
+$env:VITE_GAS_API_URL="https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/dashboard"
+npm run build
+cd ..
+```
+
+Desplegar dashboard:
+
+```powershell
+cd dashboard
+npx wrangler pages deploy dist --project-name finanzas-dashboard --branch main
+cd ..
+```
+
+Subir cambios a Git:
 
 ```powershell
 git status
-git add .
-git commit -m "mensaje del cambio"
+git add GUIA_INSTALACION_OTRO_DISPOSITIVO.md
+git commit -m "Update installation guide"
 git push origin main
 ```
 
-## 15. Problemas comunes
+## 18. Problemas comunes
 
-Dashboard sin login:
+### Telegram no responde
+
+Revisa el webhook:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "https://api.telegram.org/botTU_TOKEN_TELEGRAM/getWebhookInfo" | Select-Object -ExpandProperty Content
+```
+
+La URL debe ser la del Apps Script terminada en `/exec`.
+
+Tambien verifica en Apps Script:
 
 ```text
-Falta VITE_GAS_API_URL en el build.
+Deploy as Web app
+Execute as Me
+Who has access Anyone
+```
+
+### Apps Script responde BOT ACTIVO, pero Telegram no
+
+Revisa que `telegram_bot_token` este bien en Script Properties y vuelve a configurar webhook.
+
+### Dashboard sin login
+
+Causa comun:
+
+```text
+VITE_GAS_API_URL no estaba configurado al compilar
 ```
 
 Solucion:
 
 ```powershell
 cd dashboard
-$env:VITE_GAS_API_URL="https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard"
+$env:VITE_GAS_API_URL="https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/dashboard"
 npm run build
 npx wrangler pages deploy dist --project-name finanzas-dashboard --branch main
 ```
 
-Apps Script no sube:
+### El recibo se registra, pero la foto no aparece
+
+Revisa:
 
 ```text
-Falta .clasp.json o el Script ID es incorrecto.
+R2 bucket creado
+Binding RECEIPTS_BUCKET en wrangler.toml
+Worker desplegado despues de configurar R2
+Apps Script con d1_api_url y d1_admin_key
 ```
 
-Solucion:
+### La IA dice HTTP 403
 
-```powershell
-cd apps-script
-npx clasp deployments
-```
-
-Si ese comando no encuentra el proyecto, revisa `.clasp.json`.
-
-IA bloqueada por proveedor:
+Si el detalle dice:
 
 ```text
 This group does not allow /v1/messages dispatch
 ```
 
-Solucion:
+La key de IA esta en un grupo incorrecto o el proveedor no permite `/v1/messages`. Cambia el grupo de la key o ajusta `claude_api_url` al endpoint correcto.
+
+### La IA dice HTTP 503
+
+Normalmente es problema temporal del proveedor. Prueba otra vez. El codigo ya tiene reintentos, pero si el proveedor sigue caido, toca esperar o cambiar de grupo/proveedor.
+
+### D1 no tiene data nueva
+
+Revisa Script Properties:
 
 ```text
-Revisa claude_api_url, claude_api_key y claude_model.
-Si usas proveedor proxy, confirma permisos para /v1/messages o /v1/chat/completions.
+d1_api_url
+d1_admin_key
 ```
+
+Luego fuerza sincronizacion:
+
+```powershell
+$headers = @{ "x-admin-key" = "TU_D1_ADMIN_KEY" }
+Invoke-WebRequest -UseBasicParsing -Method POST -Headers $headers -Uri "https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/sync/gas" | Select-Object -ExpandProperty Content
+```
+
+### Las reglas no funcionan
+
+Verifica que se aplico la migracion `0007_rules.sql`:
+
+```powershell
+cd d1-api
+npx wrangler d1 migrations apply finanzas_mayeson --remote
+```
+
+Luego prueba:
+
+```text
+reglas
+regla kfc entretenimiento
+regla presupuesto comida incluye supermercado
+```
+
+## 19. Orden recomendado cada vez que hagas cambios
+
+Para no romper login, bot o dashboard:
+
+```text
+1. Baja cambios desde Git.
+2. Cambia codigo.
+3. Prueba local.
+4. Si tocaste Apps Script, ejecuta clasp push y despliega el deployment existente.
+5. Si tocaste Worker o migraciones, aplica migraciones y despliega Worker.
+6. Si tocaste dashboard, compila con VITE_GAS_API_URL y despliega Pages.
+7. Prueba Telegram y dashboard.
+8. Sube cambios a Git.
+```
+
+Comandos base:
+
+```powershell
+git pull origin main
+git status
+```
+
+Despues de probar:
+
+```powershell
+git add .
+git commit -m "Describe el cambio"
+git push origin main
+```
+
+Antes de `git add .`, revisa que no estes subiendo archivos secretos como `.env`, `.clasp.json` o `.wrangler`.
