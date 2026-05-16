@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { RiBankCardLine, RiCloseLine, RiDeleteBinLine, RiImageLine } from '@remixicon/react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { RiBankCardLine, RiCloseLine, RiDeleteBinLine, RiEditLine, RiImageLine } from '@remixicon/react';
 import {
   Badge,
   Table,
@@ -24,15 +24,19 @@ interface ReceiptPreview {
 export function TransactionsTable({
   transactions,
   authToken,
-  onDeleted,
+  chatId,
+  onChanged,
 }: {
   transactions: Transaction[];
   authToken?: string | null;
-  onDeleted?: () => void;
+  chatId?: string;
+  onChanged?: () => void;
 }) {
   const [loadingReceiptId, setLoadingReceiptId] = useState('');
   const [deletingId, setDeletingId] = useState('');
   const [preview, setPreview] = useState<ReceiptPreview | null>(null);
+  const [editing, setEditing] = useState<Transaction | null>(null);
+  const [savingId, setSavingId] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -100,7 +104,9 @@ export function TransactionsTable({
     setError('');
 
     try {
-      const response = await fetch(apiEndpoint(`transactions/${encodeURIComponent(tx.id)}`), {
+      const url = new URL(apiEndpoint(`transactions/${encodeURIComponent(tx.id)}`));
+      if (chatId) url.searchParams.set('chat_id', chatId);
+      const response = await fetch(url.toString(), {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${authToken}`,
@@ -112,12 +118,39 @@ export function TransactionsTable({
         throw new Error(result.error || 'No se pudo eliminar');
       }
 
-      onDeleted?.();
+      onChanged?.();
     } catch (err) {
       console.error('Delete transaction error:', err);
       setError('No pude eliminar el movimiento.');
     } finally {
       setDeletingId('');
+    }
+  }
+
+  async function saveTransaction(next: Transaction) {
+    if (!authToken || !next.id) return;
+    setSavingId(next.id);
+    setError('');
+    try {
+      const url = new URL(apiEndpoint(`transactions/${encodeURIComponent(next.id)}`));
+      if (chatId) url.searchParams.set('chat_id', chatId);
+      const response = await fetch(url.toString(), {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(next),
+      });
+      const result = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo guardar');
+      setEditing(null);
+      onChanged?.();
+    } catch (err) {
+      console.error('Edit transaction error:', err);
+      setError(err instanceof Error ? err.message : 'No pude guardar el movimiento.');
+    } finally {
+      setSavingId('');
     }
   }
 
@@ -133,7 +166,7 @@ export function TransactionsTable({
               <TableHeaderCell>Pago</TableHeaderCell>
               <TableHeaderCell>Foto</TableHeaderCell>
               <TableHeaderCell className="text-right">Monto</TableHeaderCell>
-              <TableHeaderCell className="text-right">Accion</TableHeaderCell>
+              <TableHeaderCell className="text-right">Acciones</TableHeaderCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -193,16 +226,27 @@ export function TransactionsTable({
                     {formatMoney(tx.monto, tx.currency)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <button
-                      type="button"
-                      className="inline-grid h-8 w-8 place-items-center rounded-tremor-default border border-rose-500/30 bg-rose-500/10 text-rose-200 transition hover:border-rose-400/60 hover:bg-rose-500/20 disabled:cursor-wait disabled:opacity-60"
-                      disabled={deletingId === tx.id}
-                      onClick={() => void deleteTransaction(tx)}
-                      aria-label={`Eliminar ${tx.desc}`}
-                      title="Eliminar movimiento"
-                    >
-                      <RiDeleteBinLine className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                    <div className="inline-flex gap-2">
+                      <button
+                        type="button"
+                        className="inline-grid h-8 w-8 place-items-center rounded-tremor-default border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 transition hover:border-cyan-400/60 hover:bg-cyan-500/20"
+                        onClick={() => setEditing(tx)}
+                        aria-label={`Editar ${tx.desc}`}
+                        title="Editar movimiento"
+                      >
+                        <RiEditLine className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-grid h-8 w-8 place-items-center rounded-tremor-default border border-rose-500/30 bg-rose-500/10 text-rose-200 transition hover:border-rose-400/60 hover:bg-rose-500/20 disabled:cursor-wait disabled:opacity-60"
+                        disabled={deletingId === tx.id}
+                        onClick={() => void deleteTransaction(tx)}
+                        aria-label={`Eliminar ${tx.desc}`}
+                        title="Eliminar movimiento"
+                      >
+                        <RiDeleteBinLine className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -261,8 +305,87 @@ export function TransactionsTable({
           </div>
         </div>
       ) : null}
+
+      {editing ? (
+        <EditTransactionModal
+          tx={editing}
+          saving={savingId === editing.id}
+          onClose={() => setEditing(null)}
+          onSave={(next) => void saveTransaction(next)}
+        />
+      ) : null}
     </>
   );
+}
+
+function EditTransactionModal({
+  tx,
+  saving,
+  onClose,
+  onSave,
+}: {
+  tx: Transaction;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (tx: Transaction) => void;
+}) {
+  const [draft, setDraft] = useState<Transaction>(tx);
+  const set = (key: keyof Transaction, value: string | number) => setDraft((current) => ({ ...current, [key]: value }));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
+      <form className="w-full max-w-2xl rounded-tremor-default border border-slate-700 bg-slate-950 p-4 shadow-2xl shadow-black/40" onSubmit={(event) => { event.preventDefault(); onSave(draft); }}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-100">Corregir movimiento</h2>
+            <p className="text-sm text-slate-400">Actualiza los datos leidos por la IA o ingresados manualmente.</p>
+          </div>
+          <button type="button" className="grid h-9 w-9 place-items-center rounded-tremor-default border border-slate-700 text-slate-300" onClick={onClose}>
+            <RiCloseLine className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Field label="Descripcion"><input className="form-input" value={draft.desc} onChange={(event) => set('desc', event.target.value)} /></Field>
+          <Field label="Categoria"><input className="form-input" value={draft.cat} onChange={(event) => set('cat', event.target.value.toLowerCase())} /></Field>
+          <Field label="Monto"><input className="form-input" type="number" min="0.01" step="0.01" value={draft.monto} onChange={(event) => set('monto', Number(event.target.value))} /></Field>
+          <Field label="Moneda">
+            <select className="form-input" value={draft.currency || 'PEN'} onChange={(event) => set('currency', event.target.value)}>
+              <option value="PEN">PEN</option>
+              <option value="USD">USD</option>
+            </select>
+          </Field>
+          <Field label="Fecha"><input className="form-input" type="date" value={draft.fecha} onChange={(event) => set('fecha', event.target.value)} /></Field>
+          <Field label="Hora"><input className="form-input" type="time" value={draft.hora || '00:00'} onChange={(event) => set('hora', event.target.value)} /></Field>
+          <Field label="Tipo">
+            <select className="form-input" value={draft.tipo} onChange={(event) => set('tipo', event.target.value)}>
+              <option value="gasto">Gasto</option>
+              <option value="ingreso">Ingreso</option>
+            </select>
+          </Field>
+          <Field label="Pago">
+            <select className="form-input" value={draft.paymentMethod || 'debito'} onChange={(event) => set('paymentMethod', event.target.value)}>
+              <option value="debito">Debito</option>
+              <option value="credito">Credito</option>
+            </select>
+          </Field>
+          {draft.paymentMethod === 'credito' ? (
+            <>
+              <Field label="Fecha pago"><input className="form-input" type="date" value={draft.paymentDueDate || ''} onChange={(event) => set('paymentDueDate', event.target.value)} /></Field>
+              <Field label="Tarjeta"><input className="form-input" value={draft.cardName || ''} onChange={(event) => set('cardName', event.target.value)} /></Field>
+            </>
+          ) : null}
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" className="rounded-tremor-default border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200" onClick={onClose}>Cancelar</button>
+          <button className="rounded-tremor-default bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60" disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{label}{children}</label>;
 }
 
 function Meta({ label, value }: { label: string; value: string }) {

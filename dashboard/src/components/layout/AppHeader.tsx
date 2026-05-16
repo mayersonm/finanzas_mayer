@@ -1,6 +1,6 @@
 import { RiLockPasswordLine, RiLogoutBoxRLine, RiMoonLine, RiRefreshLine, RiSunLine } from '@remixicon/react';
 import { formatUpdatedAt } from '../../lib/formatters';
-import type { ApiStatus, DashboardData } from '../../types/dashboard';
+import type { ApiStatus, DashboardData, DashboardUser } from '../../types/dashboard';
 
 export function AppHeader({
   data,
@@ -12,6 +12,9 @@ export function AppHeader({
   onToggleTheme,
   onTogglePasswordPanel,
   onLogout,
+  users,
+  selectedChatId,
+  onSelectedChatIdChange,
 }: {
   data: DashboardData;
   loading: boolean;
@@ -22,6 +25,9 @@ export function AppHeader({
   onToggleTheme: () => void;
   onTogglePasswordPanel: () => void;
   onLogout: () => void;
+  users: DashboardUser[];
+  selectedChatId: string;
+  onSelectedChatIdChange: (chatId: string) => void;
 }) {
   const statusClass = status === 'live' ? 'bg-emerald-500/15 text-emerald-200'
     : status === 'error' ? 'bg-rose-500/15 text-rose-200'
@@ -42,6 +48,20 @@ export function AppHeader({
         </div>
 
         <div className="grid gap-2 min-[420px]:grid-cols-4 sm:flex sm:flex-wrap">
+          {users.length > 1 ? (
+            <select
+              className="h-10 rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-200"
+              value={selectedChatId}
+              onChange={(event) => onSelectedChatIdChange(event.target.value)}
+              aria-label="Usuario"
+            >
+              {users.map((user) => (
+                <option key={user.chatId} value={user.chatId}>
+                  {user.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <HeaderButton icon={RiRefreshLine} onClick={onRefresh} disabled={loading} tone="primary">
             {loading ? 'Actualizando' : 'Actualizar'}
           </HeaderButton>

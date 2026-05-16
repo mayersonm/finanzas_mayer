@@ -7,7 +7,7 @@ import { AppHeader } from './components/layout/AppHeader';
 import { DashboardTabs } from './components/layout/DashboardTabs';
 import { MOCK_DASHBOARD } from './data/mockDashboard';
 import { getRealExpenses } from './lib/finance';
-import type { ApiStatus, DashboardData, TabId } from './types/dashboard';
+import type { ApiStatus, DashboardData, DashboardUser, TabId } from './types/dashboard';
 
 const AnalysisSection = lazy(() => import('./features/analysis/AnalysisSection').then((mod) => ({ default: mod.AnalysisSection })));
 const CommitmentsSection = lazy(() => import('./features/commitments/CommitmentsSection').then((mod) => ({ default: mod.CommitmentsSection })));
@@ -44,6 +44,8 @@ export default function App() {
     if (stored === 'light' || stored === 'dark') return stored;
     return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   });
+  const [users, setUsers] = useState<DashboardUser[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState('');
 
   const configured = isApiConfigured();
   const realExpenses = useMemo(() => getRealExpenses(data), [data]);
@@ -77,6 +79,7 @@ export default function App() {
       }
 
       const url = new URL(apiEndpoint('dashboard'));
+      if (selectedChatId) url.searchParams.set('chat_id', selectedChatId);
 
       const response = await fetch(url.toString(), {
         headers: {
@@ -106,6 +109,24 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  }, [configured, selectedChatId, token]);
+
+  const fetchUsers = useCallback(async (sessionToken?: string | null) => {
+    const activeToken = sessionToken ?? token;
+    if (!configured || !activeToken) return;
+
+    try {
+      const response = await fetch(apiEndpoint('users'), {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      });
+      const result = await response.json() as { ok?: boolean; users?: DashboardUser[]; defaultChatId?: string };
+      if (response.ok && result.ok !== false) {
+        setUsers(result.users || []);
+        setSelectedChatId((current) => current || result.defaultChatId || result.users?.[0]?.chatId || '');
+      }
+    } catch (error) {
+      console.error('Users error:', error);
+    }
   }, [configured, token]);
 
   const handleLogin = useCallback(async (event: FormEvent<HTMLFormElement>) => {
@@ -134,6 +155,7 @@ export default function App() {
       setToken(result.token);
       setPassword('');
       setStatus('demo');
+      await fetchUsers(result.token);
       await fetchData(result.token);
     } catch (error) {
       console.error('Login error:', error);
@@ -149,6 +171,8 @@ export default function App() {
     setData(MOCK_DASHBOARD);
     setStatus('demo');
     setAuthError('');
+    setUsers([]);
+    setSelectedChatId('');
     void fetch(apiEndpoint('logout'), { method: 'POST' }).catch(() => undefined);
   }, []);
 
@@ -208,6 +232,7 @@ export default function App() {
   useEffect(() => {
     if (!configured || !token) return;
     void fetchData(token);
+    void fetchUsers(token);
   }, [fetchData, configured, token]);
 
   useEffect(() => {
@@ -251,13 +276,16 @@ export default function App() {
             setShowPasswordPanel(true);
           }}
           onLogout={handleLogout}
+          users={users}
+          selectedChatId={selectedChatId}
+          onSelectedChatIdChange={setSelectedChatId}
         />
 
         <DashboardTabs activeTab={tab} onTabChange={setTab} />
 
         <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
           {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} /> : null}
-          {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} onDeleted={() => void fetchData()} /> : null}
+          {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
           {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
           {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
           {tab === 'metas' ? <GoalsSection data={data} /> : null}
