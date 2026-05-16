@@ -579,20 +579,25 @@ async function uploadReceipt(env, payload) {
   let storage = 'd1';
   let storedR2Key = null;
   let storedBase64 = cleanedBase64;
+  let storageWarning = '';
 
   if (env.RECEIPTS_BUCKET) {
-    await env.RECEIPTS_BUCKET.put(r2Key, bytes, {
-      httpMetadata: {
-        contentType,
-      },
-      customMetadata: {
-        chat_id: chatId,
-        transaction_id: transactionId,
-      },
-    });
-    storage = 'r2';
-    storedR2Key = r2Key;
-    storedBase64 = null;
+    try {
+      await env.RECEIPTS_BUCKET.put(r2Key, bytes, {
+        httpMetadata: {
+          contentType,
+        },
+        customMetadata: {
+          chat_id: chatId,
+          transaction_id: transactionId,
+        },
+      });
+      storage = 'r2';
+      storedR2Key = r2Key;
+      storedBase64 = null;
+    } catch (error) {
+      storageWarning = `R2 no disponible, guardado en D1: ${error.message || String(error)}`;
+    }
   }
 
   await env.DB.prepare(`
@@ -648,6 +653,8 @@ async function uploadReceipt(env, payload) {
       fileName,
       contentType,
       size: bytes.byteLength,
+      storage,
+      warning: storageWarning,
     },
   };
 }
