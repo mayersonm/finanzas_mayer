@@ -4,6 +4,18 @@ function normalizarCat(cat, desc) {
   const rawDesc = normalizarTextoClave_(desc);
   const text = (rawCat + ' ' + rawDesc).trim();
 
+  if (/(recibo de gas|recibo gas|servicio de gas|servicio gas|gas natural|calidda)/.test(text)) {
+    return 'servicios';
+  }
+
+  if (/(gasolina|combustible|gas al carro|gas para carro|gnv|glp|grifo|primax|repsol|pecsa|petroperu)/.test(text) || rawCat === 'gas') {
+    return 'transporte';
+  }
+
+  if (/(kfc|popeyes|bembos|mcdonalds|mc donald|burger king|pizza hut|dominos|domino s|papa john|comida rapida|fast food|hamburguesa|salchipapa)/.test(text)) {
+    return 'entretenimiento';
+  }
+
   const direct = {
     alimentacion: 'comida',
     alimento: 'comida',
@@ -25,11 +37,11 @@ function normalizarCat(cat, desc) {
     tottus: 'supermercado',
     makro: 'supermercado',
     vivanda: 'supermercado',
-    kfc: 'comida',
-    popeyes: 'comida',
-    bembos: 'comida',
-    mcdonalds: 'comida',
-    pizza: 'comida',
+    kfc: 'entretenimiento',
+    popeyes: 'entretenimiento',
+    bembos: 'entretenimiento',
+    mcdonalds: 'entretenimiento',
+    pizza: 'entretenimiento',
     pollo: 'comida',
 
     transporte: 'transporte',
@@ -53,7 +65,7 @@ function normalizarCat(cat, desc) {
     renta: 'servicios',
     telefono: 'servicios',
     celular: 'servicios',
-    gas: 'servicios',
+    gas: 'transporte',
 
     entretenimiento: 'entretenimiento',
     cine: 'entretenimiento',
@@ -103,7 +115,8 @@ function normalizarCat(cat, desc) {
 
   const rules = [
     { cat: 'supermercado', words: ['supermercado', 'mercado', 'wong', 'metro', 'tottus', 'makro', 'vivanda', 'plaza vea'] },
-    { cat: 'comida', words: ['kfc', 'popeyes', 'bembos', 'mcdonalds', 'pollo', 'pizza', 'almuerzo', 'cena', 'desayuno', 'yogurt', 'leche'] },
+    { cat: 'entretenimiento', words: ['kfc', 'popeyes', 'bembos', 'mcdonalds', 'mc donald', 'burger king', 'pizza hut', 'dominos', 'papa john', 'comida rapida', 'fast food', 'hamburguesa', 'salchipapa'] },
+    { cat: 'comida', words: ['pollo', 'almuerzo', 'cena', 'desayuno', 'yogurt', 'leche'] },
     { cat: 'transporte', words: ['taxi', 'uber', 'didi', 'indrive', 'gasolina', 'combustible', 'peaje', 'estacionamiento', 'carro'] },
     { cat: 'servicios', words: ['internet', 'alquiler', 'renta', 'luz', 'agua', 'telefono', 'celular', 'recibo de gas'] },
     { cat: 'entretenimiento', words: ['netflix', 'spotify', 'juegos', 'steam', 'cine', 'disney'] },
@@ -119,6 +132,19 @@ function normalizarCat(cat, desc) {
   }
 
   return rawCat || 'otro';
+}
+
+function categoriasParaPresupuesto_(cat) {
+  const key = normalizarCat(cat || 'otro');
+  if (key === 'comida') return ['comida', 'supermercado'];
+  return [key || 'otro'];
+}
+
+function gastoPresupuestoPorCategoria_(gastosCat, cat) {
+  const keys = categoriasParaPresupuesto_(cat);
+  return keys.reduce(function (total, key) {
+    return total + (parseFloat(gastosCat[key]) || 0);
+  }, 0);
 }
 
 function normalizarTextoClave_(value) {

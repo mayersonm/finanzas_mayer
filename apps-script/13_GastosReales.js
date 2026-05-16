@@ -14,7 +14,7 @@ function cmdGastosReales(chatId) {
   let totalPresupuesto = 0;
   const lineasPresupuesto = presupuestos.length
     ? presupuestos.map(item => {
-        const gastado = gastosCat[item.cat] || 0;
+        const gastado = gastoPresupuestoPorCategoria_(gastosCat, item.cat);
         const considerado = gastado > 0 ? gastado : item.limite;
         const nota = gastado > 0
           ? `gastado S/ ${gastado.toFixed(2)}`

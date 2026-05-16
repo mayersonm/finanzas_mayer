@@ -261,13 +261,7 @@ async function dashboard(env, params) {
     LIMIT 20
   `).bind(chatId).all();
 
-  const categories = await env.DB.prepare(`
-    SELECT category AS cat, SUM(amount) AS monto
-    FROM transactions
-    WHERE chat_id = ? AND type = 'gasto' AND substr(tx_date, 1, 7) = ?
-    GROUP BY category
-    ORDER BY monto DESC
-  `).bind(chatId, monthKey).all();
+  const categories = await categoriesWithSpending(env, chatId, monthKey);
 
   const months = await lastMonths(env, chatId, now);
   const budgets = await budgetsWithSpending(env, chatId, monthKey);
@@ -313,11 +307,7 @@ async function dashboard(env, params) {
     mes: monthName,
     mesKey: monthKey,
     transacciones: (latest.results || []).map(txShape),
-    categorias: (categories.results || []).map((row) => ({
-      cat: title(row.cat),
-      monto: round(row.monto),
-      color: COLORS[row.cat] || COLORS.otro,
-    })),
+    categorias: categories,
     meses: months,
     presupuestos: budgets,
     fijos: fixedExpenses,
@@ -1123,28 +1113,56 @@ async function lastMonths(env, chatId, now) {
   return result;
 }
 
+async function categoriesWithSpending(env, chatId, monthKey) {
+  const rows = await env.DB.prepare(`
+    SELECT category AS cat, description AS desc, amount
+    FROM transactions
+    WHERE chat_id = ?
+      AND type = 'gasto'
+      AND substr(tx_date, 1, 7) = ?
+  `).bind(chatId, monthKey).all();
+
+  const spending = {};
+  for (const row of rows.results || []) {
+    const cat = normalizeCategory(row.cat, row.desc);
+    spending[cat] = (spending[cat] || 0) + Number(row.amount || 0);
+  }
+
+  return Object.keys(spending)
+    .map((cat) => ({
+      cat: title(cat),
+      monto: round(spending[cat]),
+      color: COLORS[cat] || COLORS.otro,
+    }))
+    .sort((a, b) => b.monto - a.monto || a.cat.localeCompare(b.cat));
+}
+
 async function budgetsWithSpending(env, chatId, monthKey) {
   const rows = await env.DB.prepare(`
-    SELECT
-      b.category AS cat,
-      b.limit_amount AS limite,
-      COALESCE(SUM(t.amount), 0) AS gasto
-    FROM budgets b
-    LEFT JOIN transactions t
-      ON t.chat_id = b.chat_id
-      AND t.category = b.category
-      AND t.type = 'gasto'
-      AND substr(t.tx_date, 1, 7) = ?
-    WHERE b.chat_id = ?
-    GROUP BY b.category, b.limit_amount
-    ORDER BY gasto DESC, b.category ASC
-  `).bind(monthKey, chatId).all();
+    SELECT category AS cat, limit_amount AS limite
+    FROM budgets
+    WHERE chat_id = ?
+  `).bind(chatId).all();
+
+  const spendingRows = await env.DB.prepare(`
+    SELECT category AS cat, description AS desc, amount
+    FROM transactions
+    WHERE chat_id = ?
+      AND type = 'gasto'
+      AND substr(tx_date, 1, 7) = ?
+  `).bind(chatId, monthKey).all();
+
+  const spending = {};
+  for (const row of spendingRows.results || []) {
+    const cat = normalizeCategory(row.cat, row.desc);
+    spending[cat] = (spending[cat] || 0) + Number(row.amount || 0);
+  }
 
   return (rows.results || []).map((row) => ({
     cat: title(row.cat),
     limite: round(row.limite),
-    gasto: round(row.gasto),
-  }));
+    gasto: round(budgetSpend(spending, row.cat)),
+  })).sort((a, b) => b.gasto - a.gasto || a.cat.localeCompare(b.cat));
 }
 
 async function fixedExpensesList(env, chatId, monthKey) {
@@ -1295,7 +1313,7 @@ function txShape(row) {
     hora: row.hora,
     tipo: row.tipo,
     desc: row.desc,
-    cat: row.cat,
+    cat: normalizeCategory(row.cat, row.desc),
     monto: round(row.monto),
     currency: normalizeCurrency(row.currency),
     paymentMethod: row.payment_method || 'debito',
@@ -1762,6 +1780,19 @@ function daysBetween(fromDateKey, toDateKey) {
 function normalizeCategory(value, description = '') {
   const rawCategory = normalizeKey(value);
   const text = `${rawCategory} ${normalizeKey(description)}`.trim();
+
+  if (/(recibo de gas|recibo gas|servicio de gas|servicio gas|gas natural|calidda)/.test(text)) {
+    return 'servicios';
+  }
+
+  if (/(gasolina|combustible|gas al carro|gas para carro|gnv|glp|grifo|primax|repsol|pecsa|petroperu)/.test(text) || rawCategory === 'gas') {
+    return 'transporte';
+  }
+
+  if (/(kfc|popeyes|bembos|mcdonalds|mc donald|burger king|pizza hut|dominos|domino s|papa john|comida rapida|fast food|hamburguesa|salchipapa)/.test(text)) {
+    return 'entretenimiento';
+  }
+
   const direct = {
     alimentacion: 'comida',
     alimento: 'comida',
@@ -1783,11 +1814,11 @@ function normalizeCategory(value, description = '') {
     tottus: 'supermercado',
     makro: 'supermercado',
     vivanda: 'supermercado',
-    kfc: 'comida',
-    popeyes: 'comida',
-    bembos: 'comida',
-    mcdonalds: 'comida',
-    pizza: 'comida',
+    kfc: 'entretenimiento',
+    popeyes: 'entretenimiento',
+    bembos: 'entretenimiento',
+    mcdonalds: 'entretenimiento',
+    pizza: 'entretenimiento',
     pollo: 'comida',
     transporte: 'transporte',
     taxi: 'transporte',
@@ -1809,7 +1840,7 @@ function normalizeCategory(value, description = '') {
     renta: 'servicios',
     telefono: 'servicios',
     celular: 'servicios',
-    gas: 'servicios',
+    gas: 'transporte',
     entretenimiento: 'entretenimiento',
     cine: 'entretenimiento',
     netflix: 'entretenimiento',
@@ -1851,7 +1882,8 @@ function normalizeCategory(value, description = '') {
 
   const rules = [
     { cat: 'supermercado', words: ['supermercado', 'mercado', 'wong', 'metro', 'tottus', 'makro', 'vivanda', 'plaza vea'] },
-    { cat: 'comida', words: ['kfc', 'popeyes', 'bembos', 'mcdonalds', 'pollo', 'pizza', 'almuerzo', 'cena', 'desayuno', 'yogurt', 'leche'] },
+    { cat: 'entretenimiento', words: ['kfc', 'popeyes', 'bembos', 'mcdonalds', 'mc donald', 'burger king', 'pizza hut', 'dominos', 'papa john', 'comida rapida', 'fast food', 'hamburguesa', 'salchipapa'] },
+    { cat: 'comida', words: ['pollo', 'almuerzo', 'cena', 'desayuno', 'yogurt', 'leche'] },
     { cat: 'transporte', words: ['taxi', 'uber', 'didi', 'indrive', 'gasolina', 'combustible', 'peaje', 'estacionamiento', 'carro'] },
     { cat: 'servicios', words: ['internet', 'alquiler', 'renta', 'luz', 'agua', 'telefono', 'celular', 'recibo de gas'] },
     { cat: 'entretenimiento', words: ['netflix', 'spotify', 'juegos', 'steam', 'cine', 'disney'] },
@@ -1865,6 +1897,16 @@ function normalizeCategory(value, description = '') {
   }
 
   return rawCategory || 'otro';
+}
+
+function budgetCategoryKeys(category) {
+  const key = normalizeCategory(category || 'otro');
+  if (key === 'comida') return ['comida', 'supermercado'];
+  return [key || 'otro'];
+}
+
+function budgetSpend(spending, category) {
+  return budgetCategoryKeys(category).reduce((total, key) => total + Number(spending[key] || 0), 0);
 }
 
 function title(value) {

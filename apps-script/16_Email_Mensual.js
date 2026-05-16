@@ -98,6 +98,12 @@ function construirTextoMensualEmail_(data) {
       }).join('\n')
     : '- Sin gastos por categoria en el periodo';
 
+  const presupuestos = data.presupuestos.length
+    ? data.presupuestos.map(function (p) {
+        return '- ' + capitalizar(p.cat) + ': ' + fmtEmail_(p.gasto) + ' de ' + fmtEmail_(p.limite);
+      }).join('\n')
+    : '- Sin presupuestos configurados';
+
   return [
     'Cierre financiero mensual - ' + data.nombrePeriodo,
     'Periodo actual: ' + data.nombrePeriodo,
@@ -107,6 +113,9 @@ function construirTextoMensualEmail_(data) {
     '',
     'Categorias principales',
     categorias,
+    '',
+    'Presupuestos',
+    presupuestos,
     '',
     'Sugerencia financiera IA',
     data.sugerenciaIA,
@@ -146,6 +155,20 @@ function construirHtmlMensualEmail_(data) {
       }).join('')
     : '<tr><td colspan="5" style="color:#6b7280">Sin gastos por categoria en el periodo.</td></tr>';
 
+  const presupuestosHtml = data.presupuestos.length
+    ? data.presupuestos.map(function (p) {
+        const pct = p.limite > 0 ? Math.min(Math.round((p.gasto / p.limite) * 100), 100) : 0;
+        const color = pct >= 100 ? '#dc2626' : pct >= 80 ? '#d97706' : '#16a34a';
+        return bloqueAvanceEmail_(
+          capitalizar(p.cat),
+          fmtEmail_(p.gasto) + ' / ' + fmtEmail_(p.limite),
+          pct,
+          color,
+          pct + '% usado'
+        );
+      }).join('')
+    : '<p style="color:#6b7280;margin:0">Sin presupuestos configurados.</p>';
+
   const iaHtml = escEmail_(data.sugerenciaIA).replace(/\n/g, '<br>');
   const mesesComparadosHtml = [
     '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse">',
@@ -162,15 +185,16 @@ function construirHtmlMensualEmail_(data) {
     '<h1 style="margin:6px 0 0;font-size:24px">' + escEmail_(data.nombrePeriodo) + '</h1>',
     '<div style="font-size:13px;color:#d1d5db;margin-top:8px">Comparativa: ' + escEmail_(data.nombrePeriodo) + ' vs ' + escEmail_(data.nombreAnterior) + '</div>',
     '</div>',
-    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">',
-    cardEmail_('Ingresos', fmtEmail_(data.totalesPeriodo.ingresos), '#16a34a'),
-    cardEmail_('Gastos', fmtEmail_(data.totalesPeriodo.gastos), '#dc2626'),
-    cardEmail_('Balance', fmtSignedEmail_(balance), colorBalance),
-    cardEmail_('Ahorro estimado', fmtPctEmail_(ahorroPct), ahorroPct >= 0 ? '#2563eb' : '#dc2626'),
-    '</div>',
+    cardsEmail_([
+      ['Ingresos', fmtEmail_(data.totalesPeriodo.ingresos), '#16a34a'],
+      ['Gastos', fmtEmail_(data.totalesPeriodo.gastos), '#dc2626'],
+      ['Balance', fmtSignedEmail_(balance), colorBalance],
+      ['Ahorro estimado', fmtPctEmail_(ahorroPct), ahorroPct >= 0 ? '#2563eb' : '#dc2626'],
+    ]),
     seccionEmail_('Meses comparados', mesesComparadosHtml),
     seccionEmail_('Comparativo mensual', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Indicador</th><th align="right">' + escEmail_(data.nombrePeriodo) + '</th><th align="right">' + escEmail_(data.nombreAnterior) + '</th><th align="right">Cambio</th></tr>' + comparativoRows + '</table>'),
     seccionEmail_('Gastos por categoria', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Categoria</th><th align="right">' + escEmail_(data.nombrePeriodo) + '</th><th align="right">' + escEmail_(data.nombreAnterior) + '</th><th align="right">Cambio</th><th align="right">Participacion</th></tr>' + categoriasRows + '</table>'),
+    seccionEmail_('Presupuestos', presupuestosHtml),
     seccionEmail_('Sugerencia financiera IA', '<div style="line-height:1.55;font-size:14px">' + iaHtml + '</div><p style="font-size:12px;color:#6b7280;margin:14px 0 0">Contenido educativo para organizacion personal. No reemplaza asesoria financiera profesional.</p>'),
     seccionEmail_('Senal para alerta anual', '<p style="margin:0;line-height:1.55"><strong>' + escEmail_(data.alertaAnualBase.nivel) + ':</strong> ' + escEmail_(data.alertaAnualBase.texto) + '</p>'),
     '<p style="font-size:12px;color:#6b7280;text-align:center;margin-top:18px">Archivo Excel adjunto generado el ' + escEmail_(data.generadoEn) + '.</p>',
