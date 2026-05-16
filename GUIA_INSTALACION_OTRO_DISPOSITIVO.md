@@ -1,6 +1,6 @@
-# Guia de instalacion completa de Finanzas Mayeson
+# Guia de instalacion completa de Finanzas xxxx
 
-Esta guia es para instalar Finanzas Mayeson en cualquier dispositivo sin depender de rutas locales. Sigue los pasos en orden: Telegram, Google Sheets, Apps Script, Cloudflare Worker, D1, R2 y dashboard.
+Esta guia es para instalar Finanzas xxxx en cualquier dispositivo sin depender de rutas locales. Sigue los pasos en orden: Telegram, Google Sheets, Apps Script, Cloudflare Worker, D1, R2 y dashboard.
 
 Hay dos escenarios:
 
@@ -33,8 +33,8 @@ Usuario del bot terminado en bot
 Ejemplo:
 
 ```text
-Finanzas Mayeson
-finanzas_mayeson_bot
+Finanzas xxxx
+finanzas_xxxx_bot
 ```
 
 BotFather entregara un token parecido a este formato:
@@ -91,7 +91,7 @@ Entra a Google Sheets y crea una hoja nueva.
 Ponle un nombre claro, por ejemplo:
 
 ```text
-Finanzas Mayeson
+Finanzas xxxx
 ```
 
 Copia el ID del Sheet desde la URL.
@@ -262,7 +262,7 @@ Usa esta opcion si estas montando todo desde cero.
 
 ```powershell
 cd apps-script
-clasp create --type webapp --title "Finanzas Mayeson"
+clasp create --type webapp --title "Finanzas xxxx"
 npx clasp push -f
 ```
 
@@ -390,12 +390,12 @@ compatibility_date = "2026-05-09"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "finanzas_mayeson"
-database_id = "7964ac92-2d13-4103-8b63-d9235e8cd526"
+database_name = "finanzas_xxxn"
+database_id = "xxxxxx"
 
 [[r2_buckets]]
-binding = "RECEIPTS_BUCKET"
-bucket_name = "finanzas-mayeson-receipts"
+binding = "RECEIPTS_BUCKET" 
+bucket_name = "finanzas-xxxn-receipts"
 ```
 
 Si esos datos siguen iguales, no tienes que crear D1 ni R2 otra vez.
@@ -405,7 +405,7 @@ Si esos datos siguen iguales, no tienes que crear D1 ni R2 otra vez.
 Crea la base D1:
 
 ```powershell
-npx wrangler d1 create finanzas_mayeson
+npx wrangler d1 create finanzas_xxxn
 ```
 
 Wrangler mostrara un bloque con `database_id`. Copia ese ID y abre:
@@ -419,14 +419,14 @@ Actualiza esta parte:
 ```toml
 [[d1_databases]]
 binding = "DB"
-database_name = "finanzas_mayeson"
+database_name = "finanzas_xxxn"
 database_id = "TU_DATABASE_ID"
 ```
 
 Aplica migraciones en remoto:
 
 ```powershell
-npx wrangler d1 migrations apply finanzas_mayeson --remote
+npx wrangler d1 migrations apply finanzas_xxxx --remote
 ```
 
 Las migraciones crean tablas para movimientos, recibos, pagos, deudas, monedas PEN/USD y reglas inteligentes.
@@ -436,7 +436,7 @@ Las migraciones crean tablas para movimientos, recibos, pagos, deudas, monedas P
 Crea el bucket R2:
 
 ```powershell
-npx wrangler r2 bucket create finanzas-mayeson-receipts
+npx wrangler r2 bucket create finanzas-xxxx-receipts
 ```
 
 Verifica que `wrangler.toml` tenga el binding:
@@ -444,7 +444,7 @@ Verifica que `wrangler.toml` tenga el binding:
 ```toml
 [[r2_buckets]]
 binding = "RECEIPTS_BUCKET"
-bucket_name = "finanzas-mayeson-receipts"
+bucket_name = "finanzas-xxxx-receipts"
 ```
 
 Ese binding es lo que adjunta R2 al Worker. Sin esto, el gasto puede registrarse pero la foto no se vera en el dashboard.
@@ -701,7 +701,7 @@ Migrar D1 remoto:
 
 ```powershell
 cd d1-api
-npx wrangler d1 migrations apply finanzas_mayeson --remote
+npx wrangler d1 migrations apply finanzas_xxxx --remote
 cd ..
 ```
 
@@ -834,7 +834,7 @@ Verifica que se aplico la migracion `0007_rules.sql`:
 
 ```powershell
 cd d1-api
-npx wrangler d1 migrations apply finanzas_mayeson --remote
+npx wrangler d1 migrations apply finanzas_xxxx --remote
 ```
 
 Luego prueba:
