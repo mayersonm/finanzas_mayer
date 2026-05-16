@@ -475,7 +475,6 @@ function serviceLabel(name) {
     telegramToken: 'Telegram token',
     workerUrl: 'Worker URL',
     claudeApiKey: 'IA API key',
-    claudeApiUrl: 'IA endpoint',
     d1ApiUrl: 'D1 API URL',
     d1AdminKey: 'D1 admin key',
   };

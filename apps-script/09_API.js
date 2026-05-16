@@ -193,7 +193,6 @@ function dashHealth_() {
       telegramToken: Boolean(props.getProperty('telegram_bot_token')),
       workerUrl: Boolean(props.getProperty('worker_url')),
       claudeApiKey: Boolean(props.getProperty('claude_api_key')),
-      claudeApiUrl: Boolean(props.getProperty('claude_api_url')),
       d1ApiUrl: Boolean(props.getProperty('d1_api_url')),
       d1AdminKey: Boolean(props.getProperty('d1_admin_key')),
     },
