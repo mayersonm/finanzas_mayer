@@ -137,6 +137,11 @@ export default {
         return json(await transactions(env, url.searchParams));
       }
 
+      if (url.pathname === '/api/users' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await usersList(env));
+      }
+
       if (url.pathname === '/api/transactions' && request.method === 'POST') {
         requireAdminKey(request, env);
         const payload = await request.json();
@@ -150,6 +155,12 @@ export default {
           chatId: getChatId(env, url.searchParams),
           deleteFromGas: true,
         }));
+      }
+
+      if (transactionMatch && request.method === 'PATCH') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await updateTransactionFromDashboard(env, decodeURIComponent(transactionMatch[1]), payload, url.searchParams));
       }
 
       if (url.pathname === '/api/transactions/delete' && request.method === 'POST') {
@@ -595,6 +606,40 @@ async function dashboard(env, params) {
 async function transactions(env, params) {
   const chatId = getChatId(env, params);
   const limit = clamp(Number(params.get('limit') || 100), 1, 500);
+  const search = normalizeKey(params.get('q') || params.get('search') || '');
+  const category = normalizeBaseCategory(params.get('category') || '');
+  const type = String(params.get('type') || '').toLowerCase();
+  const payment = normalizePaymentMethod(params.get('payment') || params.get('payment_method') || '');
+  const currency = String(params.get('currency') || '').trim().toUpperCase();
+  const month = String(params.get('month') || '').trim();
+  const where = ['t.chat_id = ?'];
+  const values = [chatId];
+
+  if (search) {
+    where.push('(lower(t.description) LIKE ? OR lower(t.category) LIKE ?)');
+    values.push(`%${search}%`, `%${search}%`);
+  }
+  if (category) {
+    where.push('t.category = ?');
+    values.push(category);
+  }
+  if (type === 'ingreso' || type === 'gasto') {
+    where.push('t.type = ?');
+    values.push(type);
+  }
+  if (payment) {
+    where.push('t.payment_method = ?');
+    values.push(payment);
+  }
+  if (currency === 'PEN' || currency === 'USD') {
+    where.push('t.currency = ?');
+    values.push(currency);
+  }
+  if (/^\d{4}-\d{2}$/.test(month)) {
+    where.push('substr(t.tx_date, 1, 7) = ?');
+    values.push(month);
+  }
+
   const rows = await env.DB.prepare(`
     SELECT
       t.id,
@@ -615,16 +660,37 @@ async function transactions(env, params) {
       r.created_at AS receipt_uploaded_at
     FROM transactions t
     LEFT JOIN receipts r ON r.transaction_id = t.id
-    WHERE t.chat_id = ?
+    WHERE ${where.join(' AND ')}
     ORDER BY t.tx_date DESC, t.tx_time DESC, t.created_at DESC
     LIMIT ?
-  `).bind(chatId, limit).all();
+  `).bind(...values, limit).all();
 
   return {
     ok: true,
     total: rows.results?.length || 0,
     limit,
     transacciones: (rows.results || []).map(txShape),
+  };
+}
+
+async function usersList(env) {
+  const rows = await env.DB.prepare(`
+    SELECT chat_id, COUNT(*) AS transactions, MAX(updated_at) AS lastActivity
+    FROM transactions
+    GROUP BY chat_id
+    ORDER BY lastActivity DESC
+    LIMIT 50
+  `).all();
+
+  return {
+    ok: true,
+    defaultChatId: env.DEFAULT_CHAT_ID || '',
+    users: (rows.results || []).map((row) => ({
+      chatId: row.chat_id,
+      label: row.chat_id === env.DEFAULT_CHAT_ID ? `Principal (${row.chat_id})` : `Chat ${row.chat_id}`,
+      transactions: Number(row.transactions || 0),
+      lastActivity: row.lastActivity || '',
+    })),
   };
 }
 
@@ -858,6 +924,96 @@ async function deleteTransaction(env, { id, chatId, deleteFromGas = false }) {
     deleted: true,
     id: cleanId,
     gas: gasResult,
+  };
+}
+
+async function updateTransactionFromDashboard(env, id, payload, params) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const cleanId = String(id || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  if (!cleanId) throw httpError(400, 'id requerido');
+
+  const existing = await env.DB.prepare('SELECT * FROM transactions WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .first();
+  if (!existing) throw httpError(404, 'Transaccion no encontrada');
+
+  const description = String(payload.desc ?? payload.description ?? existing.description).trim().slice(0, 240);
+  const category = normalizeCategory(payload.cat ?? payload.category ?? existing.category, description);
+  const amount = parseAmount(payload.monto ?? payload.amount ?? existing.amount);
+  const currency = normalizeCurrency(payload.currency ?? existing.currency);
+  const txDate = normalizeDateOnly(payload.fecha ?? payload.tx_date ?? existing.tx_date) || existing.tx_date;
+  const txTime = String(payload.hora ?? payload.tx_time ?? existing.tx_time ?? '00:00').slice(0, 5);
+  const type = String(payload.tipo ?? payload.type ?? existing.type).toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
+  const paymentMethod = normalizePaymentMethod(payload.paymentMethod ?? payload.payment_method ?? existing.payment_method) || 'debito';
+  const paymentDueDate = paymentMethod === 'credito'
+    ? normalizeDateOnly(payload.paymentDueDate ?? payload.payment_due_date ?? existing.payment_due_date)
+    : '';
+  const cardName = paymentMethod === 'credito'
+    ? String(payload.cardName ?? payload.card_name ?? existing.card_name ?? '').trim().slice(0, 80)
+    : '';
+
+  if (!description) throw httpError(400, 'descripcion requerida');
+  if (amount <= 0) throw httpError(400, 'monto invalido');
+
+  await env.DB.prepare(`
+    UPDATE transactions
+    SET tx_date = ?,
+        tx_time = ?,
+        type = ?,
+        description = ?,
+        category = ?,
+        amount = ?,
+        currency = ?,
+        payment_method = ?,
+        payment_due_date = ?,
+        card_name = ?,
+        source = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND chat_id = ?
+  `).bind(
+    txDate,
+    txTime,
+    type,
+    description,
+    category,
+    round(amount),
+    currency,
+    paymentMethod,
+    paymentDueDate || null,
+    cardName,
+    existing.source && existing.source !== 'gas' ? existing.source : 'dashboard_edit',
+    cleanId,
+    chatId,
+  ).run();
+
+  await env.DB.prepare(`
+    UPDATE receipts
+    SET tx_date = ?,
+        tx_time = ?,
+        type = ?,
+        description = ?,
+        category = ?,
+        amount = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE transaction_id = ?
+  `).bind(txDate, txTime, type, description, category, round(amount), cleanId).run();
+
+  return {
+    ok: true,
+    transaction: {
+      id: cleanId,
+      fecha: txDate,
+      hora: txTime,
+      tipo: type,
+      desc: description,
+      cat: category,
+      monto: round(amount),
+      currency,
+      paymentMethod,
+      paymentDueDate,
+      cardName,
+    },
   };
 }
 

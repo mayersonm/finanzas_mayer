@@ -47,6 +47,13 @@ export interface Budget {
   gasto: number;
 }
 
+export interface DashboardUser {
+  chatId: string;
+  label: string;
+  transactions: number;
+  lastActivity?: string;
+}
+
 export interface BudgetRule {
   budgetCategory: string;
   includedCategory: string;
