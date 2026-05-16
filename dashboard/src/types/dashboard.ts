@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'analisis' | 'metas' | 'configuracion';
+export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'analisis' | 'metas' | 'salud' | 'configuracion';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {
@@ -122,6 +122,28 @@ export interface AppSettingsData {
   config: AppSettingsConfig;
   secrets: Record<string, boolean>;
   updatedAt?: string;
+  error?: string;
+}
+
+export interface HealthCheck {
+  id: string;
+  label: string;
+  status: 'ok' | 'warning' | 'error' | string;
+  message: string;
+}
+
+export interface SystemHealthData {
+  ok?: boolean;
+  status: 'ok' | 'warning' | 'error' | string;
+  summary: {
+    total: number;
+    ok: number;
+    warnings: number;
+    errors: number;
+    latencyMs: number;
+  };
+  checks: HealthCheck[];
+  checkedAt?: string;
   error?: string;
 }
 

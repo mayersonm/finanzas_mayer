@@ -3,6 +3,7 @@ import {
   RiDashboardLine,
   RiFileList3Line,
   RiFundsBoxLine,
+  RiPulseLine,
   RiSettings3Line,
   RiWallet3Line,
 } from '@remixicon/react';
@@ -14,5 +15,6 @@ export const tabs: DashboardTab[] = [
   { id: 'compromisos', label: 'Compromisos', icon: RiBankCardLine },
   { id: 'analisis', label: 'Analisis', icon: RiFundsBoxLine },
   { id: 'metas', label: 'Metas', icon: RiWallet3Line },
+  { id: 'salud', label: 'Salud', icon: RiPulseLine },
   { id: 'configuracion', label: 'Config', icon: RiSettings3Line },
 ];
