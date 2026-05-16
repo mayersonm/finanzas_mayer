@@ -200,13 +200,15 @@ function dashReadTransactions_(params) {
       const fecha = dashDate_(row[0], 'yyyy-MM-dd');
       if (!fecha) return null;
 
+      const desc = String(row[3] || 'Sin descripcion');
+
       return {
         id: String(index + 2),
         fecha: fecha,
         hora: dashDate_(row[1], 'HH:mm') || '00:00',
         tipo: String(row[2] || '').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto',
-        desc: String(row[3] || 'Sin descripcion'),
-        cat: String(row[4] || 'otro').toLowerCase(),
+        desc: desc,
+        cat: normalizarCat(row[4] || 'otro', desc),
         monto: dashRound_(Math.abs(parseFloat(row[5]) || 0)),
         currency: normalizarMoneda_(row[10]) || 'PEN',
         paymentMethod: dashPaymentMethod_(row[7]),
@@ -244,7 +246,7 @@ function dashReadBudgets_(params, categorias) {
       return {
         cat: dashTitle_(cat),
         limite: dashRound_(limit),
-        gasto: dashRound_(spending[cat.toLowerCase()] || 0),
+        gasto: dashRound_(gastoPresupuestoPorCategoria_(spending, cat)),
       };
     })
     .filter(Boolean);

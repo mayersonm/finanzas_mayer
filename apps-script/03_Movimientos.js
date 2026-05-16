@@ -300,7 +300,7 @@ function mostrarPresupuestos(chatId) {
     data.forEach(r => {
         const cat = r[1];
         const limite = parseFloat(r[2]);
-        const gasto = gastosCat[cat.toLowerCase()] || 0;
+        const gasto = gastoPresupuestoPorCategoria_(gastosCat, cat);
         const pct = Math.min(Math.round((gasto / limite) * 100), 100);
         const estado = pct >= 100 ? '🔴' : pct >= 80 ? '🟡' : '🟢';
         msg += `${estado} *${capitalizar(cat)}*
@@ -318,24 +318,26 @@ function mostrarPresupuestos(chatId) {
 
 function verificarPresupuesto(chatId, cat) {
   const sheet = getOrCreateSheet('Presupuestos', ['ChatID','Categoría','Límite']);
+  const catNormalizada = normalizarCat(cat);
   const fila  = sheet.getDataRange().getValues().slice(1)
-    .find(r => String(r[0]) === chatId && r[1].toLowerCase() === cat.toLowerCase());
+    .find(r => String(r[0]) === chatId && categoriasParaPresupuesto_(r[1]).indexOf(catNormalizada) >= 0);
 
   if (!fila) return;
 
+  const presupuestoCat = normalizarCat(fila[1]);
   const limite    = parseFloat(fila[2]);
   const mes       = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
   const porCat    = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {}; // ← fix
-  const gasto     = porCat[cat.toLowerCase()] || 0;
+  const gasto     = gastoPresupuestoPorCategoria_(porCat, presupuestoCat);
   const pct       = Math.round((gasto / limite) * 100);
 
   if (pct >= 100) {
     sendMessage(chatId,
       `🔴 *¡Presupuesto superado!*\n` +
-      `${capitalizar(cat)}: S/ ${gasto.toFixed(2)} / S/ ${limite.toFixed(2)}`, true);
+      `${capitalizar(presupuestoCat)}: S/ ${gasto.toFixed(2)} / S/ ${limite.toFixed(2)}`, true);
   } else if (pct >= 80) {
     sendMessage(chatId,
-      `🟡 *Alerta:* llevas el ${pct}% de ${capitalizar(cat)}\n` +
+      `🟡 *Alerta:* llevas el ${pct}% de ${capitalizar(presupuestoCat)}\n` +
       `S/ ${gasto.toFixed(2)} de S/ ${limite.toFixed(2)}`, true);
   }
 }

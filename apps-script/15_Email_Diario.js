@@ -130,36 +130,26 @@ function construirHtmlEmail_(data) {
     ? data.presupuestos.map(function (p) {
         const pct = p.limite > 0 ? Math.min(Math.round((p.gasto / p.limite) * 100), 100) : 0;
         const color = pct >= 100 ? '#dc2626' : pct >= 80 ? '#d97706' : '#16a34a';
-        return [
-          '<div style="margin:10px 0 14px">',
-          '<div style="display:flex;justify-content:space-between;font-size:13px">',
-          '<strong>' + escEmail_(capitalizar(p.cat)) + '</strong>',
-          '<span>' + fmtEmail_(p.gasto) + ' / ' + fmtEmail_(p.limite) + '</span>',
-          '</div>',
-          '<div style="height:8px;background:#e5e7eb;border-radius:999px;margin-top:6px;overflow:hidden">',
-          '<div style="width:' + pct + '%;height:8px;background:' + color + ';border-radius:999px"></div>',
-          '</div>',
-          '<div style="font-size:12px;color:' + color + ';margin-top:4px">' + pct + '% usado</div>',
-          '</div>',
-        ].join('');
+        return bloqueAvanceEmail_(
+          capitalizar(p.cat),
+          fmtEmail_(p.gasto) + ' / ' + fmtEmail_(p.limite),
+          pct,
+          color,
+          pct + '% usado'
+        );
       }).join('')
     : '<p style="color:#6b7280;margin:0">Sin presupuestos configurados.</p>';
 
   const metasHtml = data.metas.length
     ? data.metas.map(function (m) {
         const pct = m.objetivo > 0 ? Math.min(Math.round((m.ahorrado / m.objetivo) * 100), 100) : 0;
-        return [
-          '<div style="margin:10px 0 14px">',
-          '<div style="display:flex;justify-content:space-between;font-size:13px">',
-          '<strong>' + escEmail_(capitalizar(m.nombre)) + '</strong>',
-          '<span>' + fmtEmail_(m.ahorrado) + ' / ' + fmtEmail_(m.objetivo) + '</span>',
-          '</div>',
-          '<div style="height:8px;background:#e5e7eb;border-radius:999px;margin-top:6px;overflow:hidden">',
-          '<div style="width:' + pct + '%;height:8px;background:#2563eb;border-radius:999px"></div>',
-          '</div>',
-          '<div style="font-size:12px;color:#2563eb;margin-top:4px">' + pct + '% completado</div>',
-          '</div>',
-        ].join('');
+        return bloqueAvanceEmail_(
+          capitalizar(m.nombre),
+          fmtEmail_(m.ahorrado) + ' / ' + fmtEmail_(m.objetivo),
+          pct,
+          '#2563eb',
+          pct + '% completado'
+        );
       }).join('')
     : '<p style="color:#6b7280;margin:0">Sin metas registradas.</p>';
 
@@ -170,18 +160,18 @@ function construirHtmlEmail_(data) {
     '<div style="font-size:12px;text-transform:uppercase;color:#9ca3af">Resumen financiero diario</div>',
     '<h1 style="margin:6px 0 0;font-size:24px">' + escEmail_(data.fechaLarga) + '</h1>',
     '</div>',
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">',
-    cardEmail_('Ingresos hoy', fmtEmail_(data.totalesHoy.ingresos), '#16a34a'),
-    cardEmail_('Gastos hoy', fmtEmail_(data.totalesHoy.gastos), '#dc2626'),
-    cardEmail_('Balance hoy', fmtSignedEmail_(balanceHoy), colorBalanceHoy),
-    '</div>',
+    cardsEmail_([
+      ['Ingresos hoy', fmtEmail_(data.totalesHoy.ingresos), '#16a34a'],
+      ['Gastos hoy', fmtEmail_(data.totalesHoy.gastos), '#dc2626'],
+      ['Balance hoy', fmtSignedEmail_(balanceHoy), colorBalanceHoy],
+    ]),
     seccionEmail_('Movimientos de hoy', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse">' + txRows + '</table>'),
     seccionEmail_('Gastos por categoria', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse">' + categoriasRows + '</table>'),
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0">',
-    cardEmail_('Ingresos ' + data.nombreMes, fmtEmail_(data.totalesMes.ingresos), '#16a34a'),
-    cardEmail_('Gastos ' + data.nombreMes, fmtEmail_(data.totalesMes.gastos), '#dc2626'),
-    cardEmail_('Balance mes', fmtSignedEmail_(balanceMes), colorBalanceMes),
-    '</div>',
+    cardsEmail_([
+      ['Ingresos ' + data.nombreMes, fmtEmail_(data.totalesMes.ingresos), '#16a34a'],
+      ['Gastos ' + data.nombreMes, fmtEmail_(data.totalesMes.gastos), '#dc2626'],
+      ['Balance mes', fmtSignedEmail_(balanceMes), colorBalanceMes],
+    ]),
     seccionEmail_('Presupuestos', presupuestosHtml),
     seccionEmail_('Metas', metasHtml),
     '<p style="font-size:12px;color:#6b7280;text-align:center;margin-top:18px">Enviado automaticamente por tu bot de finanzas.</p>',
@@ -208,6 +198,38 @@ function seccionEmail_(title, content) {
   ].join('');
 }
 
+function cardsEmail_(items) {
+  const width = Math.floor(100 / Math.max(items.length, 1));
+  const cells = items.map(function (item) {
+    return [
+      '<td width="' + width + '%" valign="top" style="padding:0 6px 12px 6px">',
+      cardEmail_(item[0], item[1], item[2]),
+      '</td>',
+    ].join('');
+  }).join('');
+
+  return '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 4px"><tr>' + cells + '</tr></table>';
+}
+
+function bloqueAvanceEmail_(label, value, pct, color, caption) {
+  const safePct = Math.max(0, Math.min(Math.round(Number(pct) || 0), 100));
+
+  return [
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:10px 0 14px">',
+    '<tr>',
+    '<td style="font-size:13px;font-weight:700;color:#111827;padding:0 12px 6px 0">' + escEmail_(label) + '</td>',
+    '<td align="right" style="font-size:13px;color:#111827;padding:0 0 6px 12px;white-space:nowrap">' + escEmail_(value) + '</td>',
+    '</tr>',
+    '<tr><td colspan="2" style="padding:0">',
+    '<div style="height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden">',
+    '<div style="width:' + safePct + '%;height:8px;background:' + color + ';border-radius:999px"></div>',
+    '</div>',
+    '</td></tr>',
+    '<tr><td colspan="2" style="font-size:12px;color:' + color + ';padding-top:4px">' + escEmail_(caption) + '</td></tr>',
+    '</table>',
+  ].join('');
+}
+
 function calcularTotalesEmail_(txs) {
   return txs.reduce(function (acc, r) {
     const monto = parseFloat(r[5]) || 0;
@@ -222,7 +244,7 @@ function agruparGastosPorCategoriaEmail_(txs) {
 
   txs.forEach(function (r) {
     if (r[2] !== 'gasto') return;
-    const cat = String(r[4] || 'otro').toLowerCase();
+    const cat = normalizarCat(r[4] || 'otro', r[3]);
     map[cat] = (map[cat] || 0) + (parseFloat(r[5]) || 0);
   });
 
@@ -250,7 +272,7 @@ function obtenerPresupuestosEmail_(chatId, mesKey) {
       return {
         cat: cat,
         limite: parseFloat(r[2]) || 0,
-        gasto: gastos[cat] || 0,
+        gasto: gastoPresupuestoPorCategoria_(gastos, cat),
       };
     })
     .filter(function (p) {
