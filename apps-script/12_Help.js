@@ -66,6 +66,8 @@ function sendHelp(chatId) {
     '• 💼 `balance`     - saldo total',
     '• 🧮 `reales`      - fijos + presupuesto',
     '• 📋 `ultimos`     - ultimos movimientos',
+    '• 🗑️ `eliminar 1`  - borrar un movimiento de `ultimos`',
+    '• 🗑️ `eliminar ultimo` - borrar el ultimo movimiento',
     '• 🏷️ `categoria 1 supermercado` - corregir categoria',
     '• 💳 `pago ultimo credito`      - corregir ultimo movimiento',
     '• 💵 `pago 1 debito`            - corregir por numero de `ultimos`',

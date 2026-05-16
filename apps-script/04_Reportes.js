@@ -864,7 +864,7 @@ function procesarFotoRecibo(chatId, msg) {
       `${lineasPagoMensaje_(pago)}\n` +
       `📅 ${fecha}\n\n` +
       (reciboGuardado ? `🧾 Foto guardada en el dashboard\n\n` : `⚠️ El gasto se registró, pero la foto no se pudo adjuntar al dashboard.\n\n`) +
-      `_¿El dato es incorrecto? Elimínalo con \`ultimos\` y agrégalo manualmente._`,
+      `_¿El dato es incorrecto? Usa \`ultimos\` y luego \`eliminar 1\`._`,
       true
     );
 

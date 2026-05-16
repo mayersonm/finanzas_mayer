@@ -56,6 +56,9 @@ button {
 :root[data-theme="light"] .bg-slate-950\/70,
 :root[data-theme="light"] .bg-slate-950,
 :root[data-theme="light"] .bg-slate-900\/70,
+:root[data-theme="light"] .bg-slate-900\/80,
+:root[data-theme="light"] .bg-slate-900\/60,
+:root[data-theme="light"] .bg-slate-900\/40,
 :root[data-theme="light"] .bg-slate-900,
 :root[data-theme="light"] .bg-slate-800,
 :root[data-theme="light"] .bg-slate-800\/70 {
@@ -75,4 +78,59 @@ button {
 :root[data-theme="light"] .text-slate-300,
 :root[data-theme="light"] .text-slate-400 {
   color: rgb(71, 85, 105) !important;
+}
+
+:root[data-theme="light"] .text-slate-500,
+:root[data-theme="light"] .text-slate-600 {
+  color: rgb(100, 116, 139) !important;
+}
+
+:root[data-theme="light"] .text-emerald-100,
+:root[data-theme="light"] .text-emerald-200,
+:root[data-theme="light"] .text-emerald-300 {
+  color: rgb(4, 120, 87) !important;
+}
+
+:root[data-theme="light"] .text-cyan-100,
+:root[data-theme="light"] .text-cyan-200,
+:root[data-theme="light"] .text-cyan-300 {
+  color: rgb(14, 116, 144) !important;
+}
+
+:root[data-theme="light"] .text-amber-100,
+:root[data-theme="light"] .text-amber-200,
+:root[data-theme="light"] .text-amber-300 {
+  color: rgb(180, 83, 9) !important;
+}
+
+:root[data-theme="light"] .text-rose-100,
+:root[data-theme="light"] .text-rose-200,
+:root[data-theme="light"] .text-rose-300 {
+  color: rgb(190, 18, 60) !important;
+}
+
+:root[data-theme="light"] input {
+  background-color: rgb(255, 255, 255) !important;
+  border-color: rgb(203, 213, 225) !important;
+  color: rgb(15, 23, 42) !important;
+}
+
+:root[data-theme="light"] input::placeholder {
+  color: rgb(100, 116, 139) !important;
+}
+
+:root[data-theme="light"] table,
+:root[data-theme="light"] thead,
+:root[data-theme="light"] tbody,
+:root[data-theme="light"] tr {
+  color: rgb(15, 23, 42);
+}
+
+:root[data-theme="light"] th,
+:root[data-theme="light"] td {
+  border-color: rgb(226, 232, 240) !important;
+}
+
+:root[data-theme="light"] .bg-slate-950\/85 {
+  background-color: rgba(15, 23, 42, 0.58) !important;
 }

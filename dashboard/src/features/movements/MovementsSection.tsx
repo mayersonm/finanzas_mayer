@@ -5,9 +5,11 @@ import type { DashboardData } from '../../types/dashboard';
 export function MovementsSection({
   data,
   authToken,
+  onDeleted,
 }: {
   data: DashboardData;
   authToken?: string | null;
+  onDeleted?: () => void;
 }) {
   return (
     <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
@@ -18,7 +20,7 @@ export function MovementsSection({
         </div>
         <Badge color="emerald">{data.mes}</Badge>
       </div>
-      <TransactionsTable transactions={data.transacciones} authToken={authToken} />
+      <TransactionsTable transactions={data.transacciones} authToken={authToken} onDeleted={onDeleted} />
     </Card>
   );
 }

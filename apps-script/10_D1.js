@@ -266,6 +266,50 @@ function actualizarPagoD1(tx) {
   }
 }
 
+function eliminarTransaccionD1(tx) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiUrl = props.getProperty('d1_api_url');
+    const adminKey = props.getProperty('d1_admin_key');
+
+    if (!apiUrl || !adminKey) {
+      Logger.log('Eliminar D1 omitido: faltan d1_api_url o d1_admin_key');
+      return false;
+    }
+
+    const payload = {
+      id: tx.id || crearIdTransaccionD1_(tx),
+      chat_id: String(tx.chatId),
+      fecha: tx.fecha,
+      hora: tx.hora,
+      tipo: tx.tipo,
+      desc: tx.desc,
+      cat: String(tx.cat || 'otro').toLowerCase(),
+      monto: Number(tx.monto),
+      currency: normalizarMoneda_(tx.currency || tx.moneda) || 'PEN',
+    };
+
+    const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/transactions/delete', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-admin-key': adminKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+
+    const code = resp.getResponseCode();
+    if (code < 200 || code >= 300) {
+      Logger.log('Error eliminar D1 HTTP ' + code + ': ' + resp.getContentText());
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    Logger.log('Error eliminarTransaccionD1: ' + err);
+    return false;
+  }
+}
+
 function cmdD1Estado(chatId) {
   if (!esAdminD1_(chatId)) {
     return sendMessage(chatId, 'No autorizado.');

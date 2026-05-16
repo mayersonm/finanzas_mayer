@@ -148,6 +148,70 @@ function cmdCategoria(chatId, text) {
     );
 }
 
+// ---- ELIMINAR MOVIMIENTO -----------------------------------
+// Ejemplos:
+//   eliminar ultimo
+//   eliminar 1
+// Usa la numeracion que muestra el comando "ultimos".
+function cmdEliminarMovimiento(chatId, text) {
+    const match = String(text || '').match(/^(?:eliminar|borrar)\s+(ultimo|último|last|\d+)$/i);
+    if (!match) {
+        return sendMessage(
+            chatId,
+            '❌ Formato: `eliminar ultimo` o `eliminar 1`.\n\nUsa `ultimos` para ver la numeración.',
+            true
+        );
+    }
+
+    const ultimos = obtenerUltimosConFila_(chatId, 5);
+    if (!ultimos.length) {
+        return sendMessage(chatId, '📭 No tienes movimientos para eliminar.', true);
+    }
+
+    const ref = String(match[1]).toLowerCase();
+    const index = (ref === 'ultimo' || ref === 'último' || ref === 'last')
+        ? 0
+        : parseInt(ref, 10) - 1;
+
+    if (isNaN(index) || index < 0 || index >= ultimos.length) {
+        return sendMessage(chatId, '❌ Ese número no está en `ultimos`. Ej: `eliminar 1`.', true);
+    }
+
+    const item = ultimos[index];
+    const row = item.values;
+    const tx = transaccionDesdeFila_(chatId, row);
+
+    const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
+    sheet.deleteRow(item.rowNumber);
+
+    const d1Ok = eliminarTransaccionD1(tx);
+    const signo = tx.tipo === 'ingreso' ? '📥' : '📤';
+
+    return sendMessage(
+        chatId,
+        `🗑️ *Movimiento eliminado*\n\n` +
+        `${signo} ${tx.desc}\n` +
+        `💵 ${formatoMoneda_(tx.monto, tx.currency)}\n` +
+        `🏷️ ${capitalizar(tx.cat)}\n` +
+        `📅 ${tx.fecha} ${tx.hora}\n\n` +
+        (d1Ok ? `_Eliminado en Sheets y D1._` : `_Eliminado en Sheets. D1 no respondió, puede aparecer temporalmente en el dashboard._`),
+        true
+    );
+}
+
+function transaccionDesdeFila_(chatId, row) {
+    return {
+        chatId: chatId,
+        fecha: formatearFechaTx_(row[0]),
+        hora: formatearHoraTx_(row[1]),
+        tipo: String(row[2] || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto',
+        desc: String(row[3] || 'Sin descripcion'),
+        cat: String(row[4] || 'otro').toLowerCase(),
+        monto: parseFloat(row[5]) || 0,
+        currency: normalizarMoneda_(row[10]) || 'PEN',
+    };
+}
+
 function obtenerUltimosConFila_(chatId, limit) {
     const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
     if (!sheet || sheet.getLastRow() < 2) return [];
