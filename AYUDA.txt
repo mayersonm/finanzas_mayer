@@ -1,0 +1,22 @@
+cd d1-api
+npm ci
+npx wrangler d1 migrations apply finanzas_mayeson --remote
+npm run deploy
+cd ..
+
+cd dashboard
+npm ci
+$env:VITE_GAS_API_URL="https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard"
+npm run build
+npx wrangler pages deploy dist --project-name finanzas-dashboard --branch main
+cd ..
+
+cd apps-script
+npx clasp push -f
+npx clasp deploy -i AKfycby96cGWN27al7L34RA6uCfoysYjuGNcMBX3Gzx3KWM1XP-35NL2J1nYe8bxOz5UIs8j -d "actualizacion"
+cd ..
+
+git status
+git add .
+git commit -m "actualizacion general"
+git push origin main
