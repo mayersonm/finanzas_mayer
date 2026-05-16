@@ -69,10 +69,18 @@ function handleDashboardApi(e) {
       return dashJson_(dashStats_(params));
     }
 
+    if (action === 'config') {
+      return dashJson_(dashConfig_());
+    }
+
+    if (action === 'update_config') {
+      return dashJson_(dashUpdateConfig_(params));
+    }
+
     return dashJson_({
       ok: false,
       error: 'Accion no valida',
-      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats'],
+      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config'],
     });
   } catch (err) {
     Logger.log('Dashboard API error: ' + (err && err.stack ? err.stack : err));
@@ -166,6 +174,7 @@ function dashStats_(params) {
 
 function dashHealth_() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
+  const props = PropertiesService.getScriptProperties();
 
   return {
     ok: true,
@@ -180,7 +189,69 @@ function dashHealth_() {
       cierresMensuales: Boolean(ss.getSheetByName('CierresMensuales')),
     },
     emailConfig: dashEmailConfig_(),
+    services: {
+      telegramToken: Boolean(props.getProperty('telegram_bot_token')),
+      workerUrl: Boolean(props.getProperty('worker_url')),
+      claudeApiKey: Boolean(props.getProperty('claude_api_key')),
+      claudeApiUrl: Boolean(props.getProperty('claude_api_url')),
+      d1ApiUrl: Boolean(props.getProperty('d1_api_url')),
+      d1AdminKey: Boolean(props.getProperty('d1_admin_key')),
+    },
     checkedAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
+  };
+}
+
+function dashConfig_() {
+  const props = PropertiesService.getScriptProperties();
+
+  return {
+    ok: true,
+    config: {
+      creditCutoffDay: props.getProperty('credit_cutoff_day') || props.getProperty('credito_corte_dia') || '25',
+      creditDueDay: props.getProperty('credit_due_day') || props.getProperty('credito_pago_dia') || '10',
+      creditCardName: props.getProperty('credit_card_name') || props.getProperty('credito_tarjeta') || '',
+      receiptImageMaxBytes: props.getProperty('receipt_image_max_bytes') || '921600',
+      claudeModel: props.getProperty('claude_model') || 'claude-haiku-4-5-20251001',
+      claudeApiUrl: dashMaskUrl_(props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages'),
+      financeEmailTo: props.getProperty('finance_email_to') || '',
+      dailyEmailTo: props.getProperty('daily_email_to') || props.getProperty('finance_email_to') || '',
+      monthlyEmailTo: props.getProperty('monthly_email_to') || props.getProperty('finance_email_to') || '',
+      yearlyEmailTo: props.getProperty('yearly_email_to') || props.getProperty('finance_email_to') || '',
+    },
+    secrets: {
+      telegramBotToken: Boolean(props.getProperty('telegram_bot_token')),
+      dashboardApiKey: Boolean(props.getProperty('dashboard_api_key')),
+      claudeApiKey: Boolean(props.getProperty('claude_api_key')),
+      d1AdminKey: Boolean(props.getProperty('d1_admin_key')),
+      d1ApiUrl: Boolean(props.getProperty('d1_api_url')),
+      workerUrl: Boolean(props.getProperty('worker_url')),
+    },
+    updatedAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
+  };
+}
+
+function dashUpdateConfig_(params) {
+  const props = PropertiesService.getScriptProperties();
+  const updates = {};
+
+  dashSetIntProp_(updates, 'credit_cutoff_day', params.creditCutoffDay, 1, 31);
+  dashSetIntProp_(updates, 'credit_due_day', params.creditDueDay, 1, 31);
+  dashSetIntProp_(updates, 'receipt_image_max_bytes', params.receiptImageMaxBytes, 200000, 3000000);
+  dashSetTextProp_(updates, 'credit_card_name', params.creditCardName, 80);
+  dashSetTextProp_(updates, 'claude_model', params.claudeModel, 120);
+  dashSetEmailProp_(updates, 'finance_email_to', params.financeEmailTo);
+  dashSetEmailProp_(updates, 'daily_email_to', params.dailyEmailTo);
+  dashSetEmailProp_(updates, 'monthly_email_to', params.monthlyEmailTo);
+  dashSetEmailProp_(updates, 'yearly_email_to', params.yearlyEmailTo);
+
+  Object.keys(updates).forEach(function (key) {
+    props.setProperty(key, updates[key]);
+  });
+
+  return {
+    ok: true,
+    saved: Object.keys(updates),
+    config: dashConfig_().config,
   };
 }
 
@@ -661,6 +732,41 @@ function dashMaskEmail_(email) {
   const domain = parts[1];
   const visible = user.length <= 2 ? user.charAt(0) : user.slice(0, 2);
   return visible + '***@' + domain;
+}
+
+function dashMaskUrl_(url) {
+  const value = String(url || '').trim();
+  if (!value) return '';
+
+  try {
+    const parsed = new URL(value);
+    return parsed.origin + parsed.pathname;
+  } catch (_err) {
+    return value.replace(/[?].*$/, '');
+  }
+}
+
+function dashSetTextProp_(updates, key, value, maxLength) {
+  if (typeof value === 'undefined') return;
+  updates[key] = String(value || '').trim().slice(0, maxLength);
+}
+
+function dashSetIntProp_(updates, key, value, min, max) {
+  if (typeof value === 'undefined') return;
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed) || parsed < min || parsed > max) {
+    throw new Error(key + ' debe estar entre ' + min + ' y ' + max);
+  }
+  updates[key] = String(parsed);
+}
+
+function dashSetEmailProp_(updates, key, value) {
+  if (typeof value === 'undefined') return;
+  const clean = String(value || '').trim().slice(0, 180);
+  if (clean && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+    throw new Error(key + ' no parece un correo valido');
+  }
+  updates[key] = clean;
 }
 
 function dashRound_(value) {

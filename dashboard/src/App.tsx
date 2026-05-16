@@ -14,6 +14,7 @@ const CommitmentsSection = lazy(() => import('./features/commitments/Commitments
 const GoalsSection = lazy(() => import('./features/goals/GoalsSection').then((mod) => ({ default: mod.GoalsSection })));
 const MovementsSection = lazy(() => import('./features/movements/MovementsSection').then((mod) => ({ default: mod.MovementsSection })));
 const OverviewSection = lazy(() => import('./features/overview/OverviewSection').then((mod) => ({ default: mod.OverviewSection })));
+const SettingsSection = lazy(() => import('./features/settings/SettingsSection').then((mod) => ({ default: mod.SettingsSection })));
 
 type Theme = 'light' | 'dark';
 
@@ -259,6 +260,7 @@ export default function App() {
           {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
           {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
           {tab === 'metas' ? <GoalsSection data={data} /> : null}
+          {tab === 'configuracion' ? <SettingsSection authToken={token} /> : null}
         </Suspense>
       </div>
      

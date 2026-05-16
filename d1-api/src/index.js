@@ -65,6 +65,17 @@ export default {
         return json(await changePassword(env, payload));
       }
 
+      if (url.pathname === '/api/settings' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await dashboardSettings(env));
+      }
+
+      if (url.pathname === '/api/settings' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await updateDashboardSettings(env, payload));
+      }
+
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json(await dashboard(env, url.searchParams));
@@ -267,6 +278,85 @@ async function changePassword(env, payload) {
     ok: true,
     token,
     expiresAt,
+  };
+}
+
+async function dashboardSettings(env) {
+  const gasConfig = await gasConfigRequest(env, 'config');
+
+  return {
+    ok: true,
+    config: normalizeSettingsConfig(gasConfig.config || {}),
+    secrets: {
+      ...(gasConfig.secrets || {}),
+      workerGasApiUrl: Boolean(env.GAS_API_URL),
+      workerGasApiKey: Boolean(env.GAS_API_KEY),
+      workerAdminKey: Boolean(env.ADMIN_KEY),
+      workerDefaultChatId: Boolean(env.DEFAULT_CHAT_ID),
+      workerSessionSecret: Boolean(env.SESSION_SECRET),
+      r2Bucket: Boolean(env.RECEIPTS_BUCKET),
+    },
+    updatedAt: gasConfig.updatedAt || new Date().toISOString(),
+  };
+}
+
+async function updateDashboardSettings(env, payload) {
+  const config = normalizeSettingsConfig(payload || {});
+  const params = new URLSearchParams({
+    creditCutoffDay: String(config.creditCutoffDay),
+    creditDueDay: String(config.creditDueDay),
+    creditCardName: config.creditCardName,
+    receiptImageMaxBytes: String(config.receiptImageMaxBytes),
+    claudeModel: config.claudeModel,
+    financeEmailTo: config.financeEmailTo,
+    dailyEmailTo: config.dailyEmailTo,
+    monthlyEmailTo: config.monthlyEmailTo,
+    yearlyEmailTo: config.yearlyEmailTo,
+  });
+
+  const gasConfig = await gasConfigRequest(env, 'update_config', params);
+
+  return {
+    ok: true,
+    saved: gasConfig.saved || [],
+    config: normalizeSettingsConfig(gasConfig.config || config),
+  };
+}
+
+async function gasConfigRequest(env, action, extraParams = new URLSearchParams()) {
+  if (!env.GAS_API_URL || !env.GAS_API_KEY) {
+    throw httpError(400, 'Faltan secrets GAS_API_URL o GAS_API_KEY');
+  }
+
+  const url = new URL(env.GAS_API_URL);
+  url.searchParams.set('action', action);
+  url.searchParams.set('key', env.GAS_API_KEY);
+  for (const [key, value] of extraParams.entries()) {
+    url.searchParams.set(key, value);
+  }
+
+  const response = await fetch(url.toString());
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.ok === false) {
+    throw httpError(502, data.error || 'No se pudo leer configuracion desde Apps Script');
+  }
+
+  return data;
+}
+
+function normalizeSettingsConfig(value) {
+  return {
+    creditCutoffDay: clamp(Number(value.creditCutoffDay || 25), 1, 31),
+    creditDueDay: clamp(Number(value.creditDueDay || 10), 1, 31),
+    creditCardName: String(value.creditCardName || '').slice(0, 80),
+    receiptImageMaxBytes: clamp(Number(value.receiptImageMaxBytes || 921600), 200000, 3000000),
+    claudeModel: String(value.claudeModel || 'claude-haiku-4-5-20251001').slice(0, 120),
+    claudeApiUrl: String(value.claudeApiUrl || '').slice(0, 240),
+    financeEmailTo: String(value.financeEmailTo || '').slice(0, 180),
+    dailyEmailTo: String(value.dailyEmailTo || '').slice(0, 180),
+    monthlyEmailTo: String(value.monthlyEmailTo || '').slice(0, 180),
+    yearlyEmailTo: String(value.yearlyEmailTo || '').slice(0, 180),
   };
 }
 

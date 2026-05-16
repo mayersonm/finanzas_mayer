@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'analisis' | 'metas';
+export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'analisis' | 'metas' | 'configuracion';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {
@@ -102,6 +102,27 @@ export interface EmailConfig {
   daily?: string;
   monthly?: string;
   yearly?: string;
+}
+
+export interface AppSettingsConfig {
+  creditCutoffDay: number;
+  creditDueDay: number;
+  creditCardName: string;
+  receiptImageMaxBytes: number;
+  claudeModel: string;
+  claudeApiUrl?: string;
+  financeEmailTo: string;
+  dailyEmailTo: string;
+  monthlyEmailTo: string;
+  yearlyEmailTo: string;
+}
+
+export interface AppSettingsData {
+  ok?: boolean;
+  config: AppSettingsConfig;
+  secrets: Record<string, boolean>;
+  updatedAt?: string;
+  error?: string;
 }
 
 export interface DashboardData {
