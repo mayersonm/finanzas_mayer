@@ -17,6 +17,8 @@ import { EmptyState } from '../common/EmptyState';
 interface ReceiptPreview {
   url: string;
   name: string;
+  tx: Transaction;
+  receipt: TransactionReceipt;
 }
 
 export function TransactionsTable({
@@ -41,7 +43,10 @@ export function TransactionsTable({
 
   if (!transactions.length) return <EmptyState>Sin movimientos registrados.</EmptyState>;
 
-  async function openReceipt(receipt: TransactionReceipt) {
+  async function openReceipt(tx: Transaction) {
+    const receipt = tx.receipt;
+    if (!receipt) return;
+
     if (!authToken) {
       setError('Sesion no disponible. Vuelve a iniciar sesion.');
       return;
@@ -66,6 +71,8 @@ export function TransactionsTable({
       setPreview({
         url: objectUrl,
         name: receipt.fileName || 'Recibo',
+        tx,
+        receipt,
       });
     } catch (err) {
       console.error('Receipt preview error:', err);
@@ -165,15 +172,18 @@ export function TransactionsTable({
                   </TableCell>
                   <TableCell>
                     {tx.receipt ? (
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1.5 rounded-tremor-default border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-400/60 hover:bg-cyan-500/20 disabled:cursor-wait disabled:opacity-60"
-                        disabled={loadingReceiptId === tx.receipt.id}
-                        onClick={() => void openReceipt(tx.receipt!)}
-                      >
-                        <RiImageLine className="h-4 w-4" aria-hidden="true" />
-                        {loadingReceiptId === tx.receipt.id ? 'Abriendo' : 'Ver'}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-tremor-default border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-400/60 hover:bg-cyan-500/20 disabled:cursor-wait disabled:opacity-60"
+                          disabled={loadingReceiptId === tx.receipt.id}
+                          onClick={() => void openReceipt(tx)}
+                        >
+                          <RiImageLine className="h-4 w-4" aria-hidden="true" />
+                          {loadingReceiptId === tx.receipt.id ? 'Abriendo' : 'Ver'}
+                        </button>
+                        <p className="mt-1 text-xs text-slate-500">{formatBytes(tx.receipt.size)}</p>
+                      </>
                     ) : (
                       <span className="text-xs text-slate-600">-</span>
                     )}
@@ -213,7 +223,9 @@ export function TransactionsTable({
             <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-slate-100">{preview.name}</p>
-                <p className="text-xs text-slate-500">Comprobante adjunto</p>
+                <p className="text-xs text-slate-500">
+                  {formatDate(preview.tx.fecha)} - {formatMoney(preview.tx.monto, preview.tx.currency)}
+                </p>
               </div>
               <button
                 type="button"
@@ -224,16 +236,48 @@ export function TransactionsTable({
                 <RiCloseLine className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
-            <div className="max-h-[82vh] overflow-auto p-3">
-              <img
-                className="mx-auto max-h-[78vh] w-auto max-w-full rounded-tremor-default object-contain"
-                src={preview.url}
-                alt={preview.name}
-              />
+            <div className="grid max-h-[82vh] gap-3 overflow-auto p-3 lg:grid-cols-[18rem_minmax(0,1fr)]">
+              <aside className="rounded-tremor-default border border-slate-800 bg-slate-900/50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Datos leidos</p>
+                <dl className="mt-3 grid gap-3 text-sm">
+                  <Meta label="Descripcion" value={preview.tx.desc} />
+                  <Meta label="Categoria" value={preview.tx.cat} />
+                  <Meta label="Metodo" value={preview.tx.paymentMethod === 'credito' ? 'Credito' : 'Debito'} />
+                  <Meta label="Fecha" value={formatDate(preview.tx.fecha)} />
+                  <Meta label="Monto" value={formatMoney(preview.tx.monto, preview.tx.currency)} />
+                  <Meta label="Archivo" value={preview.receipt.fileName || 'Recibo'} />
+                  <Meta label="Peso" value={formatBytes(preview.receipt.size)} />
+                  <Meta label="Subido" value={preview.receipt.uploadedAt ? preview.receipt.uploadedAt : 'Sin fecha'} />
+                </dl>
+              </aside>
+              <div className="min-h-[20rem] rounded-tremor-default border border-slate-800 bg-slate-900/40 p-2">
+                <img
+                  className="mx-auto max-h-[76vh] w-auto max-w-full rounded-tremor-default object-contain"
+                  src={preview.url}
+                  alt={preview.name}
+                />
+              </div>
             </div>
           </div>
         </div>
       ) : null}
     </>
   );
+}
+
+function Meta({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd className="mt-0.5 break-words font-medium text-slate-100">{value || '-'}</dd>
+    </div>
+  );
+}
+
+function formatBytes(value?: number) {
+  const bytes = Number(value || 0);
+  if (!bytes) return '-';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
