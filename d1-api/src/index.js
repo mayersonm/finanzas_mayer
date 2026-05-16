@@ -322,6 +322,7 @@ async function dashboard(env, params) {
 
   const months = await lastMonths(env, chatId, now);
   const budgets = await budgetsWithSpending(env, chatId, monthKey);
+  const budgetRules = await loadBudgetRules(env, chatId);
   const fixedExpenses = await fixedExpensesList(env, chatId, monthKey);
   const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
@@ -365,6 +366,7 @@ async function dashboard(env, params) {
     mesKey: monthKey,
     transacciones: (latest.results || []).map(txShape),
     categorias: categories,
+    budgetRules: budgetRulesForDashboard(budgetRules),
     meses: months,
     presupuestos: budgets,
     fijos: fixedExpenses,
@@ -2107,6 +2109,15 @@ function budgetCategoryKeysFromRules(rules, category) {
 function budgetSpendWithRules(spending, category, rules) {
   return budgetCategoryKeysFromRules(rules, category)
     .reduce((total, key) => total + Number(spending[key] || 0), 0);
+}
+
+function budgetRulesForDashboard(rules) {
+  return Object.keys(rules || {}).flatMap((budgetCategory) => {
+    return (rules[budgetCategory] || []).map((includedCategory) => ({
+      budgetCategory,
+      includedCategory,
+    }));
+  });
 }
 
 function normalizeCategory(value) {
