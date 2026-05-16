@@ -364,7 +364,7 @@ function generarSugerenciaAnualIA_(data) {
   ].join('\n');
 
   try {
-    const resp = UrlFetchApp.fetch('https://api.synterolink.com/v1/messages', {
+    const resp = fetchIAConReintentos_('https://api.synterolink.com/v1/messages', {
       method: 'post',
       headers: {
         'x-api-key': apiKey,
@@ -377,7 +377,7 @@ function generarSugerenciaAnualIA_(data) {
         messages: [{ role: 'user', content: prompt }],
       }),
       muteHttpExceptions: true,
-    });
+    }, 'email anual /v1/messages');
 
     const result = JSON.parse(resp.getContentText());
     if (result.error) {
