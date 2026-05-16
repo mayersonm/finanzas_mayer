@@ -472,7 +472,7 @@ function cmdAnalisisIA(chatId) {
     const props = PropertiesService.getScriptProperties();
     const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
     const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
-    let resp = UrlFetchApp.fetch(claudeUrl, {
+    let resp = fetchIAConReintentos_(claudeUrl, {
       method : 'post',
       headers: {
         'x-api-key'        : apiKey,
@@ -485,7 +485,7 @@ function cmdAnalisisIA(chatId) {
         messages  : [{ role: 'user', content: prompt }]
       }),
       muteHttpExceptions: true
-    });
+    }, 'analisis /v1/messages');
  
     let raw = resp.getContentText();
     let responseCode = resp.getResponseCode();
@@ -721,7 +721,7 @@ function procesarFotoRecibo(chatId, msg) {
       'Si no puedes leer el monto exacto, estímalo.\n' +
       'Si no es un recibo, responde: {"error": "No es un recibo"}';
 
-    let resp = UrlFetchApp.fetch(claudeUrl, {
+    let resp = fetchIAConReintentos_(claudeUrl, {
       method : 'post',
       headers: {
         'x-api-key'        : apiKey,
@@ -746,7 +746,7 @@ function procesarFotoRecibo(chatId, msg) {
         }]
       }),
       muteHttpExceptions: true
-    });
+    }, 'recibo /v1/messages');
 
     let rawClaude = resp.getContentText();
     let responseCode = resp.getResponseCode();
@@ -919,6 +919,7 @@ function resumenErrorClaude_(raw) {
 function mensajeErrorClaudeUsuario_(status, raw, contexto) {
   const detalle = resumenErrorClaude_(raw);
   const bloqueoMensajes = status === 403 && /does not allow\s+\/v1\/messages\s+dispatch/i.test(detalle);
+  const proveedorTemporal = [429, 500, 502, 503, 504].indexOf(Number(status)) >= 0;
 
   if (bloqueoMensajes) {
     return '❌ La IA está bloqueada por configuración del proveedor.\n\n' +
@@ -931,12 +932,39 @@ function mensajeErrorClaudeUsuario_(status, raw, contexto) {
       'Si usas SynteroLink, ese grupo debe permitir `/v1/messages`. Si usas Anthropic directo, configura `claude_api_url` con `https://api.anthropic.com/v1/messages`.';
   }
 
+  if (proveedorTemporal) {
+    return '❌ La IA está temporalmente ocupada o no disponible.\n\n' +
+      '*Detalle:* HTTP ' + status + '\n' +
+      '`' + detalle + '`\n\n' +
+      'No parece problema de la foto ni del bot. Espera 1 o 2 minutos y vuelve a intentar.';
+  }
+
   return '❌ La IA no pudo procesar ' + (contexto === 'recibo' ? 'el recibo' : 'la solicitud') + ' en este momento.\n\n' +
     '*Detalle:* HTTP ' + status + '\n' +
     '`' + detalle + '`\n\n' +
     (contexto === 'recibo'
       ? 'Intenta otra foto más clara o agrega el gasto manualmente.'
       : 'Intenta nuevamente más tarde.');
+}
+
+function fetchIAConReintentos_(url, options, label) {
+  const maxIntentos = 3;
+  const retryStatuses = [429, 500, 502, 503, 504];
+  let lastResp = null;
+
+  for (let intento = 1; intento <= maxIntentos; intento++) {
+    lastResp = UrlFetchApp.fetch(url, options);
+    const status = lastResp.getResponseCode();
+
+    if (retryStatuses.indexOf(status) < 0 || intento === maxIntentos) {
+      return lastResp;
+    }
+
+    Logger.log('IA temporalmente no disponible (' + (label || 'request') + ') HTTP ' + status + ', intento ' + intento + '/' + maxIntentos + ': ' + lastResp.getContentText());
+    Utilities.sleep(intento * 1200);
+  }
+
+  return lastResp;
 }
 
 function debeReintentarChatCompletions_(status, raw, claudeUrl) {
@@ -958,7 +986,7 @@ function llamarIAChatCompletions_(apiKey, messagesUrl, model, maxTokens, text, i
     });
   }
 
-  return UrlFetchApp.fetch(chatUrl, {
+  return fetchIAConReintentos_(chatUrl, {
     method: 'post',
     headers: {
       'authorization': 'Bearer ' + apiKey,
@@ -971,7 +999,7 @@ function llamarIAChatCompletions_(apiKey, messagesUrl, model, maxTokens, text, i
       messages: [{ role: 'user', content: content }],
     }),
     muteHttpExceptions: true,
-  });
+  }, 'chat/completions');
 }
 
 function recortarTexto_(text, max) {
@@ -988,7 +1016,7 @@ function diagnosticoClaudeRecibos() {
   if (!apiKey) throw new Error('Falta claude_api_key');
 
   const onePixelPng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
-  const resp = UrlFetchApp.fetch(claudeUrl, {
+  const resp = fetchIAConReintentos_(claudeUrl, {
     method: 'post',
     headers: {
       'x-api-key': apiKey,
@@ -1013,7 +1041,7 @@ function diagnosticoClaudeRecibos() {
       }]
     }),
     muteHttpExceptions: true
-  });
+  }, 'diagnostico recibos');
 
   Logger.log('Claude diagnostico HTTP ' + resp.getResponseCode() + ': ' + resp.getContentText());
   return 'HTTP ' + resp.getResponseCode() + ' - ' + resumenErrorClaude_(resp.getContentText());

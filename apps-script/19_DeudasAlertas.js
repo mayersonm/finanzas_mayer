@@ -167,7 +167,7 @@ function cmdInsightsIA(chatId) {
 
     const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
     const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
-    let resp = UrlFetchApp.fetch(claudeUrl, {
+    let resp = fetchIAConReintentos_(claudeUrl, {
       method: 'post',
       headers: {
         'x-api-key': apiKey,
@@ -180,7 +180,7 @@ function cmdInsightsIA(chatId) {
         messages: [{ role: 'user', content: prompt }],
       }),
       muteHttpExceptions: true,
-    });
+    }, 'insights /v1/messages');
 
     let raw = resp.getContentText();
     let responseCode = resp.getResponseCode();
