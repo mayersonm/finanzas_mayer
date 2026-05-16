@@ -14,6 +14,22 @@ const COLORS = {
   otro: '#6b7280',
 };
 
+const VALID_CATEGORIES = [
+  'comida',
+  'supermercado',
+  'transporte',
+  'servicios',
+  'entretenimiento',
+  'salud',
+  'ropa',
+  'educacion',
+  'salario',
+  'freelance',
+  'inversion',
+  'venta',
+  'otro',
+];
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -52,6 +68,47 @@ export default {
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json(await dashboard(env, url.searchParams));
+      }
+
+      if (url.pathname === '/api/rules' && request.method === 'GET') {
+        await requireDashboardOrAdminAccess(request, env);
+        return json(await rulesList(env, url.searchParams));
+      }
+
+      if (url.pathname === '/api/rules/classify' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await classifyRulePayload(env, payload));
+      }
+
+      if (url.pathname === '/api/rules/budget/keys' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await budgetKeysPayload(env, payload));
+      }
+
+      if (url.pathname === '/api/rules/category' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await upsertCategoryRule(env, payload), 201);
+      }
+
+      if (url.pathname === '/api/rules/category/delete' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await deleteCategoryRule(env, payload));
+      }
+
+      if (url.pathname === '/api/rules/budget' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await upsertBudgetCategoryRule(env, payload), 201);
+      }
+
+      if (url.pathname === '/api/rules/budget/delete' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await deleteBudgetCategoryRule(env, payload));
       }
 
       if (url.pathname === '/api/sync' && request.method === 'POST') {
@@ -289,7 +346,7 @@ async function dashboard(env, params) {
     ingresosMes,
     gastosMes,
     balanceMes: ingresosMes - gastosMes,
-    categories: categories.results || [],
+    categories,
     budgets,
     debts,
     months,
@@ -358,11 +415,189 @@ async function transactions(env, params) {
   };
 }
 
+async function rulesList(env, params) {
+  const chatId = getChatId(env, params);
+  const categoryRows = await env.DB.prepare(`
+    SELECT id, chat_id, keyword, category, priority, active, notes, updated_at
+    FROM category_rules
+    WHERE chat_id IN ('*', ?)
+    ORDER BY
+      CASE WHEN chat_id = ? THEN 0 ELSE 1 END,
+      active DESC,
+      priority DESC,
+      keyword ASC
+  `).bind(chatId, chatId).all();
+
+  const budgetRows = await env.DB.prepare(`
+    SELECT id, chat_id, budget_category, included_category, active, notes, updated_at
+    FROM budget_category_rules
+    WHERE chat_id IN ('*', ?)
+    ORDER BY
+      CASE WHEN chat_id = ? THEN 0 ELSE 1 END,
+      active DESC,
+      budget_category ASC,
+      included_category ASC
+  `).bind(chatId, chatId).all();
+
+  return {
+    ok: true,
+    categoryRules: (categoryRows.results || []).map((row) => ({
+      id: row.id,
+      scope: row.chat_id === '*' ? 'global' : 'personal',
+      keyword: row.keyword,
+      category: row.category,
+      priority: Number(row.priority || 0),
+      active: Boolean(row.active),
+      notes: row.notes || '',
+      updatedAt: row.updated_at || '',
+    })),
+    budgetRules: (budgetRows.results || []).map((row) => ({
+      id: row.id,
+      scope: row.chat_id === '*' ? 'global' : 'personal',
+      budgetCategory: row.budget_category,
+      includedCategory: row.included_category,
+      active: Boolean(row.active),
+      notes: row.notes || '',
+      updatedAt: row.updated_at || '',
+    })),
+  };
+}
+
+async function classifyRulePayload(env, payload) {
+  const chatId = payloadChatId(env, payload);
+  const rawCategory = payload.cat || payload.category || 'otro';
+  const description = payload.desc || payload.description || '';
+  const result = await classifyCategory(env, chatId, rawCategory, description);
+
+  return {
+    ok: true,
+    category: result.category,
+    source: result.source,
+    keyword: result.keyword || '',
+  };
+}
+
+async function budgetKeysPayload(env, payload) {
+  const chatId = payloadChatId(env, payload);
+  const category = normalizeBaseCategory(payload.cat || payload.category || payload.budget_category || payload.budgetCategory || 'otro');
+  const rules = await loadBudgetRules(env, chatId);
+
+  return {
+    ok: true,
+    category,
+    keys: budgetCategoryKeysFromRules(rules, category),
+  };
+}
+
+async function upsertCategoryRule(env, payload) {
+  const chatId = payloadChatId(env, payload);
+  const scope = payload.global === true || payload.scope === 'global' ? '*' : chatId;
+  const keyword = normalizeRuleKeyword(payload.keyword || payload.palabra || payload.word || '');
+  const category = normalizeBaseCategory(payload.category || payload.cat || '');
+  const priority = clamp(Number(payload.priority || 100), 1, 999);
+  const notes = String(payload.notes || payload.nota || '').trim().slice(0, 240);
+
+  if (!keyword) throw httpError(400, 'keyword requerido');
+  if (!category) throw httpError(400, 'categoria invalida');
+
+  const id = `cat:${scope}:${safeRuleId(keyword)}`.slice(0, 180);
+  await env.DB.prepare(`
+    INSERT INTO category_rules (id, chat_id, keyword, category, priority, active, notes, updated_at)
+    VALUES (?, ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(chat_id, keyword) DO UPDATE SET
+      category = excluded.category,
+      priority = excluded.priority,
+      active = 1,
+      notes = excluded.notes,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(id, scope, keyword, category, priority, notes).run();
+
+  return {
+    ok: true,
+    rule: { id, scope: scope === '*' ? 'global' : 'personal', keyword, category, priority, active: true },
+  };
+}
+
+async function deleteCategoryRule(env, payload) {
+  const chatId = payloadChatId(env, payload);
+  const keyword = normalizeRuleKeyword(payload.keyword || payload.palabra || payload.word || '');
+  if (!keyword) throw httpError(400, 'keyword requerido');
+
+  const result = await env.DB.prepare(`
+    UPDATE category_rules
+    SET active = 0, updated_at = CURRENT_TIMESTAMP
+    WHERE keyword = ? AND chat_id IN (?, '*')
+  `).bind(keyword, chatId).run();
+
+  return {
+    ok: true,
+    keyword,
+    deleted: true,
+    changed: result.meta?.changes || 0,
+  };
+}
+
+async function upsertBudgetCategoryRule(env, payload) {
+  const chatId = payloadChatId(env, payload);
+  const scope = payload.global === true || payload.scope === 'global' ? '*' : chatId;
+  const budgetCategory = normalizeBaseCategory(payload.budget_category || payload.budgetCategory || payload.presupuesto || payload.cat || '');
+  const includedCategory = normalizeBaseCategory(payload.included_category || payload.includedCategory || payload.incluye || payload.include || '');
+  const notes = String(payload.notes || payload.nota || '').trim().slice(0, 240);
+
+  if (!budgetCategory || !includedCategory) throw httpError(400, 'categorias invalidas');
+  if (budgetCategory === includedCategory) throw httpError(400, 'La categoria base ya se cuenta sola');
+
+  const id = `budget:${scope}:${budgetCategory}:${includedCategory}`.slice(0, 180);
+  await env.DB.prepare(`
+    INSERT INTO budget_category_rules (id, chat_id, budget_category, included_category, active, notes, updated_at)
+    VALUES (?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(chat_id, budget_category, included_category) DO UPDATE SET
+      active = 1,
+      notes = excluded.notes,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(id, scope, budgetCategory, includedCategory, notes).run();
+
+  return {
+    ok: true,
+    rule: {
+      id,
+      scope: scope === '*' ? 'global' : 'personal',
+      budgetCategory,
+      includedCategory,
+      active: true,
+    },
+  };
+}
+
+async function deleteBudgetCategoryRule(env, payload) {
+  const chatId = payloadChatId(env, payload);
+  const budgetCategory = normalizeBaseCategory(payload.budget_category || payload.budgetCategory || payload.presupuesto || payload.cat || '');
+  const includedCategory = normalizeBaseCategory(payload.included_category || payload.includedCategory || payload.incluye || payload.include || '');
+
+  if (!budgetCategory || !includedCategory) throw httpError(400, 'categorias invalidas');
+
+  const result = await env.DB.prepare(`
+    UPDATE budget_category_rules
+    SET active = 0, updated_at = CURRENT_TIMESTAMP
+    WHERE budget_category = ?
+      AND included_category = ?
+      AND chat_id IN (?, '*')
+  `).bind(budgetCategory, includedCategory, chatId).run();
+
+  return {
+    ok: true,
+    deleted: true,
+    budgetCategory,
+    includedCategory,
+    changed: result.meta?.changes || 0,
+  };
+}
+
 async function insertTransaction(env, payload) {
   const chatId = String(payload.chat_id || env.DEFAULT_CHAT_ID || '').trim();
   if (!chatId) throw httpError(400, 'chat_id requerido');
 
-  const tx = normalizeTransaction(payload, chatId);
+  const tx = await normalizeTransaction(env, payload, chatId);
   await upsertTransaction(env, tx);
   return { ok: true, transaction: tx };
 }
@@ -627,7 +862,7 @@ async function uploadReceipt(env, payload) {
   const txTime = String(payload.hora || payload.tx_time || '').slice(0, 5);
   const type = String(payload.tipo || payload.type || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
   const description = String(payload.desc || payload.description || '').trim();
-  const category = normalizeCategory(payload.cat || payload.category || 'otro', description);
+  const category = (await classifyCategory(env, chatId, payload.cat || payload.category || 'otro', description)).category;
   const amount = parseAmount(payload.monto || payload.amount || 0);
   const receiptId = String(payload.id || `receipt_${(await sha256Hex(`${chatId}|${transactionId}|${fileName}`)).slice(0, 32)}`).slice(0, 180);
   const month = txDate.slice(0, 7) || formatMonth(new Date());
@@ -773,7 +1008,7 @@ async function syncFromGas(env, params) {
 
   let txCount = 0;
   for (const raw of txData.transacciones || []) {
-    await upsertTransaction(env, normalizeTransaction(raw, chatId));
+    await upsertTransaction(env, await normalizeTransaction(env, raw, chatId));
     txCount++;
   }
 
@@ -1002,7 +1237,7 @@ async function upsertGoal(env, chatId, raw) {
 async function upsertFixedExpense(env, chatId, raw) {
   const name = normalizeKey(raw.nombre || raw.name || '');
   const amount = Number(raw.monto || raw.amount || 0);
-  const category = normalizeCategory(raw.cat || raw.category || 'servicios', name);
+  const category = (await classifyCategory(env, chatId, raw.cat || raw.category || 'servicios', name)).category;
   if (!name || amount <= 0) return;
 
   await env.DB.prepare(`
@@ -1122,9 +1357,10 @@ async function categoriesWithSpending(env, chatId, monthKey) {
       AND substr(tx_date, 1, 7) = ?
   `).bind(chatId, monthKey).all();
 
+  const rules = await loadCategoryRules(env, chatId);
   const spending = {};
   for (const row of rows.results || []) {
-    const cat = normalizeCategory(row.cat, row.desc);
+    const cat = classifyCategoryFromLoadedRules(rules, row.cat, row.desc);
     spending[cat] = (spending[cat] || 0) + Number(row.amount || 0);
   }
 
@@ -1152,16 +1388,18 @@ async function budgetsWithSpending(env, chatId, monthKey) {
       AND substr(tx_date, 1, 7) = ?
   `).bind(chatId, monthKey).all();
 
+  const categoryRules = await loadCategoryRules(env, chatId);
+  const budgetRules = await loadBudgetRules(env, chatId);
   const spending = {};
   for (const row of spendingRows.results || []) {
-    const cat = normalizeCategory(row.cat, row.desc);
+    const cat = classifyCategoryFromLoadedRules(categoryRules, row.cat, row.desc);
     spending[cat] = (spending[cat] || 0) + Number(row.amount || 0);
   }
 
   return (rows.results || []).map((row) => ({
     cat: title(row.cat),
     limite: round(row.limite),
-    gasto: round(budgetSpend(spending, row.cat)),
+    gasto: round(budgetSpendWithRules(spending, row.cat, budgetRules)),
   })).sort((a, b) => b.gasto - a.gasto || a.cat.localeCompare(b.cat));
 }
 
@@ -1258,12 +1496,12 @@ async function goalsList(env, chatId) {
   }));
 }
 
-function normalizeTransaction(raw, chatId) {
+async function normalizeTransaction(env, raw, chatId) {
   const fecha = String(raw.fecha || raw.tx_date || '').slice(0, 10);
   const hora = String(raw.hora || raw.tx_time || '00:00').slice(0, 5);
   const tipo = String(raw.tipo || raw.type || '').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
   const desc = String(raw.desc || raw.description || 'Sin descripcion').trim();
-  const cat = normalizeCategory(raw.cat || raw.category || 'otro', desc);
+  const cat = (await classifyCategory(env, chatId, raw.cat || raw.category || 'otro', desc)).category;
   const monto = Math.abs(Number(raw.monto || raw.amount || 0));
   const currency = normalizeCurrency(raw.currency || raw.moneda);
   const rawId = String(raw.id || '').trim();
@@ -1471,6 +1709,11 @@ async function requireDashboardAccess(request, env) {
   throw httpError(401, 'Unauthorized');
 }
 
+async function requireDashboardOrAdminAccess(request, env) {
+  if (hasAdminKey(request, env)) return;
+  return requireDashboardAccess(request, env);
+}
+
 function hasDashboardKey(request, env) {
   const url = new URL(request.url);
   const provided = url.searchParams.get('key') || bearer(request);
@@ -1480,12 +1723,15 @@ function hasDashboardKey(request, env) {
 }
 
 function requireAdminKey(request, env) {
+  if (hasAdminKey(request, env)) return;
+  throw httpError(401, 'Unauthorized');
+}
+
+function hasAdminKey(request, env) {
   const provided = request.headers.get('x-admin-key') || bearer(request);
   const expected = env.ADMIN_KEY;
 
-  if (!expected || provided !== expected) {
-    throw httpError(401, 'Unauthorized');
-  }
+  return Boolean(expected && provided === expected);
 }
 
 function bearer(request) {
@@ -1777,136 +2023,142 @@ function daysBetween(fromDateKey, toDateKey) {
   return Math.round((to - from) / 86400000);
 }
 
-function normalizeCategory(value, description = '') {
-  const rawCategory = normalizeKey(value);
-  const text = `${rawCategory} ${normalizeKey(description)}`.trim();
-
-  if (/(recibo de gas|recibo gas|servicio de gas|servicio gas|gas natural|calidda)/.test(text)) {
-    return 'servicios';
+async function classifyCategory(env, chatId, value, description = '') {
+  const rules = await loadCategoryRules(env, chatId);
+  const match = matchCategoryRule(rules, value, description);
+  if (match) {
+    return {
+      category: match.category,
+      source: match.chat_id === '*' ? 'rule_global' : 'rule_personal',
+      keyword: match.keyword,
+    };
   }
 
-  if (/(gasolina|combustible|gas al carro|gas para carro|gnv|glp|grifo|primax|repsol|pecsa|petroperu)/.test(text) || rawCategory === 'gas') {
-    return 'transporte';
+  return {
+    category: normalizeCategory(value),
+    source: 'fallback',
+    keyword: '',
+  };
+}
+
+async function loadCategoryRules(env, chatId) {
+  const rows = await env.DB.prepare(`
+    SELECT chat_id, keyword, category, priority
+    FROM category_rules
+    WHERE active = 1
+      AND chat_id IN ('*', ?)
+    ORDER BY
+      CASE WHEN chat_id = ? THEN 0 ELSE 1 END,
+      priority DESC,
+      length(keyword) DESC,
+      keyword ASC
+  `).bind(chatId, chatId).all();
+
+  return rows.results || [];
+}
+
+function matchCategoryRule(rules, value, description = '') {
+  const text = normalizeRuleKeyword(`${value || ''} ${description || ''}`);
+  if (!text) return null;
+
+  for (const rule of rules || []) {
+    const keyword = normalizeRuleKeyword(rule.keyword);
+    if (keyword && text.includes(keyword)) return rule;
   }
 
-  if (/(kfc|popeyes|bembos|mcdonalds|mc donald|burger king|pizza hut|dominos|domino s|papa john|comida rapida|fast food|hamburguesa|salchipapa)/.test(text)) {
-    return 'entretenimiento';
+  return null;
+}
+
+function classifyCategoryFromLoadedRules(rules, value, description = '') {
+  const match = matchCategoryRule(rules, value, description);
+  return match ? match.category : normalizeCategory(value);
+}
+
+async function loadBudgetRules(env, chatId) {
+  const rows = await env.DB.prepare(`
+    SELECT chat_id, budget_category, included_category
+    FROM budget_category_rules
+    WHERE active = 1
+      AND chat_id IN ('*', ?)
+    ORDER BY
+      CASE WHEN chat_id = ? THEN 0 ELSE 1 END,
+      budget_category ASC,
+      included_category ASC
+  `).bind(chatId, chatId).all();
+
+  const map = {};
+  for (const row of rows.results || []) {
+    const budgetCategory = normalizeBaseCategory(row.budget_category);
+    const includedCategory = normalizeBaseCategory(row.included_category);
+    if (!budgetCategory || !includedCategory) continue;
+    if (!map[budgetCategory]) map[budgetCategory] = [];
+    if (!map[budgetCategory].includes(includedCategory)) map[budgetCategory].push(includedCategory);
   }
 
-  const direct = {
+  return map;
+}
+
+function budgetCategoryKeysFromRules(rules, category) {
+  const key = normalizeBaseCategory(category);
+  const included = rules[key] || [];
+  return [key].concat(included).filter(Boolean);
+}
+
+function budgetSpendWithRules(spending, category, rules) {
+  return budgetCategoryKeysFromRules(rules, category)
+    .reduce((total, key) => total + Number(spending[key] || 0), 0);
+}
+
+function normalizeCategory(value) {
+  return normalizeBaseCategory(value) || 'otro';
+}
+
+function normalizeBaseCategory(value) {
+  const key = normalizeKey(value);
+  const aliases = {
     alimentacion: 'comida',
     alimento: 'comida',
     alimentos: 'comida',
     comida: 'comida',
-    almuerzo: 'comida',
-    cena: 'comida',
-    desayuno: 'comida',
-    merienda: 'comida',
-    snack: 'comida',
-    cafe: 'comida',
-    restaurant: 'comida',
-    restaurante: 'comida',
     mercado: 'supermercado',
     supermercado: 'supermercado',
-    super: 'supermercado',
-    wong: 'supermercado',
-    metro: 'supermercado',
-    tottus: 'supermercado',
-    makro: 'supermercado',
-    vivanda: 'supermercado',
-    kfc: 'entretenimiento',
-    popeyes: 'entretenimiento',
-    bembos: 'entretenimiento',
-    mcdonalds: 'entretenimiento',
-    pizza: 'entretenimiento',
-    pollo: 'comida',
     transporte: 'transporte',
-    taxi: 'transporte',
-    bus: 'transporte',
-    uber: 'transporte',
-    didi: 'transporte',
-    indrive: 'transporte',
-    gasolina: 'transporte',
-    combustible: 'transporte',
-    carro: 'transporte',
-    peaje: 'transporte',
-    estacionamiento: 'transporte',
     servicios: 'servicios',
     servicio: 'servicios',
-    luz: 'servicios',
-    agua: 'servicios',
-    internet: 'servicios',
-    alquiler: 'servicios',
-    renta: 'servicios',
-    telefono: 'servicios',
-    celular: 'servicios',
-    gas: 'transporte',
     entretenimiento: 'entretenimiento',
-    cine: 'entretenimiento',
-    netflix: 'entretenimiento',
-    spotify: 'entretenimiento',
-    juegos: 'entretenimiento',
-    juego: 'entretenimiento',
-    steam: 'entretenimiento',
-    disney: 'entretenimiento',
     salud: 'salud',
-    medico: 'salud',
-    farmacia: 'salud',
-    doctor: 'salud',
-    clinica: 'salud',
-    medicina: 'salud',
     ropa: 'ropa',
-    vestir: 'ropa',
-    zapatillas: 'ropa',
-    zapatos: 'ropa',
     educacion: 'educacion',
-    curso: 'educacion',
-    cursos: 'educacion',
-    libro: 'educacion',
-    libros: 'educacion',
-    universidad: 'educacion',
     salario: 'salario',
     sueldo: 'salario',
-    trabajo: 'salario',
-    planilla: 'salario',
     freelance: 'freelance',
-    proyecto: 'freelance',
-    cliente: 'freelance',
     inversion: 'inversion',
     venta: 'venta',
     otro: 'otro',
     otros: 'otro',
   };
 
-  if (direct[rawCategory]) return direct[rawCategory];
-
-  const rules = [
-    { cat: 'supermercado', words: ['supermercado', 'mercado', 'wong', 'metro', 'tottus', 'makro', 'vivanda', 'plaza vea'] },
-    { cat: 'entretenimiento', words: ['kfc', 'popeyes', 'bembos', 'mcdonalds', 'mc donald', 'burger king', 'pizza hut', 'dominos', 'papa john', 'comida rapida', 'fast food', 'hamburguesa', 'salchipapa'] },
-    { cat: 'comida', words: ['pollo', 'almuerzo', 'cena', 'desayuno', 'yogurt', 'leche'] },
-    { cat: 'transporte', words: ['taxi', 'uber', 'didi', 'indrive', 'gasolina', 'combustible', 'peaje', 'estacionamiento', 'carro'] },
-    { cat: 'servicios', words: ['internet', 'alquiler', 'renta', 'luz', 'agua', 'telefono', 'celular', 'recibo de gas'] },
-    { cat: 'entretenimiento', words: ['netflix', 'spotify', 'juegos', 'steam', 'cine', 'disney'] },
-    { cat: 'salud', words: ['farmacia', 'medicina', 'doctor', 'clinica', 'medico'] },
-    { cat: 'ropa', words: ['zapatilla', 'zapato', 'camisa', 'polo', 'pantalon'] },
-    { cat: 'educacion', words: ['curso', 'libro', 'universidad', 'clase'] },
-  ];
-
-  for (const rule of rules) {
-    if (rule.words.some((word) => text.includes(word))) return rule.cat;
-  }
-
-  return rawCategory || 'otro';
+  return aliases[key] || (VALID_CATEGORIES.includes(key) ? key : '');
 }
 
-function budgetCategoryKeys(category) {
-  const key = normalizeCategory(category || 'otro');
-  if (key === 'comida') return ['comida', 'supermercado'];
-  return [key || 'otro'];
+function normalizeRuleKeyword(value) {
+  return normalizeKey(value)
+    .replace(/[^a-z0-9ñ\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function budgetSpend(spending, category) {
-  return budgetCategoryKeys(category).reduce((total, key) => total + Number(spending[key] || 0), 0);
+function payloadChatId(env, payload) {
+  const chatId = String(payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  return chatId;
+}
+
+function safeRuleId(value) {
+  return normalizeRuleKeyword(value)
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9ñ-]/g, '')
+    .slice(0, 90) || 'rule';
 }
 
 function title(value) {

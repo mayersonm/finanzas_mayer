@@ -11,7 +11,7 @@ function registrarMovimiento(chatId, match, originalText) {
     const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
     const hora = Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm');
     const pago = resolverPagoMovimiento_(tipo, monedaInfo.texto || '', fecha);
-    const cat = normalizarCat(catTexto, pago.descripcion || monedaInfo.texto);
+    const cat = normalizarCat(catTexto, pago.descripcion || monedaInfo.texto, chatId);
     const desc = pago.descripcion
         ? capitalizar(pago.descripcion)
         : capitalizar(cat);
@@ -87,7 +87,7 @@ function cmdCategoria(chatId, text) {
     }
 
     const ref = String(match[1]).toLowerCase();
-    const nuevaCat = normalizarCat(match[2]);
+    const nuevaCat = normalizarCat(match[2], '', chatId);
     if (!nuevaCat) {
         return sendMessage(chatId, '❌ Categoria no valida.', true);
     }
@@ -249,7 +249,7 @@ function cmdPresupuesto(chatId, text) {
 
     if (parts.length === 1) return mostrarPresupuestos(chatId);
 
-    const cat = normalizarCat(parts[1]);
+    const cat = normalizarCat(parts[1], '', chatId);
     const limit = parseFloat(parts[2]);
 
     if (!cat || isNaN(limit) || limit <= 0) {
@@ -262,7 +262,7 @@ function cmdPresupuesto(chatId, text) {
 
     // Actualiza si ya existe, si no agrega fila nueva
     for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]) === chatId && normalizarCat(data[i][1]) === cat) {
+        if (String(data[i][0]) === chatId && normalizarCat(data[i][1], '', chatId) === cat) {
             sheet.getRange(i + 1, 3).setValue(limit);
             return sendMessage(chatId,
                 `✅ Presupuesto actualizado
@@ -300,7 +300,7 @@ function mostrarPresupuestos(chatId) {
     data.forEach(r => {
         const cat = r[1];
         const limite = parseFloat(r[2]);
-        const gasto = gastoPresupuestoPorCategoria_(gastosCat, cat);
+        const gasto = gastoPresupuestoPorCategoria_(gastosCat, cat, chatId);
         const pct = Math.min(Math.round((gasto / limite) * 100), 100);
         const estado = pct >= 100 ? '🔴' : pct >= 80 ? '🟡' : '🟢';
         msg += `${estado} *${capitalizar(cat)}*
@@ -318,17 +318,17 @@ function mostrarPresupuestos(chatId) {
 
 function verificarPresupuesto(chatId, cat) {
   const sheet = getOrCreateSheet('Presupuestos', ['ChatID','Categoría','Límite']);
-  const catNormalizada = normalizarCat(cat);
+  const catNormalizada = normalizarCat(cat, '', chatId);
   const fila  = sheet.getDataRange().getValues().slice(1)
-    .find(r => String(r[0]) === chatId && categoriasParaPresupuesto_(r[1]).indexOf(catNormalizada) >= 0);
+    .find(r => String(r[0]) === chatId && categoriasParaPresupuesto_(r[1], chatId).indexOf(catNormalizada) >= 0);
 
   if (!fila) return;
 
-  const presupuestoCat = normalizarCat(fila[1]);
+  const presupuestoCat = normalizarCat(fila[1], '', chatId);
   const limite    = parseFloat(fila[2]);
   const mes       = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
   const porCat    = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {}; // ← fix
-  const gasto     = gastoPresupuestoPorCategoria_(porCat, presupuestoCat);
+  const gasto     = gastoPresupuestoPorCategoria_(porCat, presupuestoCat, chatId);
   const pct       = Math.round((gasto / limite) * 100);
 
   if (pct >= 100) {

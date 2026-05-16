@@ -310,6 +310,134 @@ function eliminarTransaccionD1(tx) {
   }
 }
 
+function clasificarCategoriaD1_(cat, desc, chatId) {
+  try {
+    const cleanCat = String(cat || 'otro');
+    const cleanDesc = String(desc || '');
+    const scopeChatId = String(chatId || PropertiesService.getScriptProperties().getProperty('dashboard_chat_id') || '');
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'cat_rule_' + Utilities.base64EncodeWebSafe([scopeChatId, cleanCat, cleanDesc].join('|')).slice(0, 150);
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
+    const result = d1ApiRequest_('/api/rules/classify', {
+      chat_id: scopeChatId,
+      cat: cleanCat,
+      desc: cleanDesc,
+    });
+
+    const category = result && result.ok ? String(result.category || '') : '';
+    if (category) cache.put(cacheKey, category, 600);
+    return category;
+  } catch (err) {
+    Logger.log('Regla categoria D1 omitida: ' + err);
+    return '';
+  }
+}
+
+function categoriasPresupuestoD1_(cat, chatId) {
+  try {
+    const cleanCat = String(cat || 'otro');
+    const scopeChatId = String(chatId || PropertiesService.getScriptProperties().getProperty('dashboard_chat_id') || '');
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'budget_rule_' + Utilities.base64EncodeWebSafe([scopeChatId, cleanCat].join('|')).slice(0, 150);
+    const cached = cache.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    const result = d1ApiRequest_('/api/rules/budget/keys', {
+      chat_id: scopeChatId,
+      category: cleanCat,
+    });
+
+    const keys = result && result.ok && result.keys ? result.keys : [];
+    if (keys.length) cache.put(cacheKey, JSON.stringify(keys), 600);
+    return keys;
+  } catch (err) {
+    Logger.log('Regla presupuesto D1 omitida: ' + err);
+    return [];
+  }
+}
+
+function listarReglasD1_(chatId) {
+  const props = PropertiesService.getScriptProperties();
+  const apiUrl = props.getProperty('d1_api_url');
+  const adminKey = props.getProperty('d1_admin_key');
+  if (!apiUrl || !adminKey) throw new Error('Faltan d1_api_url o d1_admin_key');
+
+  const url = apiUrl.replace(/\/$/, '') + '/api/rules?chat_id=' + encodeURIComponent(String(chatId));
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'get',
+    headers: { 'x-admin-key': adminKey },
+    muteHttpExceptions: true,
+  });
+
+  const code = resp.getResponseCode();
+  const body = JSON.parse(resp.getContentText() || '{}');
+  if (code < 200 || code >= 300 || body.ok === false) {
+    throw new Error(body.error || ('HTTP ' + code));
+  }
+
+  return body;
+}
+
+function guardarReglaCategoriaD1_(chatId, keyword, category) {
+  return d1ApiRequest_('/api/rules/category', {
+    chat_id: String(chatId),
+    keyword: keyword,
+    category: category,
+    priority: 200,
+  });
+}
+
+function eliminarReglaCategoriaD1_(chatId, keyword) {
+  return d1ApiRequest_('/api/rules/category/delete', {
+    chat_id: String(chatId),
+    keyword: keyword,
+  });
+}
+
+function guardarReglaPresupuestoD1_(chatId, budgetCategory, includedCategory) {
+  return d1ApiRequest_('/api/rules/budget', {
+    chat_id: String(chatId),
+    budget_category: budgetCategory,
+    included_category: includedCategory,
+  });
+}
+
+function eliminarReglaPresupuestoD1_(chatId, budgetCategory, includedCategory) {
+  return d1ApiRequest_('/api/rules/budget/delete', {
+    chat_id: String(chatId),
+    budget_category: budgetCategory,
+    included_category: includedCategory,
+  });
+}
+
+function d1ApiRequest_(path, payload) {
+  const props = PropertiesService.getScriptProperties();
+  const apiUrl = props.getProperty('d1_api_url');
+  const adminKey = props.getProperty('d1_admin_key');
+
+  if (!apiUrl || !adminKey) {
+    throw new Error('Faltan d1_api_url o d1_admin_key');
+  }
+
+  const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + path, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-admin-key': adminKey },
+    payload: JSON.stringify(payload || {}),
+    muteHttpExceptions: true,
+  });
+
+  const code = resp.getResponseCode();
+  const body = JSON.parse(resp.getContentText() || '{}');
+  if (code < 200 || code >= 300 || body.ok === false) {
+    throw new Error(body.error || ('HTTP ' + code));
+  }
+
+  return body;
+}
+
 function cmdD1Estado(chatId) {
   if (!esAdminD1_(chatId)) {
     return sendMessage(chatId, 'No autorizado.');

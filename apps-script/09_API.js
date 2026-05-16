@@ -208,7 +208,7 @@ function dashReadTransactions_(params) {
         hora: dashDate_(row[1], 'HH:mm') || '00:00',
         tipo: String(row[2] || '').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto',
         desc: desc,
-        cat: normalizarCat(row[4] || 'otro', desc),
+        cat: normalizarCat(row[4] || 'otro', desc, chatId),
         monto: dashRound_(Math.abs(parseFloat(row[5]) || 0)),
         currency: normalizarMoneda_(row[10]) || 'PEN',
         paymentMethod: dashPaymentMethod_(row[7]),
@@ -246,7 +246,7 @@ function dashReadBudgets_(params, categorias) {
       return {
         cat: dashTitle_(cat),
         limite: dashRound_(limit),
-        gasto: dashRound_(gastoPresupuestoPorCategoria_(spending, cat)),
+        gasto: dashRound_(gastoPresupuestoPorCategoria_(spending, cat, chatId)),
       };
     })
     .filter(Boolean);
