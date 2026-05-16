@@ -73,9 +73,11 @@ export function CommitmentsSection({
         </div>
       </Card>
 
-      <div className="lg:col-span-2">
-        <EmailPanel config={data.emailConfig} />
-      </div>
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+        <div className="lg:col-span-2">
+          <EmailPanel config={data.emailConfig} />
+        </div>
+      </Card>
     </section>
   );
 }
