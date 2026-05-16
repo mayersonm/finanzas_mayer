@@ -47,6 +47,11 @@ export interface Budget {
   gasto: number;
 }
 
+export interface BudgetRule {
+  budgetCategory: string;
+  includedCategory: string;
+}
+
 export interface Goal {
   nombre: string;
   objetivo: number;
@@ -112,6 +117,7 @@ export interface DashboardData {
   mesKey?: string;
   transacciones: Transaction[];
   categorias: CategoryTotal[];
+  budgetRules?: BudgetRule[];
   meses: MonthTotal[];
   presupuestos: Budget[];
   fijos?: FixedExpense[];

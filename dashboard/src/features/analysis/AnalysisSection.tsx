@@ -3,7 +3,26 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { percent } from '../../lib/finance';
 import { formatMoney } from '../../lib/formatters';
 import { categoryColors } from '../../lib/tremorColors';
-import type { DashboardData } from '../../types/dashboard';
+import type { Budget, DashboardData } from '../../types/dashboard';
+
+function key(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function budgetForCategory(data: DashboardData, category: string): Budget | undefined {
+  const categoryKey = key(category);
+  const direct = data.presupuestos.find((item) => key(item.cat) === categoryKey);
+  if (direct) return direct;
+
+  const rule = data.budgetRules?.find((item) => key(item.includedCategory) === categoryKey);
+  if (!rule) return undefined;
+
+  return data.presupuestos.find((item) => key(item.cat) === key(rule.budgetCategory));
+}
 
 export function AnalysisSection({ data }: { data: DashboardData }) {
   const totalCategorias = data.categorias.reduce((total, item) => total + item.monto, 0);
@@ -36,12 +55,16 @@ export function AnalysisSection({ data }: { data: DashboardData }) {
 
       <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
         <Title>Categorias</Title>
-        <Text>Distribucion del gasto actual</Text>
+        <Text>Impacto por categoria y presupuesto</Text>
         <div className="mt-4 space-y-3 sm:mt-5 sm:space-y-4">
           {data.categorias.length ? (
             data.categorias.map((item, index) => {
-              const pct = percent(item.monto, totalCategorias);
+              const budget = budgetForCategory(data, item.cat);
+              const pct = budget ? percent(item.monto, budget.limite) : percent(item.monto, totalCategorias);
               const color = categoryColors[index % categoryColors.length];
+              const detail = budget
+                ? `${pct}% del presupuesto ${budget.cat}`
+                : `${pct}% del gasto categorizado`;
 
               return (
                 <div key={item.cat}>
@@ -50,7 +73,12 @@ export function AnalysisSection({ data }: { data: DashboardData }) {
                     <span className="font-mono text-sm text-slate-100">{formatMoney(item.monto)}</span>
                   </div>
                   <ProgressBar className="mt-2" value={pct} color={color} />
-                  <Text className="mt-1">{pct}% del total</Text>
+                  <Text className="mt-1">{detail}</Text>
+                  {budget ? (
+                    <Text className="mt-0.5 text-xs">
+                      Presupuesto usado: {formatMoney(budget.gasto)} / {formatMoney(budget.limite)}
+                    </Text>
+                  ) : null}
                 </div>
               );
             })
