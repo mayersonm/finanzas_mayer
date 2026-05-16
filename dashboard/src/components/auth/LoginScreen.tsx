@@ -1,5 +1,4 @@
 import type { FormEvent } from 'react';
-import { Badge, Button, Card, Text, Title } from '@tremor/react';
 import { RiShieldKeyholeLine } from '@remixicon/react';
 
 export function LoginScreen({
@@ -17,22 +16,23 @@ export function LoginScreen({
 }) {
   return (
     <main className="grid min-h-screen place-items-center px-3 py-5 sm:px-4 sm:py-8">
-      <Card className="w-full max-w-md rounded-tremor-default border-slate-800 bg-slate-950/80 !p-5 shadow-2xl shadow-black/30 sm:!p-6">
+      <section className="w-full max-w-md rounded-tremor-default border border-slate-800 bg-slate-950/80 p-5 shadow-2xl shadow-black/30 sm:p-6">
         <div className="mb-5 flex items-center justify-between gap-3 sm:mb-6 sm:gap-4">
           <div className="grid h-11 w-11 place-items-center rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 text-sm font-black text-emerald-200 sm:h-12 sm:w-12">
             MF
           </div>
           <div className="flex flex-wrap justify-end gap-2">
-            <Badge color="emerald">D1 en vivo</Badge>
-            <Badge color="cyan">Privado</Badge>
+            <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-200">D1 en vivo</span>
+            <span className="rounded-full bg-cyan-500/15 px-2.5 py-1 text-xs font-semibold text-cyan-200">Privado</span>
           </div>
         </div>
 
-        <Badge color="emerald" icon={RiShieldKeyholeLine}>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-200">
+          <RiShieldKeyholeLine className="h-4 w-4" />
           Acceso seguro
-        </Badge>
-        <Title className="mt-4 text-xl sm:text-2xl">Mayeson Finanzas</Title>
-        <Text className="mt-2">Dashboard personal para revisar gastos, compromisos y metas.</Text>
+        </span>
+        <h1 className="mt-4 text-xl font-semibold text-slate-100 sm:text-2xl">Mayeson Finanzas</h1>
+        <p className="mt-2 text-sm text-slate-400">Dashboard personal para revisar gastos, compromisos y metas.</p>
 
         <form className="mt-6 space-y-4 sm:mt-7" onSubmit={onSubmit}>
           <label className="block text-sm font-semibold text-slate-200" htmlFor="password">
@@ -53,11 +53,14 @@ export function LoginScreen({
               {error}
             </div>
           ) : null}
-          <Button className="w-full" color="emerald" loading={loading} loadingText="Validando..." disabled={!password.trim()}>
-            Entrar
-          </Button>
+          <button
+            className="h-11 w-full rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!password.trim() || loading}
+          >
+            {loading ? 'Validando...' : 'Entrar'}
+          </button>
         </form>
-      </Card>
+      </section>
     </main>
   );
 }
