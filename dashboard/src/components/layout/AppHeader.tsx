@@ -1,7 +1,5 @@
-import { Badge, Button, Card, Text, Title } from '@tremor/react';
 import { RiLockPasswordLine, RiLogoutBoxRLine, RiMoonLine, RiRefreshLine, RiSunLine } from '@remixicon/react';
 import { formatUpdatedAt } from '../../lib/formatters';
-import { statusColor } from '../../lib/tremorColors';
 import type { ApiStatus, DashboardData } from '../../types/dashboard';
 
 export function AppHeader({
@@ -25,39 +23,75 @@ export function AppHeader({
   onTogglePasswordPanel: () => void;
   onLogout: () => void;
 }) {
+  const statusClass = status === 'live' ? 'bg-emerald-500/15 text-emerald-200'
+    : status === 'error' ? 'bg-rose-500/15 text-rose-200'
+      : 'bg-slate-500/15 text-slate-300';
+
   return (
-    <Card className="mb-4 rounded-tremor-default border-slate-800 bg-slate-950/80 !p-4 sm:mb-5 sm:!p-6">
+    <section className="mb-4 rounded-tremor-default border border-slate-800 bg-slate-950/80 p-4 sm:mb-5 sm:p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <Badge color={statusColor(status)}>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass}`}>
               {status === 'live' ? `En vivo${data.source ? ` - ${data.source}` : ''}` : status === 'error' ? 'Error API' : 'Demo'}
-            </Badge>
-            <Badge color="cyan">{data.mesKey || data.mes}</Badge>
+            </span>
+            <span className="rounded-full bg-cyan-500/15 px-2.5 py-1 text-xs font-semibold text-cyan-200">{data.mesKey || data.mes}</span>
           </div>
-          <Title className="text-xl sm:text-3xl">Mayeson Finanzas</Title>
-          <Text className="mt-1 text-xs sm:text-sm">Ultima actualizacion: {loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)}</Text>
+          <h1 className="text-xl font-semibold text-slate-100 sm:text-3xl">Mayeson Finanzas</h1>
+          <p className="mt-1 text-xs text-slate-400 sm:text-sm">Ultima actualizacion: {loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)}</p>
         </div>
 
         <div className="grid gap-2 min-[420px]:grid-cols-4 sm:flex sm:flex-wrap">
-          <Button className="min-w-0" icon={RiRefreshLine} color="emerald" loading={loading} loadingText="Actualizando" onClick={onRefresh}>
-            Actualizar
-          </Button>
-          <Button className="min-w-0" icon={theme === 'dark' ? RiSunLine : RiMoonLine} variant="secondary" color="slate" onClick={onToggleTheme}>
+          <HeaderButton icon={RiRefreshLine} onClick={onRefresh} disabled={loading} tone="primary">
+            {loading ? 'Actualizando' : 'Actualizar'}
+          </HeaderButton>
+          <HeaderButton icon={theme === 'dark' ? RiSunLine : RiMoonLine} onClick={onToggleTheme}>
             {theme === 'dark' ? 'Claro' : 'Oscuro'}
-          </Button>
+          </HeaderButton>
           {isConfigured ? (
             <>
-              <Button className="min-w-0" icon={RiLockPasswordLine} variant="secondary" color="slate" onClick={onTogglePasswordPanel}>
+              <HeaderButton icon={RiLockPasswordLine} onClick={onTogglePasswordPanel}>
                 Clave
-              </Button>
-              <Button className="min-w-0" icon={RiLogoutBoxRLine} variant="light" color="rose" onClick={onLogout}>
+              </HeaderButton>
+              <HeaderButton icon={RiLogoutBoxRLine} onClick={onLogout} tone="danger">
                 Salir
-              </Button>
+              </HeaderButton>
             </>
           ) : null}
         </div>
       </div>
-    </Card>
+    </section>
+  );
+}
+
+function HeaderButton({
+  icon: Icon,
+  children,
+  onClick,
+  disabled,
+  tone = 'secondary',
+}: {
+  icon: typeof RiRefreshLine;
+  children: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: 'primary' | 'secondary' | 'danger';
+}) {
+  const className = tone === 'primary'
+    ? 'border-emerald-400/40 bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+    : tone === 'danger'
+      ? 'border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
+      : 'border-slate-700 bg-slate-900/70 text-slate-200 hover:bg-slate-800';
+
+  return (
+    <button
+      type="button"
+      className={`inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-tremor-default border px-3 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60 ${className}`}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="truncate">{children}</span>
+    </button>
   );
 }

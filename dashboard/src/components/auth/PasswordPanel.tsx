@@ -1,5 +1,4 @@
 import type { FormEvent } from 'react';
-import { Button, Card, Text, Title } from '@tremor/react';
 
 export function PasswordPanel({
   currentPassword,
@@ -27,15 +26,15 @@ export function PasswordPanel({
   onClose: () => void;
 }) {
   return (
-    <Card className="mb-4 ml-auto max-w-xl rounded-tremor-default border-slate-800 bg-slate-950/80 !p-4 sm:mb-5 sm:!p-6">
+    <section className="mb-4 ml-auto max-w-xl rounded-tremor-default border border-slate-800 bg-slate-950/80 p-4 sm:mb-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <Title>Cambiar clave</Title>
-          <Text>Usa minimo 12 caracteres para la nueva clave.</Text>
+          <h2 className="text-lg font-semibold text-slate-100">Cambiar clave</h2>
+          <p className="mt-1 text-sm text-slate-400">Usa minimo 12 caracteres para la nueva clave.</p>
         </div>
-        <Button type="button" variant="light" color="slate" onClick={onClose}>
+        <button type="button" className="rounded-tremor-default border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-900" onClick={onClose}>
           Cerrar
-        </Button>
+        </button>
       </div>
 
       <form className="mt-5 grid gap-3" onSubmit={onSubmit}>
@@ -73,10 +72,14 @@ export function PasswordPanel({
             {success}
           </div>
         ) : null}
-        <Button type="submit" color="emerald" loading={loading} loadingText="Guardando...">
-          Guardar clave
-        </Button>
+        <button
+          type="submit"
+          className="h-11 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60"
+          disabled={loading}
+        >
+          {loading ? 'Guardando...' : 'Guardar clave'}
+        </button>
       </form>
-    </Card>
+    </section>
   );
 }

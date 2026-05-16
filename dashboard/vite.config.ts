@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   build: {
+    modulePreload: false,
     rollupOptions: {
       output: {
         entryFileNames: '[name]-[hash].js',
