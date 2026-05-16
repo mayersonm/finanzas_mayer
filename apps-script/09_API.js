@@ -61,6 +61,10 @@ function handleDashboardApi(e) {
       return dashJson_(dashTransactions_(params));
     }
 
+    if (action === 'delete_tx' || action === 'eliminar_tx') {
+      return dashJson_(dashDeleteTransaction_(params));
+    }
+
     if (action === 'stats') {
       return dashJson_(dashStats_(params));
     }
@@ -68,7 +72,7 @@ function handleDashboardApi(e) {
     return dashJson_({
       ok: false,
       error: 'Accion no valida',
-      validActions: ['health', 'dashboard', 'txs', 'stats'],
+      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats'],
     });
   } catch (err) {
     Logger.log('Dashboard API error: ' + (err && err.stack ? err.stack : err));
@@ -308,6 +312,62 @@ function dashReadFixedExpenses_(params, monthTxs, monthKey) {
     .sort(function (a, b) {
       return b.monto - a.monto;
     });
+}
+
+function dashDeleteTransaction_(params) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName('Transacciones');
+  if (!sheet || sheet.getLastRow() < 2) {
+    return { ok: false, error: 'No hay transacciones para eliminar' };
+  }
+
+  const chatId = dashDashboardChatId_(params);
+  const numericId = parseInt(params.id || params.row || '', 10);
+
+  if (!isNaN(numericId) && numericId >= 2 && numericId <= sheet.getLastRow()) {
+    const row = sheet.getRange(numericId, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (!chatId || String(row[6]).trim() === chatId) {
+      sheet.deleteRow(numericId);
+      return { ok: true, deleted: true, rowNumber: numericId };
+    }
+  }
+
+  const values = sheet.getDataRange().getValues();
+  const target = {
+    fecha: String(params.fecha || '').slice(0, 10),
+    hora: String(params.hora || '00:00').slice(0, 5),
+    tipo: String(params.tipo || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto',
+    desc: String(params.desc || ''),
+    cat: String(params.cat || 'otro').toLowerCase(),
+    monto: parseFloat(params.monto || params.amount || 0) || 0,
+  };
+
+  for (let i = values.length - 1; i >= 1; i--) {
+    const row = values[i];
+    const rowChat = String(row[6]).trim();
+    if (chatId && rowChat !== chatId) continue;
+
+    const rowFecha = dashDate_(row[0], 'yyyy-MM-dd');
+    const rowHora = dashDate_(row[1], 'HH:mm') || '00:00';
+    const rowTipo = String(row[2] || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
+    const rowDesc = String(row[3] || '');
+    const rowCat = String(row[4] || 'otro').toLowerCase();
+    const rowMonto = parseFloat(row[5]) || 0;
+
+    if (
+      rowFecha === target.fecha &&
+      rowHora === target.hora &&
+      rowTipo === target.tipo &&
+      rowDesc === target.desc &&
+      rowCat === target.cat &&
+      Math.abs(rowMonto - target.monto) < 0.005
+    ) {
+      sheet.deleteRow(i + 1);
+      return { ok: true, deleted: true, rowNumber: i + 1 };
+    }
+  }
+
+  return { ok: false, error: 'Transaccion no encontrada en Sheets' };
 }
 
 function dashReadDebts_(params) {

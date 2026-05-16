@@ -101,6 +101,8 @@ function handleMessage(chatId, text) {
   if (lower.startsWith('pagar deuda '))    return cmdDeudas(chatId, text.trim());
   if (lower.startsWith('saltar fijo ')) return cmdFijos(chatId, lower);
   if (lower.startsWith('confirmar eliminar fijo ')) return cmdFijos(chatId, lower);
+  if (lower.startsWith('eliminar '))       return cmdEliminarMovimiento(chatId, lower);
+  if (lower.startsWith('borrar '))         return cmdEliminarMovimiento(chatId, lower);
   if (lower.startsWith('correo '))        return cmdCorreo(chatId, text.trim());
   if (lower.startsWith('email '))         return cmdCorreo(chatId, text.trim().replace(/^email/i, 'correo'));
   

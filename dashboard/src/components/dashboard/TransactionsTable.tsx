@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RiBankCardLine, RiCloseLine, RiImageLine } from '@remixicon/react';
+import { RiBankCardLine, RiCloseLine, RiDeleteBinLine, RiImageLine } from '@remixicon/react';
 import {
   Badge,
   Table,
@@ -22,11 +22,14 @@ interface ReceiptPreview {
 export function TransactionsTable({
   transactions,
   authToken,
+  onDeleted,
 }: {
   transactions: Transaction[];
   authToken?: string | null;
+  onDeleted?: () => void;
 }) {
   const [loadingReceiptId, setLoadingReceiptId] = useState('');
+  const [deletingId, setDeletingId] = useState('');
   const [preview, setPreview] = useState<ReceiptPreview | null>(null);
   const [error, setError] = useState('');
 
@@ -72,10 +75,49 @@ export function TransactionsTable({
     }
   }
 
+  async function deleteTransaction(tx: Transaction) {
+    if (!authToken) {
+      setError('Sesion no disponible. Vuelve a iniciar sesion.');
+      return;
+    }
+
+    if (!tx.id) {
+      setError('Este movimiento no tiene id para eliminar.');
+      return;
+    }
+
+    const ok = window.confirm(`Eliminar "${tx.desc}" por ${formatMoney(tx.monto, tx.currency)}?`);
+    if (!ok) return;
+
+    setDeletingId(tx.id);
+    setError('');
+
+    try {
+      const response = await fetch(apiEndpoint(`transactions/${encodeURIComponent(tx.id)}`), {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      const result = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
+      if (!response.ok || result.ok === false) {
+        throw new Error(result.error || 'No se pudo eliminar');
+      }
+
+      onDeleted?.();
+    } catch (err) {
+      console.error('Delete transaction error:', err);
+      setError('No pude eliminar el movimiento.');
+    } finally {
+      setDeletingId('');
+    }
+  }
+
   return (
     <>
       <div className="-mx-4 mt-3 overflow-x-auto px-4 sm:mx-0 sm:mt-4 sm:px-0">
-        <Table className="min-w-[54rem]">
+        <Table className="min-w-[58rem]">
           <TableHead>
             <TableRow>
               <TableHeaderCell>Fecha</TableHeaderCell>
@@ -84,6 +126,7 @@ export function TransactionsTable({
               <TableHeaderCell>Pago</TableHeaderCell>
               <TableHeaderCell>Foto</TableHeaderCell>
               <TableHeaderCell className="text-right">Monto</TableHeaderCell>
+              <TableHeaderCell className="text-right">Accion</TableHeaderCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -138,6 +181,18 @@ export function TransactionsTable({
                   <TableCell className={`text-right font-mono font-semibold ${isIncome ? 'text-emerald-300' : 'text-rose-300'}`}>
                     {isIncome ? '+' : '-'}
                     {formatMoney(tx.monto, tx.currency)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <button
+                      type="button"
+                      className="inline-grid h-8 w-8 place-items-center rounded-tremor-default border border-rose-500/30 bg-rose-500/10 text-rose-200 transition hover:border-rose-400/60 hover:bg-rose-500/20 disabled:cursor-wait disabled:opacity-60"
+                      disabled={deletingId === tx.id}
+                      onClick={() => void deleteTransaction(tx)}
+                      aria-label={`Eliminar ${tx.desc}`}
+                      title="Eliminar movimiento"
+                    >
+                      <RiDeleteBinLine className="h-4 w-4" aria-hidden="true" />
+                    </button>
                   </TableCell>
                 </TableRow>
               );

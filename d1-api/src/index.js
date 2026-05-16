@@ -18,6 +18,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const receiptFileMatch = url.pathname.match(/^\/api\/receipts\/([^/]+)\/file$/);
+    const transactionMatch = url.pathname.match(/^\/api\/transactions\/([^/]+)$/);
 
     if (request.method === 'OPTIONS') {
       return corsResponse(null, 204);
@@ -67,6 +68,25 @@ export default {
         requireAdminKey(request, env);
         const payload = await request.json();
         return json(await insertTransaction(env, payload), 201);
+      }
+
+      if (transactionMatch && request.method === 'DELETE') {
+        await requireDashboardAccess(request, env);
+        return json(await deleteTransaction(env, {
+          id: decodeURIComponent(transactionMatch[1]),
+          chatId: getChatId(env, url.searchParams),
+          deleteFromGas: true,
+        }));
+      }
+
+      if (url.pathname === '/api/transactions/delete' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await deleteTransaction(env, {
+          id: String(payload.id || payload.transaction_id || payload.transactionId || '').trim(),
+          chatId: String(payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim(),
+          deleteFromGas: false,
+        }));
       }
 
       if (url.pathname === '/api/transactions/category' && request.method === 'POST') {
@@ -355,6 +375,52 @@ async function insertTransaction(env, payload) {
   const tx = normalizeTransaction(payload, chatId);
   await upsertTransaction(env, tx);
   return { ok: true, transaction: tx };
+}
+
+async function deleteTransaction(env, { id, chatId, deleteFromGas = false }) {
+  const cleanId = String(id || '').trim();
+  const cleanChatId = String(chatId || '').trim();
+
+  if (!cleanId) throw httpError(400, 'id requerido');
+  if (!cleanChatId) throw httpError(400, 'chat_id requerido');
+
+  const tx = await env.DB.prepare('SELECT * FROM transactions WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, cleanChatId)
+    .first();
+
+  if (!tx) throw httpError(404, 'Transaccion no encontrada');
+
+  let gasResult = null;
+  if (deleteFromGas) {
+    gasResult = await deleteTransactionFromGas(env, tx);
+  }
+
+  const receipts = await env.DB.prepare('SELECT id, storage, r2_key FROM receipts WHERE transaction_id = ?')
+    .bind(cleanId)
+    .all();
+
+  if (env.RECEIPTS_BUCKET) {
+    for (const receipt of receipts.results || []) {
+      if (receipt.storage === 'r2' && receipt.r2_key) {
+        await env.RECEIPTS_BUCKET.delete(receipt.r2_key).catch(() => undefined);
+      }
+    }
+  }
+
+  await env.DB.prepare('DELETE FROM receipts WHERE transaction_id = ?')
+    .bind(cleanId)
+    .run();
+
+  await env.DB.prepare('DELETE FROM transactions WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, cleanChatId)
+    .run();
+
+  return {
+    ok: true,
+    deleted: true,
+    id: cleanId,
+    gas: gasResult,
+  };
 }
 
 async function updateTransactionCategory(env, payload) {
@@ -775,6 +841,33 @@ async function emailConfigFromGas(env) {
   } catch (_error) {
     return undefined;
   }
+}
+
+async function deleteTransactionFromGas(env, tx) {
+  if (!env.GAS_API_URL || !env.GAS_API_KEY) {
+    return { ok: false, skipped: true, reason: 'GAS_API_URL o GAS_API_KEY no configurado' };
+  }
+
+  const url = new URL(env.GAS_API_URL);
+  url.searchParams.set('action', 'delete_tx');
+  url.searchParams.set('key', env.GAS_API_KEY);
+  url.searchParams.set('chat_id', tx.chat_id);
+  url.searchParams.set('id', tx.id);
+  url.searchParams.set('fecha', tx.tx_date || '');
+  url.searchParams.set('hora', tx.tx_time || '');
+  url.searchParams.set('tipo', tx.type || 'gasto');
+  url.searchParams.set('desc', tx.description || '');
+  url.searchParams.set('cat', tx.category || 'otro');
+  url.searchParams.set('monto', String(tx.amount || 0));
+
+  const response = await fetch(url.toString());
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.ok === false) {
+    throw httpError(502, data.error || 'No se pudo eliminar en Sheets');
+  }
+
+  return data;
 }
 
 async function getAppSetting(env, key) {
@@ -1447,7 +1540,7 @@ function corsResponse(body, status = 200, headers = {}) {
     status,
     headers: {
       'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-methods': 'GET,POST,DELETE,OPTIONS',
       'access-control-allow-headers': 'content-type,authorization,x-admin-key',
       ...headers,
     },

@@ -270,7 +270,7 @@ export default function App() {
 
       <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
         {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} /> : null}
-        {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} /> : null}
+      {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} onDeleted={() => void fetchData()} /> : null}
         {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
         {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
         {tab === 'metas' ? <GoalsSection data={data} /> : null}
