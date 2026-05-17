@@ -64,8 +64,8 @@ export default {
       }
 
       if (url.pathname === '/api/session' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json({ ok: true, authenticated: true });
+        const session = await requireDashboardAccess(request, env);
+        return json({ ok: true, authenticated: true, user: sessionUserShape(session) });
       }
 
       if (url.pathname === '/api/logout' && request.method === 'POST') {
@@ -79,36 +79,36 @@ export default {
       }
 
       if (url.pathname === '/api/settings' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await dashboardSettings(env, url.searchParams));
+        const session = await requireDashboardAccess(request, env);
+        return json(await dashboardSettings(env, url.searchParams, session));
       }
 
       if (url.pathname === '/api/settings' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
+        const session = await requireDashboardAccess(request, env);
         const payload = await request.json();
-        return json(await updateDashboardSettings(env, payload, url.searchParams));
+        return json(await updateDashboardSettings(env, payload, url.searchParams, session));
       }
 
       if (url.pathname === '/api/profile' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await profile(env, url.searchParams));
+        const session = await requireDashboardAccess(request, env);
+        return json(await profile(env, url.searchParams, session));
       }
 
       if (url.pathname === '/api/categories' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await categoryDefinitions(env, url.searchParams));
+        const session = await requireDashboardAccess(request, env);
+        return json(await categoryDefinitions(env, url.searchParams, session));
       }
 
       if (url.pathname === '/api/categories' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
+        const session = await requireDashboardAccess(request, env);
         const payload = await request.json();
-        return json(await upsertCategoryDefinition(env, payload, url.searchParams), 201);
+        return json(await upsertCategoryDefinition(env, payload, url.searchParams, session), 201);
       }
 
       if (url.pathname === '/api/categories/delete' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
+        const session = await requireDashboardAccess(request, env);
         const payload = await request.json();
-        return json(await disableCategoryDefinition(env, payload, url.searchParams));
+        return json(await disableCategoryDefinition(env, payload, url.searchParams, session));
       }
 
       if (url.pathname === '/api/system-health' && request.method === 'GET') {
@@ -117,13 +117,13 @@ export default {
       }
 
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await dashboard(env, url.searchParams));
+        const session = await requireDashboardAccess(request, env);
+        return json(await dashboard(env, url.searchParams, session));
       }
 
       if (url.pathname === '/api/rules' && request.method === 'GET') {
-        await requireDashboardOrAdminAccess(request, env);
-        return json(await rulesList(env, url.searchParams));
+        const session = await requireDashboardOrAdminAccess(request, env);
+        return json(await rulesList(env, url.searchParams, session));
       }
 
       if (url.pathname === '/api/rules/classify' && request.method === 'POST') {
@@ -139,27 +139,27 @@ export default {
       }
 
       if (url.pathname === '/api/rules/category' && request.method === 'POST') {
-        await requireDashboardOrAdminAccess(request, env);
+        const session = await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
-        return json(await upsertCategoryRule(env, payload), 201);
+        return json(await upsertCategoryRule(env, await scopedRulePayload(env, url.searchParams, session, payload)), 201);
       }
 
       if (url.pathname === '/api/rules/category/delete' && request.method === 'POST') {
-        await requireDashboardOrAdminAccess(request, env);
+        const session = await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
-        return json(await deleteCategoryRule(env, payload));
+        return json(await deleteCategoryRule(env, await scopedRulePayload(env, url.searchParams, session, payload)));
       }
 
       if (url.pathname === '/api/rules/budget' && request.method === 'POST') {
-        await requireDashboardOrAdminAccess(request, env);
+        const session = await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
-        return json(await upsertBudgetCategoryRule(env, payload), 201);
+        return json(await upsertBudgetCategoryRule(env, await scopedRulePayload(env, url.searchParams, session, payload)), 201);
       }
 
       if (url.pathname === '/api/rules/budget/delete' && request.method === 'POST') {
-        await requireDashboardOrAdminAccess(request, env);
+        const session = await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
-        return json(await deleteBudgetCategoryRule(env, payload));
+        return json(await deleteBudgetCategoryRule(env, await scopedRulePayload(env, url.searchParams, session, payload)));
       }
 
       if (url.pathname === '/api/sync' && request.method === 'POST') {
@@ -168,13 +168,13 @@ export default {
       }
 
       if (url.pathname === '/api/transactions' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await transactions(env, url.searchParams));
+        const session = await requireDashboardAccess(request, env);
+        return json(await transactions(env, url.searchParams, session));
       }
 
       if (url.pathname === '/api/users' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await usersList(env));
+        const session = await requireDashboardAccess(request, env);
+        return json(await usersList(env, session));
       }
 
       if (url.pathname === '/api/users/link' && request.method === 'POST') {
@@ -478,10 +478,9 @@ async function changePassword(env, payload) {
   };
 }
 
-async function dashboardSettings(env, params = new URLSearchParams()) {
+async function dashboardSettings(env, params = new URLSearchParams(), session = null) {
   const gasConfig = await gasConfigRequest(env, 'config');
-  const chatId = getChatId(env, params);
-  const user = await ensureUserForChat(env, chatId);
+  const user = await resolveUserForRequest(env, params, session);
   const userSettings = await getUserSettings(env, user.id);
 
   return {
@@ -504,11 +503,19 @@ async function dashboardSettings(env, params = new URLSearchParams()) {
   };
 }
 
-async function updateDashboardSettings(env, payload, params = new URLSearchParams()) {
-  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
-  const user = await ensureUserForChat(env, chatId);
+async function updateDashboardSettings(env, payload, params = new URLSearchParams(), session = null) {
+  const user = await resolveUserForRequest(env, params, session, payload);
   const config = normalizeSettingsConfig(payload || {});
   await upsertUserSettings(env, user.id, config);
+
+  if (session && session.role !== 'admin') {
+    return {
+      ok: true,
+      user,
+      saved: ['user_settings'],
+      config,
+    };
+  }
 
   const gasParams = new URLSearchParams({
     creditCutoffDay: String(config.creditCutoffDay),
@@ -532,9 +539,8 @@ async function updateDashboardSettings(env, payload, params = new URLSearchParam
   };
 }
 
-async function profile(env, params) {
-  const chatId = getChatId(env, params);
-  const user = await ensureUserForChat(env, chatId);
+async function profile(env, params, session = null) {
+  const user = await resolveUserForRequest(env, params, session);
   const settings = await getUserSettings(env, user.id);
   const links = await env.DB.prepare(`
     SELECT chat_id, label, active, updated_at
@@ -556,9 +562,8 @@ async function profile(env, params) {
   };
 }
 
-async function categoryDefinitions(env, params) {
-  const chatId = getChatId(env, params);
-  const user = await ensureUserForChat(env, chatId);
+async function categoryDefinitions(env, params, session = null) {
+  const user = await resolveUserForRequest(env, params, session);
   const rows = await env.DB.prepare(`
     SELECT id, user_id, category, type, color, active, sort_order, updated_at
     FROM category_definitions
@@ -585,9 +590,8 @@ async function categoryDefinitions(env, params) {
   };
 }
 
-async function upsertCategoryDefinition(env, payload, params) {
-  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
-  const user = await ensureUserForChat(env, chatId);
+async function upsertCategoryDefinition(env, payload, params, session = null) {
+  const user = await resolveUserForRequest(env, params, session, payload);
   const type = String(payload.type || payload.tipo || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
   const category = normalizeBaseCategory(payload.category || payload.cat || payload.nombre || '') || normalizeKey(payload.category || payload.cat || payload.nombre || '');
   const color = /^#[0-9a-f]{6}$/i.test(String(payload.color || '')) ? String(payload.color) : (COLORS[category] || COLORS.otro);
@@ -612,9 +616,8 @@ async function upsertCategoryDefinition(env, payload, params) {
   };
 }
 
-async function disableCategoryDefinition(env, payload, params) {
-  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
-  const user = await ensureUserForChat(env, chatId);
+async function disableCategoryDefinition(env, payload, params, session = null) {
+  const user = await resolveUserForRequest(env, params, session, payload);
   const type = String(payload.type || payload.tipo || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
   const category = normalizeBaseCategory(payload.category || payload.cat || '') || normalizeKey(payload.category || payload.cat || '');
 
@@ -790,8 +793,9 @@ function serviceLabel(name) {
   return labels[name] || name;
 }
 
-async function dashboard(env, params) {
-  const chatId = getChatId(env, params);
+async function dashboard(env, params, session = null) {
+  const chatId = await getScopedChatId(env, params, session);
+  if (!chatId) return emptyDashboard();
   const now = new Date();
   const monthKey = formatMonth(now);
   const monthName = monthLongName(now);
@@ -901,8 +905,11 @@ async function dashboard(env, params) {
   };
 }
 
-async function transactions(env, params) {
-  const chatId = getChatId(env, params);
+async function transactions(env, params, session = null) {
+  const chatId = await getScopedChatId(env, params, session);
+  if (!chatId) {
+    return { ok: true, total: 0, limit: clamp(Number(params.get('limit') || 100), 1, 500), transacciones: [] };
+  }
   const limit = clamp(Number(params.get('limit') || 100), 1, 500);
   const search = normalizeKey(params.get('q') || params.get('search') || '');
   const category = normalizeBaseCategory(params.get('category') || '');
@@ -971,8 +978,74 @@ async function transactions(env, params) {
   };
 }
 
-async function usersList(env) {
+function emptyDashboard() {
+  const now = new Date();
+  const monthKey = formatMonth(now);
+  return {
+    ok: true,
+    onboardingRequired: true,
+    balance: 0,
+    ingresos: 0,
+    gastos: 0,
+    ingresosMes: 0,
+    gastosMes: 0,
+    balanceMes: 0,
+    movimientos: 0,
+    mes: monthLongName(now),
+    mesKey: monthKey,
+    transacciones: [],
+    categorias: [],
+    budgetRules: [],
+    meses: [],
+    presupuestos: [],
+    fijos: [],
+    deudas: [],
+    gastosReales: { totalFijos: 0, totalPresupuesto: 0, total: 0 },
+    metas: [],
+    alertas: [{
+      level: 'info',
+      title: 'Vincula Telegram',
+      message: 'Envia al bot: perfil Tu Nombre tu@gmail.com para asociar tu Chat ID.',
+    }],
+    insights: [],
+    emailConfig: { configured: false },
+    source: 'empty_user',
+    updatedAt: localIso(now),
+  };
+}
+
+async function usersList(env, session = null) {
   await ensureKnownUsers(env);
+  if (session && session.role !== 'admin' && session.userId) {
+    const rows = await env.DB.prepare(`
+      SELECT
+        l.chat_id,
+        l.label,
+        l.active,
+        u.id AS user_id,
+        u.email,
+        u.name,
+        u.role,
+        COUNT(t.id) AS transactions,
+        MAX(t.updated_at) AS lastActivity
+      FROM users u
+      LEFT JOIN user_chat_links l ON l.user_id = u.id AND l.active = 1
+      LEFT JOIN transactions t ON t.chat_id = l.chat_id
+      WHERE u.id = ? AND u.active = 1
+      GROUP BY l.chat_id, l.label, l.active, u.id, u.email, u.name, u.role
+      ORDER BY lastActivity DESC
+    `).bind(session.userId).all();
+
+    return {
+      ok: true,
+      defaultChatId: '',
+      users: (rows.results || [])
+        .filter((row) => row.chat_id)
+        .map(userListShape),
+      onboardingRequired: !(rows.results || []).some((row) => row.chat_id),
+    };
+  }
+
   const rows = await env.DB.prepare(`
     SELECT
       l.chat_id,
@@ -996,17 +1069,21 @@ async function usersList(env) {
   return {
     ok: true,
     defaultChatId: env.DEFAULT_CHAT_ID || '',
-    users: (rows.results || []).map((row) => ({
-      chatId: row.chat_id,
-      userId: row.user_id,
-      email: row.email || '',
-      name: row.name || '',
-      role: row.role || 'user',
-      active: Boolean(row.active),
-      label: row.label || row.name || (row.chat_id === env.DEFAULT_CHAT_ID ? `Principal (${row.chat_id})` : `Chat ${row.chat_id}`),
-      transactions: Number(row.transactions || 0),
-      lastActivity: row.lastActivity || '',
-    })),
+    users: (rows.results || []).map(userListShape),
+  };
+}
+
+function userListShape(row) {
+  return {
+    chatId: row.chat_id,
+    userId: row.user_id,
+    email: row.email || '',
+    name: row.name || '',
+    role: row.role || 'user',
+    active: Boolean(row.active),
+    label: row.label || row.name || `Chat ${row.chat_id}`,
+    transactions: Number(row.transactions || 0),
+    lastActivity: row.lastActivity || '',
   };
 }
 
@@ -1124,6 +1201,58 @@ async function ensureUserForChat(env, chatId) {
   };
 }
 
+async function resolveUserForRequest(env, params, session = null, payload = {}) {
+  const requestedChatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || '').trim();
+  if (requestedChatId) {
+    if (session && session.role !== 'admin') {
+      const allowed = await env.DB.prepare('SELECT user_id FROM user_chat_links WHERE chat_id = ? AND user_id = ? AND active = 1')
+        .bind(requestedChatId, session.userId || '')
+        .first();
+      if (!allowed) throw httpError(403, 'Chat ID no vinculado a este usuario');
+    }
+    return ensureUserForChat(env, requestedChatId);
+  }
+
+  if (session && session.userId && session.role !== 'admin') {
+    const user = await env.DB.prepare('SELECT id, email, name, role FROM users WHERE id = ? AND active = 1')
+      .bind(session.userId)
+      .first();
+    if (!user) throw httpError(404, 'Usuario no encontrado');
+    return {
+      id: user.id,
+      email: user.email || '',
+      name: user.name || '',
+      role: user.role || 'user',
+      chatId: '',
+      label: user.name || user.email || '',
+    };
+  }
+
+  return ensureUserForChat(env, env.DEFAULT_CHAT_ID);
+}
+
+async function getScopedChatId(env, params, session = null) {
+  const requestedChatId = String(params.get('chat_id') || '').trim();
+  if (requestedChatId) {
+    if (session && session.role !== 'admin') {
+      const allowed = await env.DB.prepare('SELECT 1 FROM user_chat_links WHERE chat_id = ? AND user_id = ? AND active = 1')
+        .bind(requestedChatId, session.userId || '')
+        .first();
+      if (!allowed) throw httpError(403, 'Chat ID no vinculado a este usuario');
+    }
+    return requestedChatId;
+  }
+
+  if (session && session.role !== 'admin' && session.userId) {
+    const link = await env.DB.prepare('SELECT chat_id FROM user_chat_links WHERE user_id = ? AND active = 1 ORDER BY updated_at DESC LIMIT 1')
+      .bind(session.userId)
+      .first();
+    return link?.chat_id || '';
+  }
+
+  return String(env.DEFAULT_CHAT_ID || '').trim();
+}
+
 async function getUserSettings(env, userId) {
   await env.DB.prepare(`
     INSERT OR IGNORE INTO user_settings (user_id, updated_at)
@@ -1183,8 +1312,17 @@ function userSettingsToConfig(settings) {
   };
 }
 
-async function rulesList(env, params) {
-  const chatId = getChatId(env, params);
+async function rulesList(env, params, session = null) {
+  const chatId = await getScopedChatId(env, params, session);
+  if (!chatId) {
+    return {
+      ok: true,
+      onboardingRequired: true,
+      categoryRules: [],
+      budgetRules: [],
+    };
+  }
+
   const categoryRows = await env.DB.prepare(`
     SELECT id, chat_id, keyword, category, priority, active, notes, updated_at
     FROM category_rules
@@ -1255,6 +1393,14 @@ async function budgetKeysPayload(env, payload) {
     category,
     keys: budgetCategoryKeysFromRules(rules, category),
   };
+}
+
+async function scopedRulePayload(env, params, session, payload) {
+  if (!session || session.role === 'admin') return payload;
+
+  const chatId = await getScopedChatId(env, params, session);
+  if (!chatId) throw httpError(400, 'Vincula Telegram antes de crear reglas');
+  return { ...payload, chat_id: chatId, chatId };
 }
 
 async function upsertCategoryRule(env, payload) {
@@ -2559,16 +2705,19 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets
 }
 
 async function requireDashboardAccess(request, env) {
-  if (hasDashboardKey(request, env)) return;
+  if (hasDashboardKey(request, env)) return { sub: 'dashboard', role: 'admin', userId: 'dashboard_key' };
 
   const token = bearer(request);
-  if (token && await verifySessionToken(env, token)) return;
+  if (token) {
+    const session = await verifySessionToken(env, token);
+    if (session) return session;
+  }
 
   throw httpError(401, 'Unauthorized');
 }
 
 async function requireDashboardOrAdminAccess(request, env) {
-  if (hasAdminKey(request, env)) return;
+  if (hasAdminKey(request, env)) return { sub: 'dashboard', role: 'admin', userId: 'admin_key' };
   return requireDashboardAccess(request, env);
 }
 
@@ -2633,10 +2782,18 @@ async function verifySessionToken(env, token) {
   try {
     const payload = JSON.parse(base64UrlDecode(body));
     const now = Math.floor(Date.now() / 1000);
-    return payload?.sub === 'dashboard' && Number(payload.exp || 0) > now;
+    return payload?.sub === 'dashboard' && Number(payload.exp || 0) > now ? payload : false;
   } catch (_error) {
     return false;
   }
+}
+
+function sessionUserShape(session) {
+  return {
+    id: session?.userId || '',
+    email: session?.email || '',
+    role: session?.role || 'user',
+  };
 }
 
 function sessionSecret(env) {
