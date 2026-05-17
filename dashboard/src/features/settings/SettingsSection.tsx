@@ -8,6 +8,8 @@ const EMPTY_CONFIG: AppSettingsConfig = {
   creditCutoffDay: 25,
   creditDueDay: 10,
   creditCardName: '',
+  defaultCurrency: 'PEN',
+  defaultPaymentMethod: 'debito',
   receiptImageMaxBytes: 921600,
   claudeModel: 'claude-haiku-4-5-20251001',
   claudeApiUrl: '',
@@ -32,8 +34,9 @@ const SECRET_LABELS: Record<string, string> = {
   r2Bucket: 'R2 recibos',
 };
 
-export function SettingsSection({ authToken }: { authToken?: string | null }) {
+export function SettingsSection({ authToken, chatId }: { authToken?: string | null; chatId?: string }) {
   const [config, setConfig] = useState<AppSettingsConfig>(EMPTY_CONFIG);
+  const [userLabel, setUserLabel] = useState('');
   const [secrets, setSecrets] = useState<Record<string, boolean>>({});
   const [updatedAt, setUpdatedAt] = useState('');
   const [loading, setLoading] = useState(false);
@@ -47,13 +50,16 @@ export function SettingsSection({ authToken }: { authToken?: string | null }) {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(apiEndpoint('settings'), {
+      const url = new URL(apiEndpoint('settings'));
+      if (chatId) url.searchParams.set('chat_id', chatId);
+      const response = await fetch(url.toString(), {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       const data = await response.json() as AppSettingsData;
       if (!response.ok || data.ok === false) throw new Error(data.error || 'No se pudo leer configuracion');
 
       setConfig({ ...EMPTY_CONFIG, ...data.config });
+      setUserLabel(data.user?.label || data.user?.name || data.user?.chatId || '');
       setSecrets(data.secrets || {});
       setUpdatedAt(data.updatedAt || '');
     } catch (err) {
@@ -62,7 +68,7 @@ export function SettingsSection({ authToken }: { authToken?: string | null }) {
     } finally {
       setLoading(false);
     }
-  }, [authToken]);
+  }, [authToken, chatId]);
 
   useEffect(() => {
     void loadSettings();
@@ -81,13 +87,15 @@ export function SettingsSection({ authToken }: { authToken?: string | null }) {
     setError('');
 
     try {
-      const response = await fetch(apiEndpoint('settings'), {
+      const url = new URL(apiEndpoint('settings'));
+      if (chatId) url.searchParams.set('chat_id', chatId);
+      const response = await fetch(url.toString(), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${authToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(config),
+        body: JSON.stringify({ ...config, chatId }),
       });
       const data = await response.json() as AppSettingsData;
       if (!response.ok || data.ok === false) throw new Error(data.error || 'No se pudo guardar configuracion');
@@ -109,7 +117,7 @@ export function SettingsSection({ authToken }: { authToken?: string | null }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <Title>Configuracion</Title>
-            <Text>Parametros operativos del bot y reportes.</Text>
+            <Text>{userLabel ? `Preferencias de ${userLabel}` : 'Parametros operativos del bot y reportes.'}</Text>
           </div>
           <Button icon={RiRefreshLine} variant="secondary" color="slate" loading={loading} onClick={() => void loadSettings()}>
             Recargar
@@ -128,6 +136,24 @@ export function SettingsSection({ authToken }: { authToken?: string | null }) {
               </Field>
               <Field label="Tarjeta">
                 <input className="form-input" value={config.creditCardName} onChange={(event) => updateField('creditCardName', event.target.value)} placeholder="Opcional" />
+              </Field>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-semibold text-slate-100">Preferencias por usuario</h2>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Field label="Moneda por defecto">
+                <select className="form-input" value={config.defaultCurrency || 'PEN'} onChange={(event) => updateField('defaultCurrency', event.target.value as AppSettingsConfig['defaultCurrency'])}>
+                  <option value="PEN">PEN</option>
+                  <option value="USD">USD</option>
+                </select>
+              </Field>
+              <Field label="Pago por defecto">
+                <select className="form-input" value={config.defaultPaymentMethod || 'debito'} onChange={(event) => updateField('defaultPaymentMethod', event.target.value as AppSettingsConfig['defaultPaymentMethod'])}>
+                  <option value="debito">Debito</option>
+                  <option value="credito">Credito</option>
+                </select>
               </Field>
             </div>
           </section>

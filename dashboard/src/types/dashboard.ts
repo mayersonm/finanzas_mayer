@@ -115,6 +115,8 @@ export interface AppSettingsConfig {
   creditCutoffDay: number;
   creditDueDay: number;
   creditCardName: string;
+  defaultCurrency?: Currency;
+  defaultPaymentMethod?: 'debito' | 'credito';
   receiptImageMaxBytes: number;
   claudeModel: string;
   claudeApiUrl?: string;
@@ -126,6 +128,14 @@ export interface AppSettingsConfig {
 
 export interface AppSettingsData {
   ok?: boolean;
+  user?: {
+    id: string;
+    name?: string;
+    email?: string;
+    role?: string;
+    chatId?: string;
+    label?: string;
+  };
   config: AppSettingsConfig;
   secrets: Record<string, boolean>;
   updatedAt?: string;

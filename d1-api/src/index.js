@@ -67,13 +67,23 @@ export default {
 
       if (url.pathname === '/api/settings' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
-        return json(await dashboardSettings(env));
+        return json(await dashboardSettings(env, url.searchParams));
       }
 
       if (url.pathname === '/api/settings' && request.method === 'POST') {
         await requireDashboardAccess(request, env);
         const payload = await request.json();
-        return json(await updateDashboardSettings(env, payload));
+        return json(await updateDashboardSettings(env, payload, url.searchParams));
+      }
+
+      if (url.pathname === '/api/profile' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await profile(env, url.searchParams));
+      }
+
+      if (url.pathname === '/api/categories' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await categoryDefinitions(env, url.searchParams));
       }
 
       if (url.pathname === '/api/system-health' && request.method === 'GET') {
@@ -297,12 +307,19 @@ async function changePassword(env, payload) {
   };
 }
 
-async function dashboardSettings(env) {
+async function dashboardSettings(env, params = new URLSearchParams()) {
   const gasConfig = await gasConfigRequest(env, 'config');
+  const chatId = getChatId(env, params);
+  const user = await ensureUserForChat(env, chatId);
+  const userSettings = await getUserSettings(env, user.id);
 
   return {
     ok: true,
-    config: normalizeSettingsConfig(gasConfig.config || {}),
+    user,
+    config: normalizeSettingsConfig({
+      ...(gasConfig.config || {}),
+      ...userSettingsToConfig(userSettings),
+    }),
     secrets: {
       ...(gasConfig.secrets || {}),
       workerGasApiUrl: Boolean(env.GAS_API_URL),
@@ -316,9 +333,13 @@ async function dashboardSettings(env) {
   };
 }
 
-async function updateDashboardSettings(env, payload) {
+async function updateDashboardSettings(env, payload, params = new URLSearchParams()) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const user = await ensureUserForChat(env, chatId);
   const config = normalizeSettingsConfig(payload || {});
-  const params = new URLSearchParams({
+  await upsertUserSettings(env, user.id, config);
+
+  const gasParams = new URLSearchParams({
     creditCutoffDay: String(config.creditCutoffDay),
     creditDueDay: String(config.creditDueDay),
     creditCardName: config.creditCardName,
@@ -330,12 +351,66 @@ async function updateDashboardSettings(env, payload) {
     yearlyEmailTo: config.yearlyEmailTo,
   });
 
-  const gasConfig = await gasConfigRequest(env, 'update_config', params);
+  const gasConfig = await gasConfigRequest(env, 'update_config', gasParams);
 
   return {
     ok: true,
+    user,
     saved: gasConfig.saved || [],
-    config: normalizeSettingsConfig(gasConfig.config || config),
+    config,
+  };
+}
+
+async function profile(env, params) {
+  const chatId = getChatId(env, params);
+  const user = await ensureUserForChat(env, chatId);
+  const settings = await getUserSettings(env, user.id);
+  const links = await env.DB.prepare(`
+    SELECT chat_id, label, active, updated_at
+    FROM user_chat_links
+    WHERE user_id = ?
+    ORDER BY active DESC, updated_at DESC
+  `).bind(user.id).all();
+
+  return {
+    ok: true,
+    user,
+    settings: userSettingsToConfig(settings),
+    chatLinks: (links.results || []).map((row) => ({
+      chatId: row.chat_id,
+      label: row.label || `Chat ${row.chat_id}`,
+      active: Boolean(row.active),
+      updatedAt: row.updated_at || '',
+    })),
+  };
+}
+
+async function categoryDefinitions(env, params) {
+  const chatId = getChatId(env, params);
+  const user = await ensureUserForChat(env, chatId);
+  const rows = await env.DB.prepare(`
+    SELECT id, user_id, category, type, color, active, sort_order, updated_at
+    FROM category_definitions
+    WHERE user_id IN ('*', ?)
+    ORDER BY type ASC,
+      CASE WHEN user_id = ? THEN 0 ELSE 1 END,
+      sort_order ASC,
+      category ASC
+  `).bind(user.id, user.id).all();
+
+  return {
+    ok: true,
+    user,
+    categories: (rows.results || []).map((row) => ({
+      id: row.id,
+      scope: row.user_id === '*' ? 'global' : 'user',
+      category: row.category,
+      type: row.type,
+      color: row.color,
+      active: Boolean(row.active),
+      sortOrder: Number(row.sort_order || 100),
+      updatedAt: row.updated_at || '',
+    })),
   };
 }
 
@@ -471,6 +546,8 @@ function normalizeSettingsConfig(value) {
     creditCutoffDay: clamp(Number(value.creditCutoffDay || 25), 1, 31),
     creditDueDay: clamp(Number(value.creditDueDay || 10), 1, 31),
     creditCardName: String(value.creditCardName || '').slice(0, 80),
+    defaultCurrency: normalizeCurrency(value.defaultCurrency || value.default_currency || 'PEN'),
+    defaultPaymentMethod: normalizePaymentMethod(value.defaultPaymentMethod || value.default_payment_method || 'debito') || 'debito',
     receiptImageMaxBytes: clamp(Number(value.receiptImageMaxBytes || 921600), 200000, 3000000),
     claudeModel: String(value.claudeModel || 'claude-haiku-4-5-20251001').slice(0, 120),
     claudeApiUrl: String(value.claudeApiUrl || '').slice(0, 240),
@@ -674,11 +751,24 @@ async function transactions(env, params) {
 }
 
 async function usersList(env) {
+  await ensureKnownUsers(env);
   const rows = await env.DB.prepare(`
-    SELECT chat_id, COUNT(*) AS transactions, MAX(updated_at) AS lastActivity
-    FROM transactions
-    GROUP BY chat_id
-    ORDER BY lastActivity DESC
+    SELECT
+      l.chat_id,
+      l.label,
+      l.active,
+      u.id AS user_id,
+      u.email,
+      u.name,
+      u.role,
+      COUNT(t.id) AS transactions,
+      MAX(t.updated_at) AS lastActivity
+    FROM user_chat_links l
+    JOIN users u ON u.id = l.user_id
+    LEFT JOIN transactions t ON t.chat_id = l.chat_id
+    WHERE u.active = 1
+    GROUP BY l.chat_id, l.label, l.active, u.id, u.email, u.name, u.role
+    ORDER BY l.active DESC, lastActivity DESC
     LIMIT 50
   `).all();
 
@@ -687,10 +777,139 @@ async function usersList(env) {
     defaultChatId: env.DEFAULT_CHAT_ID || '',
     users: (rows.results || []).map((row) => ({
       chatId: row.chat_id,
-      label: row.chat_id === env.DEFAULT_CHAT_ID ? `Principal (${row.chat_id})` : `Chat ${row.chat_id}`,
+      userId: row.user_id,
+      email: row.email || '',
+      name: row.name || '',
+      role: row.role || 'user',
+      active: Boolean(row.active),
+      label: row.label || row.name || (row.chat_id === env.DEFAULT_CHAT_ID ? `Principal (${row.chat_id})` : `Chat ${row.chat_id}`),
       transactions: Number(row.transactions || 0),
       lastActivity: row.lastActivity || '',
     })),
+  };
+}
+
+async function ensureKnownUsers(env) {
+  const rows = await env.DB.prepare(`
+    SELECT chat_id, COUNT(*) AS total
+    FROM transactions
+    GROUP BY chat_id
+    LIMIT 100
+  `).all();
+
+  for (const row of rows.results || []) {
+    await ensureUserForChat(env, row.chat_id);
+  }
+}
+
+async function ensureUserForChat(env, chatId) {
+  const cleanChatId = String(chatId || env.DEFAULT_CHAT_ID || '').trim();
+  if (!cleanChatId) throw httpError(400, 'chat_id requerido');
+
+  const existing = await env.DB.prepare(`
+    SELECT u.id, u.email, u.name, u.role, l.chat_id, l.label
+    FROM user_chat_links l
+    JOIN users u ON u.id = l.user_id
+    WHERE l.chat_id = ?
+    LIMIT 1
+  `).bind(cleanChatId).first();
+
+  if (existing) {
+    return {
+      id: existing.id,
+      email: existing.email || '',
+      name: existing.name || '',
+      role: existing.role || 'user',
+      chatId: existing.chat_id,
+      label: existing.label || '',
+    };
+  }
+
+  const userId = `user:${safeObjectSegment(cleanChatId)}`.slice(0, 120);
+  const role = cleanChatId === String(env.DEFAULT_CHAT_ID || '').trim() ? 'admin' : 'user';
+  const label = role === 'admin' ? 'Principal' : `Chat ${cleanChatId}`;
+
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO users (id, name, role, active, updated_at)
+    VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+  `).bind(userId, label, role).run();
+
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO user_chat_links (id, user_id, chat_id, label, active, updated_at)
+    VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+  `).bind(`link:${safeObjectSegment(cleanChatId)}`, userId, cleanChatId, label).run();
+
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO user_settings (user_id, updated_at)
+    VALUES (?, CURRENT_TIMESTAMP)
+  `).bind(userId).run();
+
+  return {
+    id: userId,
+    email: '',
+    name: label,
+    role,
+    chatId: cleanChatId,
+    label,
+  };
+}
+
+async function getUserSettings(env, userId) {
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO user_settings (user_id, updated_at)
+    VALUES (?, CURRENT_TIMESTAMP)
+  `).bind(userId).run();
+
+  return env.DB.prepare('SELECT * FROM user_settings WHERE user_id = ?')
+    .bind(userId)
+    .first();
+}
+
+async function upsertUserSettings(env, userId, config) {
+  await env.DB.prepare(`
+    INSERT INTO user_settings (
+      user_id, credit_cutoff_day, credit_due_day, credit_card_name,
+      default_currency, default_payment_method, receipt_image_max_bytes,
+      email_daily, email_monthly, email_yearly, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id) DO UPDATE SET
+      credit_cutoff_day = excluded.credit_cutoff_day,
+      credit_due_day = excluded.credit_due_day,
+      credit_card_name = excluded.credit_card_name,
+      default_currency = excluded.default_currency,
+      default_payment_method = excluded.default_payment_method,
+      receipt_image_max_bytes = excluded.receipt_image_max_bytes,
+      email_daily = excluded.email_daily,
+      email_monthly = excluded.email_monthly,
+      email_yearly = excluded.email_yearly,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(
+    userId,
+    config.creditCutoffDay,
+    config.creditDueDay,
+    config.creditCardName,
+    config.defaultCurrency || 'PEN',
+    config.defaultPaymentMethod || 'debito',
+    config.receiptImageMaxBytes,
+    config.dailyEmailTo,
+    config.monthlyEmailTo,
+    config.yearlyEmailTo,
+  ).run();
+}
+
+function userSettingsToConfig(settings) {
+  if (!settings) return {};
+  return {
+    creditCutoffDay: Number(settings.credit_cutoff_day || 25),
+    creditDueDay: Number(settings.credit_due_day || 10),
+    creditCardName: settings.credit_card_name || '',
+    defaultCurrency: settings.default_currency || 'PEN',
+    defaultPaymentMethod: settings.default_payment_method || 'debito',
+    receiptImageMaxBytes: Number(settings.receipt_image_max_bytes || 921600),
+    dailyEmailTo: settings.email_daily || '',
+    monthlyEmailTo: settings.email_monthly || '',
+    yearlyEmailTo: settings.email_yearly || '',
   };
 }
 

@@ -290,7 +290,7 @@ export default function App() {
           {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
           {tab === 'metas' ? <GoalsSection data={data} /> : null}
           {tab === 'salud' ? <HealthSection authToken={token} /> : null}
-          {tab === 'configuracion' ? <SettingsSection authToken={token} /> : null}
+          {tab === 'configuracion' ? <SettingsSection authToken={token} chatId={selectedChatId} /> : null}
         </Suspense>
       </div>
      
