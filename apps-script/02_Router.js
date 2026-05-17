@@ -4,6 +4,13 @@ function handleMessage(chatId, text) {
   // ── COMANDOS EXACTOS PRIMERO ─────────────────────────────
   switch (lower) {
     case '/start':
+    case 'start':
+    case 'empezar':
+    case 'inicio':
+    case 'configuracion':
+    case 'configuración':
+    case 'onboarding': return cmdOnboarding(chatId);
+
     case '/ayuda':
     case 'ayuda':
     case 'help':       return sendHelp(chatId);
@@ -109,6 +116,8 @@ function handleMessage(chatId, text) {
   if (lower.startsWith('correo '))        return cmdCorreo(chatId, text.trim());
   if (lower.startsWith('email '))         return cmdCorreo(chatId, text.trim().replace(/^email/i, 'correo'));
   if (lower.startsWith('regla '))         return cmdReglas(chatId, text.trim());
+  if (lower.startsWith('perfil '))        return cmdPerfil(chatId, text.trim());
+  if (lower.startsWith('vincular '))      return cmdPerfil(chatId, text.trim().replace(/^vincular/i, 'perfil'));
   
 
   // ── REGISTRAR MOVIMIENTO (siempre al final) ──────────────
