@@ -10,6 +10,7 @@ import { getRealExpenses } from './lib/finance';
 import type { ApiStatus, DashboardData, DashboardUser, TabId } from './types/dashboard';
 
 const AnalysisSection = lazy(() => import('./features/analysis/AnalysisSection').then((mod) => ({ default: mod.AnalysisSection })));
+const AdminSection = lazy(() => import('./features/admin/AdminSection').then((mod) => ({ default: mod.AdminSection })));
 const CommitmentsSection = lazy(() => import('./features/commitments/CommitmentsSection').then((mod) => ({ default: mod.CommitmentsSection })));
 const GoalsSection = lazy(() => import('./features/goals/GoalsSection').then((mod) => ({ default: mod.GoalsSection })));
 const HealthSection = lazy(() => import('./features/health/HealthSection').then((mod) => ({ default: mod.HealthSection })));
@@ -291,6 +292,7 @@ export default function App() {
           {tab === 'metas' ? <GoalsSection data={data} /> : null}
           {tab === 'salud' ? <HealthSection authToken={token} /> : null}
           {tab === 'configuracion' ? <SettingsSection authToken={token} chatId={selectedChatId} /> : null}
+          {tab === 'admin' ? <AdminSection authToken={token} chatId={selectedChatId} users={users} /> : null}
         </Suspense>
       </div>
      

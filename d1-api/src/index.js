@@ -86,6 +86,18 @@ export default {
         return json(await categoryDefinitions(env, url.searchParams));
       }
 
+      if (url.pathname === '/api/categories' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await upsertCategoryDefinition(env, payload, url.searchParams), 201);
+      }
+
+      if (url.pathname === '/api/categories/delete' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await disableCategoryDefinition(env, payload, url.searchParams));
+      }
+
       if (url.pathname === '/api/system-health' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json(await systemHealth(env));
@@ -114,25 +126,25 @@ export default {
       }
 
       if (url.pathname === '/api/rules/category' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
         return json(await upsertCategoryRule(env, payload), 201);
       }
 
       if (url.pathname === '/api/rules/category/delete' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
         return json(await deleteCategoryRule(env, payload));
       }
 
       if (url.pathname === '/api/rules/budget' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
         return json(await upsertBudgetCategoryRule(env, payload), 201);
       }
 
       if (url.pathname === '/api/rules/budget/delete' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
         return json(await deleteBudgetCategoryRule(env, payload));
       }
@@ -150,6 +162,12 @@ export default {
       if (url.pathname === '/api/users' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json(await usersList(env));
+      }
+
+      if (url.pathname === '/api/users/link' && request.method === 'POST') {
+        requireAdminKey(request, env);
+        const payload = await request.json();
+        return json(await linkTelegramUser(env, payload), 201);
       }
 
       if (url.pathname === '/api/transactions' && request.method === 'POST') {
@@ -411,6 +429,56 @@ async function categoryDefinitions(env, params) {
       sortOrder: Number(row.sort_order || 100),
       updatedAt: row.updated_at || '',
     })),
+  };
+}
+
+async function upsertCategoryDefinition(env, payload, params) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const user = await ensureUserForChat(env, chatId);
+  const type = String(payload.type || payload.tipo || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
+  const category = normalizeBaseCategory(payload.category || payload.cat || payload.nombre || '') || normalizeKey(payload.category || payload.cat || payload.nombre || '');
+  const color = /^#[0-9a-f]{6}$/i.test(String(payload.color || '')) ? String(payload.color) : (COLORS[category] || COLORS.otro);
+  const sortOrder = clamp(Number(payload.sortOrder || payload.sort_order || 100), 1, 999);
+
+  if (!category) throw httpError(400, 'categoria requerida');
+
+  const id = `catdef:${user.id}:${type}:${safeObjectSegment(category)}`.slice(0, 180);
+  await env.DB.prepare(`
+    INSERT INTO category_definitions (id, user_id, category, type, color, active, sort_order, updated_at)
+    VALUES (?, ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id, category, type) DO UPDATE SET
+      color = excluded.color,
+      active = 1,
+      sort_order = excluded.sort_order,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(id, user.id, category, type, color, sortOrder).run();
+
+  return {
+    ok: true,
+    category: { id, scope: 'user', category, type, color, active: true, sortOrder },
+  };
+}
+
+async function disableCategoryDefinition(env, payload, params) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const user = await ensureUserForChat(env, chatId);
+  const type = String(payload.type || payload.tipo || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
+  const category = normalizeBaseCategory(payload.category || payload.cat || '') || normalizeKey(payload.category || payload.cat || '');
+
+  if (!category) throw httpError(400, 'categoria requerida');
+
+  const result = await env.DB.prepare(`
+    UPDATE category_definitions
+    SET active = 0, updated_at = CURRENT_TIMESTAMP
+    WHERE user_id = ? AND category = ? AND type = ?
+  `).bind(user.id, category, type).run();
+
+  return {
+    ok: true,
+    deleted: true,
+    category,
+    type,
+    changed: result.meta?.changes || 0,
   };
 }
 
@@ -786,6 +854,41 @@ async function usersList(env) {
       transactions: Number(row.transactions || 0),
       lastActivity: row.lastActivity || '',
     })),
+  };
+}
+
+async function linkTelegramUser(env, payload) {
+  const chatId = String(payload.chat_id || payload.chatId || '').trim();
+  const name = String(payload.name || payload.nombre || '').trim().slice(0, 120);
+  const email = String(payload.email || '').trim().toLowerCase().slice(0, 180);
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+
+  const existing = await ensureUserForChat(env, chatId);
+  const nextName = name || existing.name || existing.label || `Chat ${chatId}`;
+  const nextEmail = email || existing.email || '';
+
+  await env.DB.prepare(`
+    UPDATE users
+    SET name = ?,
+        email = CASE WHEN ? <> '' THEN ? ELSE email END,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(nextName, nextEmail, nextEmail, existing.id).run();
+
+  await env.DB.prepare(`
+    UPDATE user_chat_links
+    SET label = ?, active = 1, updated_at = CURRENT_TIMESTAMP
+    WHERE chat_id = ?
+  `).bind(nextName, chatId).run();
+
+  return {
+    ok: true,
+    user: {
+      ...existing,
+      name: nextName,
+      email: nextEmail,
+      label: nextName,
+    },
   };
 }
 

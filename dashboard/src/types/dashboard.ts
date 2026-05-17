@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'analisis' | 'metas' | 'salud' | 'configuracion';
+export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'analisis' | 'metas' | 'salud' | 'configuracion' | 'admin';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {
@@ -50,8 +50,40 @@ export interface Budget {
 export interface DashboardUser {
   chatId: string;
   label: string;
+  userId?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  active?: boolean;
   transactions: number;
   lastActivity?: string;
+}
+
+export interface CategoryDefinition {
+  id: string;
+  scope: 'global' | 'user' | string;
+  category: string;
+  type: TxType | string;
+  color: string;
+  active: boolean;
+  sortOrder: number;
+}
+
+export interface CategoryRuleItem {
+  id: string;
+  scope: 'global' | 'personal' | string;
+  keyword: string;
+  category: string;
+  priority: number;
+  active: boolean;
+}
+
+export interface BudgetRuleItem {
+  id: string;
+  scope: 'global' | 'personal' | string;
+  budgetCategory: string;
+  includedCategory: string;
+  active: boolean;
 }
 
 export interface BudgetRule {
