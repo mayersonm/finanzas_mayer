@@ -45,7 +45,7 @@ export function LoginScreen({
           <RiShieldKeyholeLine className="h-4 w-4" />
           Acceso seguro
         </span>
-        <h1 className="mt-4 text-xl font-semibold text-slate-100 sm:text-2xl">Mayeson Finanzas</h1>
+        <h1 className="mt-4 text-xl font-semibold text-slate-100 sm:text-2xl">Finanzas personales</h1>
         <p className="mt-2 text-sm text-slate-400">
           {mode === 'login' ? 'Entra con Google o con tu correo.' : 'Crea tu usuario y luego vincula Telegram con tu correo.'}
         </p>

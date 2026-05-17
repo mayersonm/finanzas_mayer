@@ -4,7 +4,7 @@ function cmdOnboarding(chatId) {
   registrarUsuarioTelegramD1_(chatId, '', '');
 
   const text = [
-    '*Bienvenido a Finanzas Mayeson*',
+    '*Bienvenido a ' + APP_NAME + '*',
     '',
     'Tu usuario de Telegram ya quedo detectado:',
     '`' + chatId + '`',

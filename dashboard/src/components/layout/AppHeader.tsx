@@ -15,6 +15,7 @@ export function AppHeader({
   users,
   selectedChatId,
   onSelectedChatIdChange,
+  appName,
 }: {
   data: DashboardData;
   loading: boolean;
@@ -28,6 +29,7 @@ export function AppHeader({
   users: DashboardUser[];
   selectedChatId: string;
   onSelectedChatIdChange: (chatId: string) => void;
+  appName?: string;
 }) {
   const statusClass = status === 'live' ? 'bg-emerald-500/15 text-emerald-200'
     : status === 'error' ? 'bg-rose-500/15 text-rose-200'
@@ -43,7 +45,7 @@ export function AppHeader({
             </span>
             <span className="rounded-full bg-cyan-500/15 px-2.5 py-1 text-xs font-semibold text-cyan-200">{data.mesKey || data.mes}</span>
           </div>
-          <h1 className="text-xl font-semibold text-slate-100 sm:text-3xl">Mayeson Finanzas</h1>
+          <h1 className="text-xl font-semibold text-slate-100 sm:text-3xl">{appName || 'Finanzas personales'}</h1>
           <p className="mt-1 text-xs text-slate-400 sm:text-sm">Ultima actualizacion: {loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)}</p>
         </div>
 

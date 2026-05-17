@@ -30,6 +30,19 @@ const VALID_CATEGORIES = [
   'otro',
 ];
 
+const GOOGLE_OAUTH_SCOPES = [
+  'openid',
+  'email',
+  'profile',
+  'https://www.googleapis.com/auth/script.projects',
+  'https://www.googleapis.com/auth/script.deployments',
+  'https://www.googleapis.com/auth/spreadsheets',
+  'https://www.googleapis.com/auth/drive.file',
+];
+
+const APPS_SCRIPT_TEMPLATE_MANIFEST_KEY = 'templates/apps-script/manifest.json';
+const APPS_SCRIPT_TEMPLATE_PREFIX = 'templates/apps-script/';
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -56,11 +69,37 @@ export default {
       }
 
       if (url.pathname === '/api/auth/google/start' && request.method === 'GET') {
-        return googleStart(request, env);
+        return await googleStart(request, env);
       }
 
       if (url.pathname === '/api/auth/google/callback' && request.method === 'GET') {
-        return googleCallback(request, env);
+        return await googleCallback(request, env);
+      }
+
+      if (url.pathname === '/api/installations/config' && (request.method === 'GET' || request.method === 'POST')) {
+        const payload = request.method === 'POST' ? await request.json().catch(() => ({})) : {};
+        return json(await installationRuntimeConfig(env, url.searchParams, payload, request));
+      }
+
+      if (url.pathname === '/api/onboarding/status' && request.method === 'GET') {
+        const session = await requireDashboardAccess(request, env);
+        return json(await onboardingStatus(env, session));
+      }
+
+      if (url.pathname === '/api/onboarding/telegram' && request.method === 'POST') {
+        const session = await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await saveOnboardingTelegram(env, session, payload, request));
+      }
+
+      if (url.pathname === '/api/onboarding/provision' && request.method === 'POST') {
+        const session = await requireDashboardAccess(request, env);
+        return json(await provisionGoogleWorkspace(env, session, request), 201);
+      }
+
+      if (url.pathname === '/api/onboarding/webhook' && request.method === 'POST') {
+        const session = await requireDashboardAccess(request, env);
+        return json(await configureInstallationWebhook(env, session));
       }
 
       if (url.pathname === '/api/session' && request.method === 'GET') {
@@ -127,13 +166,13 @@ export default {
       }
 
       if (url.pathname === '/api/rules/classify' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        await requireAdminAccess(request, env);
         const payload = await request.json();
         return json(await classifyRulePayload(env, payload));
       }
 
       if (url.pathname === '/api/rules/budget/keys' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        await requireAdminAccess(request, env);
         const payload = await request.json();
         return json(await budgetKeysPayload(env, payload));
       }
@@ -178,15 +217,15 @@ export default {
       }
 
       if (url.pathname === '/api/users/link' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        const adminAccess = await requireAdminAccess(request, env);
         const payload = await request.json();
-        return json(await linkTelegramUser(env, payload), 201);
+        return json(await linkTelegramUser(env, payload, adminAccess), 201);
       }
 
       if (url.pathname === '/api/transactions' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        const adminAccess = await requireAdminAccess(request, env);
         const payload = await request.json();
-        return json(await insertTransaction(env, payload), 201);
+        return json(await insertTransaction(env, await scopedAdminPayload(env, payload, adminAccess)), 201);
       }
 
       if (transactionMatch && request.method === 'DELETE') {
@@ -205,46 +244,47 @@ export default {
       }
 
       if (url.pathname === '/api/transactions/delete' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        const adminAccess = await requireAdminAccess(request, env);
         const payload = await request.json();
+        const scopedPayload = await scopedAdminPayload(env, payload, adminAccess);
         return json(await deleteTransaction(env, {
-          id: String(payload.id || payload.transaction_id || payload.transactionId || '').trim(),
-          chatId: String(payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim(),
+          id: String(scopedPayload.id || scopedPayload.transaction_id || scopedPayload.transactionId || '').trim(),
+          chatId: String(scopedPayload.chat_id || scopedPayload.chatId || env.DEFAULT_CHAT_ID || '').trim(),
           deleteFromGas: false,
         }));
       }
 
       if (url.pathname === '/api/transactions/category' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        const adminAccess = await requireAdminAccess(request, env);
         const payload = await request.json();
-        return json(await updateTransactionCategory(env, payload));
+        return json(await updateTransactionCategory(env, await scopedAdminPayload(env, payload, adminAccess)));
       }
 
       if (url.pathname === '/api/transactions/payment' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        const adminAccess = await requireAdminAccess(request, env);
         const payload = await request.json();
-        return json(await updateTransactionPayment(env, payload));
+        return json(await updateTransactionPayment(env, await scopedAdminPayload(env, payload, adminAccess)));
       }
 
       if (url.pathname === '/api/debts' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        const adminAccess = await requireAdminAccess(request, env);
         const payload = await request.json();
-        return json(await upsertDebtFromPayload(env, payload), 201);
+        return json(await upsertDebtFromPayload(env, await scopedAdminPayload(env, payload, adminAccess)), 201);
       }
 
       if (url.pathname === '/api/receipts' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        const adminAccess = await requireAdminAccess(request, env);
         const payload = await request.json();
-        return json(await uploadReceipt(env, payload), 201);
+        return json(await uploadReceipt(env, await scopedAdminPayload(env, payload, adminAccess)), 201);
       }
 
       if (receiptFileMatch && request.method === 'GET') {
         await requireDashboardAccess(request, env);
-        return receiptFile(env, decodeURIComponent(receiptFileMatch[1]));
+        return await receiptFile(env, decodeURIComponent(receiptFileMatch[1]));
       }
 
       if (url.pathname === '/api/sync/gas' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        await requireAdminAccess(request, env);
         return json(await syncFromGas(env, url.searchParams));
       }
 
@@ -346,6 +386,7 @@ async function sessionForUser(env, user) {
     sub: 'dashboard',
     userId: user.id || '',
     email: user.email || '',
+    name: user.name || '',
     role: user.role || 'user',
     iat: now,
     exp: expiresAt,
@@ -374,9 +415,11 @@ async function googleStart(request, env) {
   auth.searchParams.set('client_id', env.GOOGLE_CLIENT_ID);
   auth.searchParams.set('redirect_uri', redirectUri);
   auth.searchParams.set('response_type', 'code');
-  auth.searchParams.set('scope', 'openid email profile');
+  auth.searchParams.set('scope', GOOGLE_OAUTH_SCOPES.join(' '));
   auth.searchParams.set('state', state);
-  auth.searchParams.set('prompt', 'select_account');
+  auth.searchParams.set('access_type', 'offline');
+  auth.searchParams.set('include_granted_scopes', 'true');
+  auth.searchParams.set('prompt', 'consent select_account');
   return Response.redirect(auth.toString(), 302);
 }
 
@@ -416,7 +459,11 @@ async function googleCallback(request, env) {
   const email = normalizeEmail(claims.email || '');
   if (!email) throw httpError(400, 'Google no devolvio email');
 
-  const id = `google:${claims.sub}`;
+  const existing = await env.DB.prepare('SELECT * FROM users WHERE google_sub = ? OR lower(email) = ? ORDER BY updated_at DESC LIMIT 1')
+    .bind(claims.sub, email)
+    .first();
+  const id = existing?.id || `google:${claims.sub}`;
+  const displayName = String(claims.name || existing?.name || email).slice(0, 120);
   await env.DB.prepare(`
     INSERT INTO users (id, email, name, google_sub, role, active, updated_at)
     VALUES (?, ?, ?, ?, 'user', 1, CURRENT_TIMESTAMP)
@@ -426,22 +473,563 @@ async function googleCallback(request, env) {
       google_sub = excluded.google_sub,
       active = 1,
       updated_at = CURRENT_TIMESTAMP
-  `).bind(id, email, String(claims.name || email).slice(0, 120), claims.sub).run();
+  `).bind(id, email, displayName, claims.sub).run();
 
   await env.DB.prepare(`
     INSERT OR IGNORE INTO user_settings (user_id, updated_at)
     VALUES (?, CURRENT_TIMESTAMP)
   `).bind(id).run();
 
+  if (tokenData.refresh_token) {
+    await saveGoogleRefreshToken(env, id, tokenData);
+  } else if (!(await hasGoogleRefreshToken(env, id))) {
+    throw httpError(401, 'Google no devolvio refresh_token. Vuelve a entrar con Google y acepta los permisos.');
+  }
+
   const session = await sessionForUser(env, {
     id,
     email,
-    name: claims.name || email,
+    name: displayName,
     role: 'user',
   });
   const target = new URL(returnTo);
   target.searchParams.set('session_token', session.token);
   return Response.redirect(target.toString(), 302);
+}
+
+async function saveGoogleRefreshToken(env, userId, tokenData) {
+  const refreshToken = String(tokenData.refresh_token || '');
+  if (!refreshToken) return;
+
+  const encrypted = await encryptText(env, refreshToken);
+  const expiresAt = Math.floor(Date.now() / 1000) + Number(tokenData.expires_in || 3600);
+  await env.DB.prepare(`
+    INSERT INTO user_google_tokens (user_id, refresh_token_enc, scope, token_type, expires_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id) DO UPDATE SET
+      refresh_token_enc = excluded.refresh_token_enc,
+      scope = excluded.scope,
+      token_type = excluded.token_type,
+      expires_at = excluded.expires_at,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(userId, encrypted, String(tokenData.scope || ''), String(tokenData.token_type || ''), expiresAt).run();
+}
+
+async function hasGoogleRefreshToken(env, userId) {
+  const row = await env.DB.prepare('SELECT refresh_token_enc FROM user_google_tokens WHERE user_id = ?')
+    .bind(userId)
+    .first();
+  return Boolean(row?.refresh_token_enc);
+}
+
+async function googleAccessTokenForUser(env, userId) {
+  const row = await env.DB.prepare('SELECT refresh_token_enc FROM user_google_tokens WHERE user_id = ?')
+    .bind(userId)
+    .first();
+  if (!row?.refresh_token_enc) {
+    throw httpError(400, 'Vuelve a autenticar con Google para permitir crear Apps Script y Sheets.');
+  }
+
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+    throw httpError(500, 'Google OAuth no configurado');
+  }
+
+  const refreshToken = await decryptText(env, row.refresh_token_enc);
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: env.GOOGLE_CLIENT_ID,
+      client_secret: env.GOOGLE_CLIENT_SECRET,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.access_token) {
+    throw httpError(401, data.error_description || data.error || 'Google no devolvio access_token');
+  }
+  return data.access_token;
+}
+
+async function onboardingStatus(env, session) {
+  const user = await getSessionUser(env, session);
+  const installation = await getInstallation(env, user.id);
+  const hasGoogle = await hasGoogleRefreshToken(env, user.id);
+  const links = await env.DB.prepare('SELECT chat_id, label, active FROM user_chat_links WHERE user_id = ? AND active = 1 ORDER BY updated_at DESC')
+    .bind(user.id)
+    .all();
+
+  return {
+    ok: true,
+    user: sessionUserShape({ ...session, name: user.name, email: user.email }),
+    appName: appNameForUser(user),
+    google: {
+      connected: hasGoogle,
+      requiredScopes: GOOGLE_OAUTH_SCOPES,
+    },
+    installation: installationShape(installation),
+    telegram: {
+      configured: Boolean(installation?.telegram_bot_token_enc),
+      linkedChats: (links.results || []).map((row) => ({
+        chatId: row.chat_id,
+        label: row.label || `Chat ${row.chat_id}`,
+      })),
+    },
+  };
+}
+
+async function saveOnboardingTelegram(env, session, payload, request) {
+  const user = await getSessionUser(env, session);
+  const token = String(payload?.telegramBotToken || payload?.telegram_bot_token || '').trim();
+  if (!/^(\d+):[A-Za-z0-9_-]{20,}$/.test(token)) {
+    throw httpError(400, 'Token de Telegram invalido. Copialo desde BotFather.');
+  }
+
+  const installation = await ensureInstallation(env, user, request);
+  await env.DB.prepare(`
+    UPDATE user_installations
+    SET telegram_bot_token_enc = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND user_id = ?
+  `).bind(await encryptText(env, token), installation.id, user.id).run();
+
+  const next = await getInstallation(env, user.id);
+  return {
+    ok: true,
+    message: 'Token de Telegram guardado.',
+    installation: installationShape(next),
+    telegram: { configured: true },
+  };
+}
+
+async function provisionGoogleWorkspace(env, session, request) {
+  const user = await getSessionUser(env, session);
+  const installation = await ensureInstallation(env, user, request);
+  if (installation.script_id && installation.spreadsheet_id) {
+    return { ok: true, reused: true, installation: installationShape(installation) };
+  }
+
+  const appName = appNameForUser(user);
+  const accessToken = await googleAccessTokenForUser(env, user.id);
+
+  try {
+    const spreadsheet = await createGoogleSpreadsheet(accessToken, appName);
+    const script = await createAppsScriptProject(accessToken, appName, spreadsheet.spreadsheetId);
+    const installSecret = await issueInstallSecret(env, installation.id);
+    const files = await buildAppsScriptFiles(env, {
+      appName,
+      user,
+      installId: installation.id,
+      installSecret,
+      spreadsheetId: spreadsheet.spreadsheetId,
+      workerUrl: workerPublicUrl(env, request),
+    });
+
+    await googleJson(accessToken, `https://script.googleapis.com/v1/projects/${encodeURIComponent(script.scriptId)}/content`, {
+      method: 'PUT',
+      body: { files },
+    });
+    const version = await googleJson(accessToken, `https://script.googleapis.com/v1/projects/${encodeURIComponent(script.scriptId)}/versions`, {
+      method: 'POST',
+      body: { description: `${appName} inicial` },
+    });
+    const deployment = await googleJson(accessToken, `https://script.googleapis.com/v1/projects/${encodeURIComponent(script.scriptId)}/deployments`, {
+      method: 'POST',
+      body: {
+        versionNumber: version.versionNumber,
+        manifestFileName: 'appsscript',
+        description: `${appName} Telegram Web App`,
+      },
+    });
+    const webAppUrl = deploymentWebAppUrl(deployment);
+
+    await env.DB.prepare(`
+      UPDATE user_installations
+      SET app_name = ?,
+          spreadsheet_id = ?,
+          script_id = ?,
+          deployment_id = ?,
+          web_app_url = ?,
+          status = 'provisioned',
+          last_error = '',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).bind(appName, spreadsheet.spreadsheetId, script.scriptId, deployment.deploymentId || '', webAppUrl, installation.id, user.id).run();
+
+    const next = await getInstallation(env, user.id);
+    return { ok: true, installation: installationShape(next) };
+  } catch (error) {
+    await env.DB.prepare(`
+      UPDATE user_installations
+      SET status = 'error', last_error = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).bind(String(error?.message || error).slice(0, 500), installation.id, user.id).run();
+    throw error;
+  }
+}
+
+async function configureInstallationWebhook(env, session) {
+  const user = await getSessionUser(env, session);
+  const installation = await getInstallation(env, user.id);
+  if (!installation?.web_app_url) throw httpError(400, 'Primero crea el Apps Script.');
+  if (!installation?.telegram_bot_token_enc) throw httpError(400, 'Primero guarda el token de Telegram.');
+
+  const token = await decryptText(env, installation.telegram_bot_token_enc);
+  const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url: installation.web_app_url }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok === false) {
+    throw httpError(502, data.description || 'Telegram no pudo configurar el webhook');
+  }
+
+  await env.DB.prepare(`
+    UPDATE user_installations
+    SET status = 'ready', last_error = '', updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND user_id = ?
+  `).bind(installation.id, user.id).run();
+
+  return {
+    ok: true,
+    message: 'Webhook de Telegram configurado.',
+    installation: installationShape(await getInstallation(env, user.id)),
+  };
+}
+
+async function installationRuntimeConfig(env, params, payload, request) {
+  const installId = String(params.get('install_id') || payload.install_id || payload.installId || '').trim();
+  const installSecret = String(params.get('install_secret') || payload.install_secret || payload.installSecret || '').trim();
+  if (!installId || !installSecret) throw httpError(400, 'install_id e install_secret requeridos');
+
+  const installation = await env.DB.prepare(`
+    SELECT i.*, u.email, u.name
+    FROM user_installations i
+    JOIN users u ON u.id = i.user_id
+    WHERE i.id = ? AND u.active = 1
+  `).bind(installId).first();
+  if (!installation?.install_secret_hash) throw httpError(404, 'Instalacion no encontrada');
+  if (!(await constantTimeEqual(await sha256Hex(installSecret), installation.install_secret_hash))) {
+    throw httpError(401, 'Install secret invalido');
+  }
+
+  return {
+    ok: true,
+    appName: installation.app_name || appNameForUser(installation),
+    userName: installation.name || installation.email || '',
+    sheetId: installation.spreadsheet_id || '',
+    webappUrl: installation.web_app_url || '',
+    workerUrl: workerPublicUrl(env, request),
+    d1ApiUrl: workerPublicUrl(env, request),
+    d1AdminKey: installSecret,
+    dashboardUrl: env.DASHBOARD_URL || env.DASHBOARD_PAGES_URL || '',
+    telegramBotToken: installation.telegram_bot_token_enc ? await decryptText(env, installation.telegram_bot_token_enc) : '',
+  };
+}
+
+async function getSessionUser(env, session) {
+  if (!session?.userId || session.role === 'admin') {
+    const admin = await ensureUserForChat(env, env.DEFAULT_CHAT_ID);
+    return { id: admin.id, email: admin.email || session?.email || '', name: admin.name || admin.label || session?.name || 'Admin', role: 'admin' };
+  }
+
+  const user = await env.DB.prepare('SELECT id, email, name, role FROM users WHERE id = ? AND active = 1')
+    .bind(session.userId)
+    .first();
+  if (!user) throw httpError(404, 'Usuario no encontrado');
+  return user;
+}
+
+function appNameForUser(user) {
+  const rawName = String(user?.name || user?.email || 'Usuario').trim();
+  const firstName = rawName.split(/\s+/)[0] || rawName || 'Usuario';
+  return `Finanzas ${firstName}`.slice(0, 80);
+}
+
+function workerPublicUrl(env, request) {
+  if (env.WORKER_PUBLIC_URL) return String(env.WORKER_PUBLIC_URL).replace(/\/$/, '');
+  const url = new URL(request.url);
+  return url.origin.replace(/\/$/, '');
+}
+
+async function getInstallation(env, userId) {
+  return env.DB.prepare('SELECT * FROM user_installations WHERE user_id = ? AND provider = ?')
+    .bind(userId, 'google')
+    .first();
+}
+
+async function ensureInstallation(env, user, request) {
+  const existing = await getInstallation(env, user.id);
+  if (existing) return existing;
+
+  const id = `install:${(await sha256Hex(`${user.id}|google`)).slice(0, 32)}`;
+  const appName = appNameForUser(user);
+  await env.DB.prepare(`
+    INSERT INTO user_installations (id, user_id, provider, app_name, status, updated_at)
+    VALUES (?, ?, 'google', ?, 'pending', CURRENT_TIMESTAMP)
+  `).bind(id, user.id, appName).run();
+
+  const installSecret = randomSecret();
+  await env.DB.prepare(`
+    UPDATE user_installations
+    SET install_secret_hash = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(await sha256Hex(installSecret), id).run();
+
+  return {
+    id,
+    user_id: user.id,
+    provider: 'google',
+    app_name: appName,
+    spreadsheet_id: '',
+    script_id: '',
+    deployment_id: '',
+    web_app_url: '',
+    install_secret_hash: await sha256Hex(installSecret),
+    telegram_bot_token_enc: '',
+    status: 'pending',
+    last_error: '',
+    created_at: '',
+    updated_at: '',
+    worker_url: workerPublicUrl(env, request),
+  };
+}
+
+async function issueInstallSecret(env, installationId) {
+  const secret = randomSecret();
+  await env.DB.prepare(`
+    UPDATE user_installations
+    SET install_secret_hash = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(await sha256Hex(secret), installationId).run();
+  return secret;
+}
+
+function installationShape(row) {
+  if (!row) {
+    return {
+      exists: false,
+      status: 'pending',
+      appName: '',
+      spreadsheetId: '',
+      scriptId: '',
+      deploymentId: '',
+      webAppUrl: '',
+      telegramConfigured: false,
+      lastError: '',
+    };
+  }
+
+  return {
+    exists: true,
+    id: row.id,
+    status: row.status || 'pending',
+    appName: row.app_name || '',
+    spreadsheetId: row.spreadsheet_id || '',
+    scriptId: row.script_id || '',
+    deploymentId: row.deployment_id || '',
+    webAppUrl: row.web_app_url || '',
+    telegramConfigured: Boolean(row.telegram_bot_token_enc),
+    lastError: row.last_error || '',
+    updatedAt: row.updated_at || '',
+  };
+}
+
+async function createGoogleSpreadsheet(accessToken, appName) {
+  const sheets = [
+    'Transacciones',
+    'Presupuestos',
+    'Metas',
+    'Fijos',
+    'Deudas',
+    'CierresMensuales',
+  ].map((title) => ({ properties: { title } }));
+
+  const spreadsheet = await googleJson(accessToken, 'https://sheets.googleapis.com/v4/spreadsheets', {
+    method: 'POST',
+    body: {
+      properties: { title: `${appName} - Datos` },
+      sheets,
+    },
+  });
+
+  const headers = [
+    { range: 'Transacciones!A1:K1', values: [['Fecha', 'Hora', 'Tipo', 'Descripcion', 'Categoria', 'Monto', 'ChatID', 'Pago', 'FechaPago', 'Tarjeta', 'Moneda']] },
+    { range: 'Presupuestos!A1:C1', values: [['ChatID', 'Categoria', 'Limite']] },
+    { range: 'Metas!A1:E1', values: [['ChatID', 'Nombre', 'Objetivo', 'Ahorrado', 'Creada']] },
+    { range: 'Fijos!A1:E1', values: [['ChatID', 'Nombre', 'Monto', 'Categoria', 'Activo']] },
+    { range: 'Deudas!A1:G1', values: [['ChatID', 'Nombre', 'Total', 'Pagado', 'Vencimiento', 'Estado', 'Notas']] },
+    { range: 'CierresMensuales!A1:E1', values: [['Mes', 'Ingresos', 'Gastos', 'Balance', 'Creado']] },
+  ];
+
+  await googleJson(accessToken, `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheet.spreadsheetId)}/values:batchUpdate`, {
+    method: 'POST',
+    body: {
+      valueInputOption: 'RAW',
+      data: headers,
+    },
+  });
+
+  return spreadsheet;
+}
+
+async function createAppsScriptProject(accessToken, appName, spreadsheetId) {
+  return googleJson(accessToken, 'https://script.googleapis.com/v1/projects', {
+    method: 'POST',
+    body: {
+      title: appName,
+      parentId: spreadsheetId,
+    },
+  });
+}
+
+async function googleJson(accessToken, url, options = {}) {
+  const response = await fetch(url, {
+    method: options.method || 'GET',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+      ...(options.headers || {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data?.error?.message || data?.error_description || data?.error || `Google HTTP ${response.status}`;
+    throw httpError(response.status, message);
+  }
+  return data;
+}
+
+async function buildAppsScriptFiles(env, context) {
+  const template = await loadAppsScriptTemplate(env);
+  return template.map((file) => {
+    if (file.name === '00_Config' && file.type === 'SERVER_JS') {
+      return {
+        ...file,
+        source: generatedAppsScriptConfig(context),
+      };
+    }
+
+    if (file.type === 'SERVER_JS') {
+      return {
+        ...file,
+        source: personalizeAppsScriptSource(file.source, context.appName, context.user),
+      };
+    }
+
+    return file;
+  });
+}
+
+async function loadAppsScriptTemplate(env) {
+  if (!env.RECEIPTS_BUCKET) throw httpError(500, 'RECEIPTS_BUCKET no configurado');
+  const manifestObject = await env.RECEIPTS_BUCKET.get(APPS_SCRIPT_TEMPLATE_MANIFEST_KEY);
+  if (!manifestObject) {
+    throw httpError(500, 'Falta el template Apps Script en R2. Sube templates/apps-script/manifest.json.');
+  }
+
+  const manifest = JSON.parse(await manifestObject.text());
+  const files = [];
+  for (const item of manifest.files || []) {
+    const key = `${APPS_SCRIPT_TEMPLATE_PREFIX}${item.file}`;
+    const object = await env.RECEIPTS_BUCKET.get(key);
+    if (!object) throw httpError(500, `Falta template en R2: ${key}`);
+    const source = await object.text();
+    files.push({
+      name: item.name,
+      type: item.type,
+      source,
+    });
+  }
+
+  if (!files.some((file) => file.name === 'appsscript' && file.type === 'JSON')) {
+    throw httpError(500, 'El template debe incluir appsscript.json como archivo JSON.');
+  }
+
+  return files;
+}
+
+function generatedAppsScriptConfig({ appName, installId, installSecret, spreadsheetId, workerUrl }) {
+  return `// ============================================================\n` +
+    `//  BOT DE FINANZAS PERSONALES - ${escapeJsComment(appName)}\n` +
+    `//  Configuracion provisionada desde Cloudflare D1/R2\n` +
+    `// ============================================================\n\n` +
+    `const INSTALL_ID = '${escapeJsString(installId)}';\n` +
+    `const INSTALL_SECRET = '${escapeJsString(installSecret)}';\n` +
+    `const INSTALL_WORKER_URL = '${escapeJsString(workerUrl)}';\n\n` +
+    `ensureInstallProperties_();\n\n` +
+    `const TOKEN      = getRequiredScriptProperty_('telegram_bot_token');\n` +
+    `const WEBAPP_URL = PropertiesService.getScriptProperties().getProperty('webapp_url') || '';\n` +
+    `const SHEET_ID   = getRequiredScriptProperty_('sheet_id');\n` +
+    `const WORKER_URL = getRequiredScriptProperty_('worker_url');\n` +
+    `const APP_NAME   = PropertiesService.getScriptProperties().getProperty('app_name') || '${escapeJsString(appName)}';\n\n` +
+    `const CATS_GASTO   = ['comida','supermercado','transporte','servicios','entretenimiento','salud','ropa','educacion','otro'];\n` +
+    `const CATS_INGRESO = ['salario','freelance','inversion','venta','otro'];\n\n` +
+    `function ensureInstallProperties_() {\n` +
+    `  const props = PropertiesService.getScriptProperties();\n` +
+    `  const cache = CacheService.getScriptCache();\n` +
+    `  if (cache.get('install_config_ok') && props.getProperty('sheet_id')) return;\n\n` +
+    `  const resp = UrlFetchApp.fetch(INSTALL_WORKER_URL.replace(/\\/$/, '') + '/api/installations/config', {\n` +
+    `    method: 'post',\n` +
+    `    contentType: 'application/json',\n` +
+    `    payload: JSON.stringify({ install_id: INSTALL_ID, install_secret: INSTALL_SECRET }),\n` +
+    `    muteHttpExceptions: true,\n` +
+    `  });\n` +
+    `  const code = resp.getResponseCode();\n` +
+    `  const body = JSON.parse(resp.getContentText() || '{}');\n` +
+    `  if (code < 200 || code >= 300 || body.ok === false) throw new Error(body.error || ('No se pudo cargar config D1: HTTP ' + code));\n\n` +
+    `  const updates = {\n` +
+    `    app_name: body.appName || '${escapeJsString(appName)}',\n` +
+    `    telegram_bot_token: body.telegramBotToken || props.getProperty('telegram_bot_token') || '',\n` +
+    `    webapp_url: body.webappUrl || props.getProperty('webapp_url') || '',\n` +
+    `    sheet_id: body.sheetId || '${escapeJsString(spreadsheetId)}',\n` +
+    `    worker_url: body.workerUrl || INSTALL_WORKER_URL,\n` +
+    `    d1_api_url: body.d1ApiUrl || body.workerUrl || INSTALL_WORKER_URL,\n` +
+    `    d1_admin_key: body.d1AdminKey || INSTALL_SECRET,\n` +
+    `    dashboard_api_key: body.d1AdminKey || INSTALL_SECRET,\n` +
+    `    dashboard_url: body.dashboardUrl || props.getProperty('dashboard_url') || '',\n` +
+    `  };\n` +
+    `  Object.keys(updates).forEach(function (key) {\n` +
+    `    if (updates[key]) props.setProperty(key, String(updates[key]));\n` +
+    `  });\n` +
+    `  cache.put('install_config_ok', '1', 300);\n` +
+    `}\n\n` +
+    `function getRequiredScriptProperty_(name) {\n` +
+    `  const value = PropertiesService.getScriptProperties().getProperty(name);\n` +
+    `  if (!value) throw new Error('Falta Script Property: ' + name);\n` +
+    `  return value;\n` +
+    `}\n`;
+}
+
+function personalizeAppsScriptSource(source, appName, user) {
+  const firstName = String(user?.name || user?.email || 'Usuario').split(/\s+/)[0] || 'Usuario';
+  return String(source || '')
+    .replace(/Finanzas Mayeson/g, appName)
+    .replace(/FINANZAS MAYESON/g, appName.toUpperCase())
+    .replace(/Mayeson/g, firstName)
+    .replace(/MAYESON/g, firstName.toUpperCase())
+    .replace(/1538086276/g, '');
+}
+
+function deploymentWebAppUrl(deployment) {
+  const entry = (deployment.entryPoints || []).find((item) => item.entryPointType === 'WEB_APP');
+  return entry?.webApp?.url || '';
+}
+
+function escapeJsString(value) {
+  return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, ' ');
+}
+
+function escapeJsComment(value) {
+  return String(value || '').replace(/\r?\n/g, ' ').replace(/\*\//g, '* /');
+}
+
+function randomSecret() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncodeBytes(bytes);
 }
 
 async function changePassword(env, payload) {
@@ -670,6 +1258,8 @@ async function systemHealth(env) {
     ['adminKey', 'ADMIN_KEY', env.ADMIN_KEY],
     ['defaultChatId', 'DEFAULT_CHAT_ID', env.DEFAULT_CHAT_ID],
     ['sessionSecret', 'SESSION_SECRET', env.SESSION_SECRET],
+    ['googleClientId', 'GOOGLE_CLIENT_ID', env.GOOGLE_CLIENT_ID],
+    ['googleClientSecret', 'GOOGLE_CLIENT_SECRET', env.GOOGLE_CLIENT_SECRET],
   ].forEach(([id, label, value]) => {
     checks.push({
       id,
@@ -1087,23 +1677,40 @@ function userListShape(row) {
   };
 }
 
-async function linkTelegramUser(env, payload) {
+async function linkTelegramUser(env, payload, adminAccess = null) {
   const chatId = String(payload.chat_id || payload.chatId || '').trim();
   const name = String(payload.name || payload.nombre || '').trim().slice(0, 120);
   const email = normalizeEmail(payload.email || '');
   if (!chatId) throw httpError(400, 'chat_id requerido');
 
-  const userByEmail = email
-    ? await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ? AND active = 1').bind(email).first()
-    : null;
-  const existing = userByEmail ? {
-    id: userByEmail.id,
-    email: userByEmail.email || '',
-    name: userByEmail.name || '',
-    role: userByEmail.role || 'user',
-    chatId,
-    label: userByEmail.name || email,
-  } : await ensureUserForChat(env, chatId);
+  let existing = null;
+  if (adminAccess?.userId) {
+    const user = await env.DB.prepare('SELECT * FROM users WHERE id = ? AND active = 1')
+      .bind(adminAccess.userId)
+      .first();
+    if (!user) throw httpError(404, 'Usuario de instalacion no encontrado');
+    existing = {
+      id: user.id,
+      email: user.email || '',
+      name: user.name || '',
+      role: user.role || 'user',
+      chatId,
+      label: user.name || user.email || `Chat ${chatId}`,
+    };
+  } else {
+    const userByEmail = email
+      ? await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ? AND active = 1').bind(email).first()
+      : null;
+    existing = userByEmail ? {
+      id: userByEmail.id,
+      email: userByEmail.email || '',
+      name: userByEmail.name || '',
+      role: userByEmail.role || 'user',
+      chatId,
+      label: userByEmail.name || email,
+    } : await ensureUserForChat(env, chatId);
+  }
+
   const nextName = name || existing.name || existing.label || `Chat ${chatId}`;
   const nextEmail = email || existing.email || '';
 
@@ -1134,6 +1741,41 @@ async function linkTelegramUser(env, payload) {
       label: nextName,
     },
   };
+}
+
+async function scopedAdminPayload(env, payload, adminAccess) {
+  if (!adminAccess?.userId) return payload;
+
+  const chatId = String(payload.chat_id || payload.chatId || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido para esta instalacion');
+
+  await ensureChatLinkedToInstallation(env, adminAccess.userId, chatId);
+  return { ...payload, chat_id: chatId, chatId };
+}
+
+async function ensureChatLinkedToInstallation(env, userId, chatId) {
+  const existing = await env.DB.prepare('SELECT user_id FROM user_chat_links WHERE chat_id = ? AND active = 1')
+    .bind(chatId)
+    .first();
+  if (existing && existing.user_id !== userId) {
+    throw httpError(403, 'Este Chat ID ya esta vinculado a otro usuario');
+  }
+  if (existing) return;
+
+  const user = await env.DB.prepare('SELECT name, email FROM users WHERE id = ? AND active = 1')
+    .bind(userId)
+    .first();
+  const label = user?.name || user?.email || `Chat ${chatId}`;
+
+  await env.DB.prepare(`
+    INSERT INTO user_chat_links (id, user_id, chat_id, label, active, updated_at)
+    VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+    ON CONFLICT(chat_id) DO UPDATE SET
+      user_id = excluded.user_id,
+      label = excluded.label,
+      active = 1,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(`link:${safeObjectSegment(chatId)}`, userId, chatId, label).run();
 }
 
 async function ensureKnownUsers(env) {
@@ -2717,7 +3359,12 @@ async function requireDashboardAccess(request, env) {
 }
 
 async function requireDashboardOrAdminAccess(request, env) {
-  if (hasAdminKey(request, env)) return { sub: 'dashboard', role: 'admin', userId: 'admin_key' };
+  const adminAccess = await adminAccessForRequest(request, env);
+  if (adminAccess) {
+    return adminAccess.scope === 'global'
+      ? { sub: 'dashboard', role: 'admin', userId: 'admin_key' }
+      : { sub: 'dashboard', role: 'installation', userId: adminAccess.userId, installationId: adminAccess.installationId };
+  }
   return requireDashboardAccess(request, env);
 }
 
@@ -2729,16 +3376,54 @@ function hasDashboardKey(request, env) {
   return Boolean(expected && provided === expected);
 }
 
-function requireAdminKey(request, env) {
-  if (hasAdminKey(request, env)) return;
+async function requireAdminAccess(request, env) {
+  const access = await adminAccessForRequest(request, env);
+  if (access) return access;
   throw httpError(401, 'Unauthorized');
 }
 
+async function adminAccessForRequest(request, env) {
+  const provided = adminSecretFromRequest(request);
+  if (env.ADMIN_KEY && provided && constantTimeEqual(provided, env.ADMIN_KEY)) {
+    return { role: 'admin', scope: 'global' };
+  }
+
+  if (provided) {
+    const hash = await sha256Hex(provided);
+    const installation = await env.DB.prepare(`
+      SELECT id, user_id, status
+      FROM user_installations
+      WHERE install_secret_hash = ?
+      LIMIT 1
+    `).bind(hash).first();
+
+    if (installation?.user_id) {
+      return {
+        role: 'installation',
+        scope: 'installation',
+        userId: installation.user_id,
+        installationId: installation.id,
+        status: installation.status || '',
+      };
+    }
+  }
+
+  return null;
+}
+
+async function requireAdminKey(request, env) {
+  return requireAdminAccess(request, env);
+}
+
 function hasAdminKey(request, env) {
-  const provided = request.headers.get('x-admin-key') || bearer(request);
+  const provided = adminSecretFromRequest(request);
   const expected = env.ADMIN_KEY;
 
   return Boolean(expected && provided === expected);
+}
+
+function adminSecretFromRequest(request) {
+  return request.headers.get('x-admin-key') || bearer(request);
 }
 
 function bearer(request) {
@@ -2792,6 +3477,7 @@ function sessionUserShape(session) {
   return {
     id: session?.userId || '',
     email: session?.email || '',
+    name: session?.name || '',
     role: session?.role || 'user',
   };
 }
@@ -2868,6 +3554,29 @@ async function sha256Hex(value) {
     .join('');
 }
 
+async function encryptionKey(env) {
+  const digest = await crypto.subtle.digest('SHA-256', utf8Bytes(env.INSTALLATION_SECRET || sessionSecret(env)));
+  return crypto.subtle.importKey('raw', digest, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+
+async function encryptText(env, value) {
+  const iv = new Uint8Array(12);
+  crypto.getRandomValues(iv);
+  const key = await encryptionKey(env);
+  const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, utf8Bytes(value)));
+  return `${base64UrlEncodeBytes(iv)}.${base64UrlEncodeBytes(cipher)}`;
+}
+
+async function decryptText(env, value) {
+  const [ivPart, cipherPart] = String(value || '').split('.');
+  if (!ivPart || !cipherPart) return '';
+  const iv = base64UrlToBytes(ivPart);
+  const cipher = base64UrlToBytes(cipherPart);
+  const key = await encryptionKey(env);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
+  return new TextDecoder().decode(plain);
+}
+
 function utf8Bytes(value) {
   return new TextEncoder().encode(String(value));
 }
@@ -2896,6 +3605,15 @@ function base64UrlDecode(value) {
   const binary = atob(padded);
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
+}
+
+function base64UrlToBytes(value) {
+  const normalized = String(value || '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
 function constantTimeEqual(a, b) {

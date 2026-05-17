@@ -10,6 +10,7 @@ const TOKEN      = getRequiredScriptProperty_('telegram_bot_token');
 const WEBAPP_URL = getRequiredScriptProperty_('webapp_url');
 const SHEET_ID   = getRequiredScriptProperty_('sheet_id');
 const WORKER_URL = getRequiredScriptProperty_('worker_url');
+const APP_NAME   = PropertiesService.getScriptProperties().getProperty('app_name') || 'Finanzas Mayeson';
 
 const CATS_GASTO   = ['comida','supermercado','transporte','servicios','entretenimiento','salud','ropa','educacion','otro'];
 const CATS_INGRESO = ['salario','freelance','inversion','venta','otro'];
