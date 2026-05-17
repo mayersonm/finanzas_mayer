@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'analisis' | 'metas' | 'salud' | 'configuracion' | 'admin';
+export type TabId = 'inicio' | 'setup' | 'movimientos' | 'compromisos' | 'analisis' | 'metas' | 'salud' | 'configuracion' | 'admin';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {
@@ -57,6 +57,41 @@ export interface DashboardUser {
   active?: boolean;
   transactions: number;
   lastActivity?: string;
+}
+
+export interface OnboardingInstallation {
+  exists: boolean;
+  id?: string;
+  status: 'pending' | 'provisioned' | 'ready' | 'error' | string;
+  appName: string;
+  spreadsheetId: string;
+  scriptId: string;
+  deploymentId: string;
+  webAppUrl: string;
+  telegramConfigured: boolean;
+  lastError?: string;
+  updatedAt?: string;
+}
+
+export interface OnboardingStatus {
+  ok?: boolean;
+  appName: string;
+  user: {
+    id: string;
+    email?: string;
+    name?: string;
+    role?: string;
+  };
+  google: {
+    connected: boolean;
+    requiredScopes: string[];
+  };
+  installation: OnboardingInstallation;
+  telegram: {
+    configured: boolean;
+    linkedChats: Array<{ chatId: string; label: string }>;
+  };
+  error?: string;
 }
 
 export interface CategoryDefinition {
@@ -198,6 +233,8 @@ export interface SystemHealthData {
 
 export interface DashboardData {
   ok?: boolean;
+  onboardingRequired?: boolean;
+  appName?: string;
   balance: number;
   ingresos: number;
   gastos: number;

@@ -4,6 +4,7 @@ import {
   RiFileList3Line,
   RiFundsBoxLine,
   RiPulseLine,
+  RiRocketLine,
   RiSettings3Line,
   RiUserSettingsLine,
   RiWallet3Line,
@@ -12,6 +13,7 @@ import type { DashboardTab } from '../types/dashboard';
 
 export const tabs: DashboardTab[] = [
   { id: 'inicio', label: 'Inicio', icon: RiDashboardLine },
+  { id: 'setup', label: 'Setup', icon: RiRocketLine },
   { id: 'movimientos', label: 'Movimientos', icon: RiFileList3Line },
   { id: 'compromisos', label: 'Compromisos', icon: RiBankCardLine },
   { id: 'analisis', label: 'Analisis', icon: RiFundsBoxLine },

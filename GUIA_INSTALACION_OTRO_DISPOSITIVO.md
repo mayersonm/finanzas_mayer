@@ -6,8 +6,34 @@ Hay dos escenarios:
 
 - Mismo proyecto en otro dispositivo: usas el repo, el mismo Apps Script, el mismo Worker, el mismo D1, el mismo R2 y el mismo dashboard.
 - Instalacion desde cero: creas Telegram Bot, Google Sheet, Apps Script, Worker, D1, R2 y Pages desde una cuenta nueva.
+- Nuevo usuario desde el dashboard: entra con Google, abre `Setup`, pega su token de Telegram y el sistema crea su propio Google Sheet + Apps Script con el nombre del usuario.
 
 Nunca subas tokens, claves API, contrasenas ni archivos `.env` a Git.
+
+## Alta nueva desde el dashboard
+
+Usa este camino cuando el Worker, D1, R2 y dashboard principal ya existen.
+
+1. Entra al dashboard.
+2. Pulsa `Continuar con Google`.
+3. Acepta los permisos de Google para crear Sheets y Apps Script.
+4. Abre el tab `Setup`.
+5. Crea un bot nuevo en `@BotFather` y pega el token en `Telegram`.
+6. Pulsa `Crear entorno`.
+7. Pulsa `Activar bot`.
+8. Abre el bot en Telegram y envia:
+
+```text
+/start
+```
+
+El sistema crea un entorno nuevo con este formato:
+
+```text
+Finanzas NombreDelUsuario
+```
+
+Ese usuario empieza desde cero: no ve tus movimientos, no usa tu Chat ID y no escribe con tu `ADMIN_KEY` global.
 
 ## 1. Crear el bot en Telegram
 

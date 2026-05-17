@@ -7,7 +7,7 @@ import { AppHeader } from './components/layout/AppHeader';
 import { DashboardTabs } from './components/layout/DashboardTabs';
 import { MOCK_DASHBOARD } from './data/mockDashboard';
 import { getRealExpenses } from './lib/finance';
-import type { ApiStatus, DashboardData, DashboardUser, TabId } from './types/dashboard';
+import type { ApiStatus, DashboardData, DashboardUser, OnboardingStatus, TabId } from './types/dashboard';
 
 const AnalysisSection = lazy(() => import('./features/analysis/AnalysisSection').then((mod) => ({ default: mod.AnalysisSection })));
 const AdminSection = lazy(() => import('./features/admin/AdminSection').then((mod) => ({ default: mod.AdminSection })));
@@ -15,6 +15,7 @@ const CommitmentsSection = lazy(() => import('./features/commitments/Commitments
 const GoalsSection = lazy(() => import('./features/goals/GoalsSection').then((mod) => ({ default: mod.GoalsSection })));
 const HealthSection = lazy(() => import('./features/health/HealthSection').then((mod) => ({ default: mod.HealthSection })));
 const MovementsSection = lazy(() => import('./features/movements/MovementsSection').then((mod) => ({ default: mod.MovementsSection })));
+const OnboardingSection = lazy(() => import('./features/onboarding/OnboardingSection').then((mod) => ({ default: mod.OnboardingSection })));
 const OverviewSection = lazy(() => import('./features/overview/OverviewSection').then((mod) => ({ default: mod.OverviewSection })));
 const SettingsSection = lazy(() => import('./features/settings/SettingsSection').then((mod) => ({ default: mod.SettingsSection })));
 
@@ -50,6 +51,7 @@ export default function App() {
   });
   const [users, setUsers] = useState<DashboardUser[]>([]);
   const [selectedChatId, setSelectedChatId] = useState('');
+  const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
 
   const configured = isApiConfigured();
   const realExpenses = useMemo(() => getRealExpenses(data), [data]);
@@ -133,6 +135,23 @@ export default function App() {
     }
   }, [configured, token]);
 
+  const fetchOnboarding = useCallback(async (sessionToken?: string | null) => {
+    const activeToken = sessionToken ?? token;
+    if (!configured || !activeToken) return;
+
+    try {
+      const response = await fetch(apiEndpoint('onboarding/status'), {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      });
+      const result = await response.json() as OnboardingStatus;
+      if (response.ok && result.ok !== false) {
+        setOnboarding(result);
+      }
+    } catch (error) {
+      console.error('Onboarding error:', error);
+    }
+  }, [configured, token]);
+
   const handleAuthSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const cleanPassword = password.trim();
@@ -162,6 +181,7 @@ export default function App() {
       setAuthMode('login');
       setStatus('demo');
       await fetchUsers(result.token);
+      await fetchOnboarding(result.token);
       await fetchData(result.token);
     } catch (error) {
       console.error('Login error:', error);
@@ -169,7 +189,7 @@ export default function App() {
     } finally {
       setAuthLoading(false);
     }
-  }, [authMode, email, fetchData, fetchUsers, name, password]);
+  }, [authMode, email, fetchData, fetchOnboarding, fetchUsers, name, password]);
 
   const handleGoogleLogin = useCallback(() => {
     const returnTo = `${window.location.origin}${window.location.pathname}`;
@@ -186,6 +206,7 @@ export default function App() {
     setAuthError('');
     setUsers([]);
     setSelectedChatId('');
+    setOnboarding(null);
     void fetch(apiEndpoint('logout'), { method: 'POST' }).catch(() => undefined);
   }, []);
 
@@ -251,14 +272,22 @@ export default function App() {
     url.searchParams.delete('session_token');
     window.history.replaceState({}, '', url.toString());
     void fetchUsers(sessionToken);
+    void fetchOnboarding(sessionToken);
     void fetchData(sessionToken);
-  }, [fetchData, fetchUsers]);
+  }, [fetchData, fetchOnboarding, fetchUsers]);
 
   useEffect(() => {
     if (!configured || !token) return;
     void fetchData(token);
     void fetchUsers(token);
-  }, [fetchData, configured, token]);
+    void fetchOnboarding(token);
+  }, [fetchData, fetchOnboarding, fetchUsers, configured, token]);
+
+  useEffect(() => {
+    if (data.onboardingRequired && tab === 'inicio') {
+      setTab('setup');
+    }
+  }, [data.onboardingRequired, tab]);
 
   useEffect(() => {
     if (!configured || !token) return undefined;
@@ -291,6 +320,8 @@ export default function App() {
     );
   }
 
+  const appName = onboarding?.appName || data.appName || 'Finanzas personales';
+
   return (
     <main className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-6 sm:py-5 lg:px-8">
       <div  className={showPasswordPanel ? 'pointer-events-none blur-sm' : ''}>
@@ -311,12 +342,14 @@ export default function App() {
           users={users}
           selectedChatId={selectedChatId}
           onSelectedChatIdChange={setSelectedChatId}
+          appName={appName}
         />
 
         <DashboardTabs activeTab={tab} onTabChange={setTab} />
 
         <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
           {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} /> : null}
+          {tab === 'setup' ? <OnboardingSection authToken={token} status={onboarding} onRefresh={() => fetchOnboarding()} onGoogleLogin={handleGoogleLogin} /> : null}
           {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
           {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
           {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
