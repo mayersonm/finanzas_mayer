@@ -50,6 +50,19 @@ export default {
         return json(await login(env, payload));
       }
 
+      if (url.pathname === '/api/register' && request.method === 'POST') {
+        const payload = await request.json();
+        return json(await registerUser(env, payload), 201);
+      }
+
+      if (url.pathname === '/api/auth/google/start' && request.method === 'GET') {
+        return googleStart(request, env);
+      }
+
+      if (url.pathname === '/api/auth/google/callback' && request.method === 'GET') {
+        return googleCallback(request, env);
+      }
+
       if (url.pathname === '/api/session' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json({ ok: true, authenticated: true });
@@ -267,19 +280,73 @@ async function health(env) {
 
 async function login(env, payload) {
   const password = String(payload?.password || '');
+  const email = normalizeEmail(payload?.email || '');
 
   if (!password) {
     throw httpError(400, 'Password requerido');
+  }
+
+  if (email) {
+    const user = await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ? AND active = 1')
+      .bind(email)
+      .first();
+    const expected = user?.password_hash || '';
+    if (!user || !expected || !(await constantTimeEqual(await sha256Hex(password), expected))) {
+      throw httpError(401, 'Credenciales invalidas');
+    }
+
+    return sessionForUser(env, user);
   }
 
   if (!(await isValidLoginPassword(env, password))) {
     throw httpError(401, 'Credenciales invalidas');
   }
 
+  const adminUser = await ensureUserForChat(env, env.DEFAULT_CHAT_ID);
+  return sessionForUser(env, {
+    id: adminUser.id,
+    email: adminUser.email || '',
+    name: adminUser.name || adminUser.label || 'Admin',
+    role: 'admin',
+  });
+}
+
+async function registerUser(env, payload) {
+  const email = normalizeEmail(payload?.email || '');
+  const name = String(payload?.name || payload?.nombre || '').trim().slice(0, 120);
+  const password = String(payload?.password || '');
+
+  if (!email) throw httpError(400, 'email requerido');
+  if (password.length < 12) throw httpError(400, 'La clave debe tener al menos 12 caracteres');
+
+  const existing = await env.DB.prepare('SELECT id FROM users WHERE lower(email) = ?')
+    .bind(email)
+    .first();
+  if (existing) throw httpError(409, 'Ya existe un usuario con ese correo');
+
+  const id = `user:${(await sha256Hex(email)).slice(0, 24)}`;
+  const passwordHash = await sha256Hex(password);
+  await env.DB.prepare(`
+    INSERT INTO users (id, email, name, role, password_hash, active, updated_at)
+    VALUES (?, ?, ?, 'user', ?, 1, CURRENT_TIMESTAMP)
+  `).bind(id, email, name || email, passwordHash).run();
+
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO user_settings (user_id, updated_at)
+    VALUES (?, CURRENT_TIMESTAMP)
+  `).bind(id).run();
+
+  return sessionForUser(env, { id, email, name: name || email, role: 'user' });
+}
+
+async function sessionForUser(env, user) {
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = now + 60 * 60 * 12;
   const token = await signSessionToken(env, {
     sub: 'dashboard',
+    userId: user.id || '',
+    email: user.email || '',
+    role: user.role || 'user',
     iat: now,
     exp: expiresAt,
   });
@@ -288,7 +355,93 @@ async function login(env, payload) {
     ok: true,
     token,
     expiresAt,
+    user: {
+      id: user.id || '',
+      email: user.email || '',
+      name: user.name || '',
+      role: user.role || 'user',
+    },
   };
+}
+
+async function googleStart(request, env) {
+  if (!env.GOOGLE_CLIENT_ID) throw httpError(500, 'GOOGLE_CLIENT_ID no configurado');
+  const url = new URL(request.url);
+  const returnTo = url.searchParams.get('return_to') || url.origin;
+  const state = base64UrlEncode(JSON.stringify({ returnTo }));
+  const redirectUri = googleRedirectUri(request, env);
+  const auth = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  auth.searchParams.set('client_id', env.GOOGLE_CLIENT_ID);
+  auth.searchParams.set('redirect_uri', redirectUri);
+  auth.searchParams.set('response_type', 'code');
+  auth.searchParams.set('scope', 'openid email profile');
+  auth.searchParams.set('state', state);
+  auth.searchParams.set('prompt', 'select_account');
+  return Response.redirect(auth.toString(), 302);
+}
+
+async function googleCallback(request, env) {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+    throw httpError(500, 'Google OAuth no configurado');
+  }
+
+  const url = new URL(request.url);
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state') || '';
+  if (!code) throw httpError(400, 'Falta code');
+
+  let returnTo = url.origin;
+  try {
+    const parsed = JSON.parse(base64UrlDecode(state));
+    if (parsed.returnTo) returnTo = parsed.returnTo;
+  } catch (_error) {
+    returnTo = url.origin;
+  }
+
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: env.GOOGLE_CLIENT_ID,
+      client_secret: env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: googleRedirectUri(request, env),
+      grant_type: 'authorization_code',
+    }),
+  });
+  const tokenData = await tokenResponse.json();
+  if (!tokenResponse.ok || !tokenData.id_token) throw httpError(401, 'Google no pudo autenticar');
+
+  const claims = parseJwtPayload(tokenData.id_token);
+  const email = normalizeEmail(claims.email || '');
+  if (!email) throw httpError(400, 'Google no devolvio email');
+
+  const id = `google:${claims.sub}`;
+  await env.DB.prepare(`
+    INSERT INTO users (id, email, name, google_sub, role, active, updated_at)
+    VALUES (?, ?, ?, ?, 'user', 1, CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET
+      email = excluded.email,
+      name = excluded.name,
+      google_sub = excluded.google_sub,
+      active = 1,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(id, email, String(claims.name || email).slice(0, 120), claims.sub).run();
+
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO user_settings (user_id, updated_at)
+    VALUES (?, CURRENT_TIMESTAMP)
+  `).bind(id).run();
+
+  const session = await sessionForUser(env, {
+    id,
+    email,
+    name: claims.name || email,
+    role: 'user',
+  });
+  const target = new URL(returnTo);
+  target.searchParams.set('session_token', session.token);
+  return Response.redirect(target.toString(), 302);
 }
 
 async function changePassword(env, payload) {
@@ -860,10 +1013,20 @@ async function usersList(env) {
 async function linkTelegramUser(env, payload) {
   const chatId = String(payload.chat_id || payload.chatId || '').trim();
   const name = String(payload.name || payload.nombre || '').trim().slice(0, 120);
-  const email = String(payload.email || '').trim().toLowerCase().slice(0, 180);
+  const email = normalizeEmail(payload.email || '');
   if (!chatId) throw httpError(400, 'chat_id requerido');
 
-  const existing = await ensureUserForChat(env, chatId);
+  const userByEmail = email
+    ? await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ? AND active = 1').bind(email).first()
+    : null;
+  const existing = userByEmail ? {
+    id: userByEmail.id,
+    email: userByEmail.email || '',
+    name: userByEmail.name || '',
+    role: userByEmail.role || 'user',
+    chatId,
+    label: userByEmail.name || email,
+  } : await ensureUserForChat(env, chatId);
   const nextName = name || existing.name || existing.label || `Chat ${chatId}`;
   const nextEmail = email || existing.email || '';
 
@@ -876,10 +1039,14 @@ async function linkTelegramUser(env, payload) {
   `).bind(nextName, nextEmail, nextEmail, existing.id).run();
 
   await env.DB.prepare(`
-    UPDATE user_chat_links
-    SET label = ?, active = 1, updated_at = CURRENT_TIMESTAMP
-    WHERE chat_id = ?
-  `).bind(nextName, chatId).run();
+    INSERT INTO user_chat_links (id, user_id, chat_id, label, active, updated_at)
+    VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+    ON CONFLICT(chat_id) DO UPDATE SET
+      user_id = excluded.user_id,
+      label = excluded.label,
+      active = 1,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(`link:${safeObjectSegment(chatId)}`, existing.id, chatId, nextName).run();
 
   return {
     ok: true,
@@ -2476,6 +2643,23 @@ function sessionSecret(env) {
   const secret = env.SESSION_SECRET;
   if (!secret) throw httpError(500, 'SESSION_SECRET no configurado');
   return String(secret);
+}
+
+function googleRedirectUri(request, env) {
+  if (env.GOOGLE_REDIRECT_URI) return String(env.GOOGLE_REDIRECT_URI);
+  const url = new URL(request.url);
+  return `${url.origin}/api/auth/google/callback`;
+}
+
+function parseJwtPayload(token) {
+  const body = String(token || '').split('.')[1] || '';
+  if (!body) return {};
+  return JSON.parse(base64UrlDecode(body));
+}
+
+function normalizeEmail(value) {
+  const email = String(value || '').trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
 }
 
 function getChatId(env, params) {
