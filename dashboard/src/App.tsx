@@ -31,6 +31,9 @@ export default function App() {
   const [status, setStatus] = useState<ApiStatus>('demo');
   const [token, setToken] = useState<string | null>(() => window.localStorage.getItem(SESSION_STORAGE_KEY));
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [showPasswordPanel, setShowPasswordPanel] = useState(false);
@@ -130,21 +133,22 @@ export default function App() {
     }
   }, [configured, token]);
 
-  const handleLogin = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+  const handleAuthSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const cleanPassword = password.trim();
-    if (!cleanPassword) return;
+    const cleanEmail = email.trim();
+    if (!cleanPassword || (authMode === 'register' && !cleanEmail)) return;
 
     setAuthLoading(true);
     setAuthError('');
 
     try {
-      const response = await fetch(apiEndpoint('login'), {
+      const response = await fetch(apiEndpoint(authMode === 'register' ? 'register' : 'login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password: cleanPassword }),
+        body: JSON.stringify({ email: cleanEmail, password: cleanPassword, name: name.trim() }),
       });
       const result = await response.json() as { ok?: boolean; token?: string; error?: string };
 
@@ -155,16 +159,24 @@ export default function App() {
       window.localStorage.setItem(SESSION_STORAGE_KEY, result.token);
       setToken(result.token);
       setPassword('');
+      setAuthMode('login');
       setStatus('demo');
       await fetchUsers(result.token);
       await fetchData(result.token);
     } catch (error) {
       console.error('Login error:', error);
-      setAuthError('Clave incorrecta o API no disponible.');
+      setAuthError(authMode === 'register' ? 'No se pudo registrar. Revisa correo y clave.' : 'Credenciales incorrectas o API no disponible.');
     } finally {
       setAuthLoading(false);
     }
-  }, [fetchData, password]);
+  }, [authMode, email, fetchData, fetchUsers, name, password]);
+
+  const handleGoogleLogin = useCallback(() => {
+    const returnTo = `${window.location.origin}${window.location.pathname}`;
+    const url = new URL(apiEndpoint('auth/google/start'));
+    url.searchParams.set('return_to', returnTo);
+    window.location.href = url.toString();
+  }, []);
 
   const handleLogout = useCallback(() => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -231,6 +243,18 @@ export default function App() {
   }, [confirmPassword, currentPassword, fetchData, newPassword, token]);
 
   useEffect(() => {
+    const url = new URL(window.location.href);
+    const sessionToken = url.searchParams.get('session_token');
+    if (!sessionToken) return;
+    window.localStorage.setItem(SESSION_STORAGE_KEY, sessionToken);
+    setToken(sessionToken);
+    url.searchParams.delete('session_token');
+    window.history.replaceState({}, '', url.toString());
+    void fetchUsers(sessionToken);
+    void fetchData(sessionToken);
+  }, [fetchData, fetchUsers]);
+
+  useEffect(() => {
     if (!configured || !token) return;
     void fetchData(token);
     void fetchUsers(token);
@@ -252,10 +276,17 @@ export default function App() {
     return (
       <LoginScreen
         password={password}
+        email={email}
+        name={name}
+        mode={authMode}
         error={authError}
         loading={authLoading}
         onPasswordChange={setPassword}
-        onSubmit={handleLogin}
+        onEmailChange={setEmail}
+        onNameChange={setName}
+        onModeChange={setAuthMode}
+        onGoogleLogin={handleGoogleLogin}
+        onSubmit={handleAuthSubmit}
       />
     );
   }
