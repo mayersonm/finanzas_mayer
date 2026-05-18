@@ -215,15 +215,25 @@ export function CommitmentsSection({
         </div>
       </Card>
 
+
       <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <Title>Deudas</Title>
-            <Text>{debts.filter((item) => item.estado !== 'pagada').length} activas</Text>
+            <Title>Presupuesto</Title>
+            <Text>Si no hay gasto, se considera el limite completo.</Text>
           </div>
-          <Badge color="rose">{formatMoney(activeDebtTotal)}</Badge>
+          <Badge color="sky">{formatMoney(realExpenses.totalPresupuesto)}</Badge>
         </div>
+        <div className="mt-4 sm:mt-5">
+          {data.presupuestos.length ? (
+            data.presupuestos.map((item) => <BudgetProgress key={item.cat} item={item} />)
+          ) : (
+            <EmptyState>Sin presupuestos registrados.</EmptyState>
+          )}
+        </div>
+      </Card>
 
+      <Card>
         <form className="mt-5 grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3" onSubmit={saveDebt}>
           <div className="flex items-center justify-between gap-3">
             <Text className="font-semibold text-slate-100">{draft.id ? 'Editar deuda' : 'Nueva deuda'}</Text>
@@ -251,6 +261,16 @@ export function CommitmentsSection({
             {draft.id ? 'Guardar deuda' : 'Crear deuda'}
           </button>
         </form>
+      </Card>
+
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Title>Deudas</Title>
+            <Text>{debts.filter((item) => item.estado !== 'pagada').length} activas</Text>
+          </div>
+          <Badge color="rose">{formatMoney(activeDebtTotal)}</Badge>
+        </div>
 
         {payment.debt ? (
           <form className="mt-3 grid gap-3 rounded-tremor-default border border-emerald-500/20 bg-emerald-500/10 p-3" onSubmit={savePayment}>
@@ -293,22 +313,7 @@ export function CommitmentsSection({
         </div>
       </Card>
 
-      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <Title>Presupuesto</Title>
-            <Text>Si no hay gasto, se considera el limite completo.</Text>
-          </div>
-          <Badge color="sky">{formatMoney(realExpenses.totalPresupuesto)}</Badge>
-        </div>
-        <div className="mt-4 sm:mt-5">
-          {data.presupuestos.length ? (
-            data.presupuestos.map((item) => <BudgetProgress key={item.cat} item={item} />)
-          ) : (
-            <EmptyState>Sin presupuestos registrados.</EmptyState>
-          )}
-        </div>
-      </Card>
+      
 
       <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
         <div className="lg:col-span-2">
