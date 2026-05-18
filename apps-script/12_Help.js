@@ -26,16 +26,23 @@ function sendHelp(chatId) {
     .filter(r => r[2] === 'gasto' && Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes)
     .reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
   let deudasActivas = 0;
-  let deudaPendiente = 0;
+  let deudaPendientePen = 0;
+  let deudaPendienteUsd = 0;
   try {
     const deudas = leerDeudas_(chatId)
       .filter(d => d.estado !== 'pagada' && d.pendiente > 0);
     deudasActivas = deudas.length;
-    deudaPendiente = deudas.reduce((a, d) => a + d.pendiente, 0);
+    deudaPendientePen = deudas.filter(d => d.currency !== 'USD').reduce((a, d) => a + d.pendiente, 0);
+    deudaPendienteUsd = deudas.filter(d => d.currency === 'USD').reduce((a, d) => a + d.pendiente, 0);
   } catch (_err) {
     deudasActivas = 0;
-    deudaPendiente = 0;
+    deudaPendientePen = 0;
+    deudaPendienteUsd = 0;
   }
+  const resumenDeuda = [
+    deudaPendientePen > 0 ? `S/ ${deudaPendientePen.toFixed(2)}` : '',
+    deudaPendienteUsd > 0 ? `US$ ${deudaPendienteUsd.toFixed(2)}` : '',
+  ].filter(Boolean).join(' + ');
 
   const help = [
     `${saludo}, *Mayeson* 👋`,
@@ -47,7 +54,7 @@ function sendHelp(chatId) {
     `• ${emoji} Balance: *S/ ${balance.toFixed(2)}*`,
     `• 💸 Gastos ${nomMes}: *S/ ${gastosMes.toFixed(2)}*`,
     `• 🧾 Movimientos: *${data.length}*`,
-    `• 💳 Deudas activas: *${deudasActivas}*${deudaPendiente > 0 ? ` · S/ ${deudaPendiente.toFixed(2)}` : ''}`,
+    `• 💳 Deudas activas: *${deudasActivas}*${resumenDeuda ? ` · ${resumenDeuda}` : ''}`,
     '',
     '🚀 *Empieza aqui*',
     '',
@@ -95,8 +102,10 @@ function sendHelp(chatId) {
     '💳 *Deudas*',
     '',
     '• ➕ `deuda laptop 2500 vence 2026-06-30` - crear/actualizar',
+    '• ➕ `deuda viaje 800 USD vence 2026-08-15` - deuda en dolares',
     '• ➕ `deuda prestamo 1200` - sin vencimiento',
     '• 💵 `pagar deuda laptop 300`',
+    '• 💵 `pagar deuda viaje 100 USD`',
     '• 📌 `deudas` - ver pendientes',
     '',
     '🎯 *Presupuestos y metas*',

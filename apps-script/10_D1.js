@@ -129,6 +129,7 @@ function guardarDeudaD1(debt) {
       nombre: debt.nombre,
       total: Number(debt.total || 0),
       pagado: Number(debt.pagado || 0),
+      currency: normalizarMoneda_(debt.currency || debt.moneda) || 'PEN',
       vencimiento: debt.vencimiento || '',
       estado: debt.estado || 'activa',
       notas: debt.notas || '',

@@ -117,8 +117,12 @@ pago 1 debito
 
 ```text
 deuda laptop 2500 vence 2026-06-30
+deuda viaje 800 USD vence 2026-08-15
 pagar deuda laptop 300
+pagar deuda viaje 100 USD
 deudas
 alertas
 insights
 ```
+
+Las deudas aceptan `PEN` y `USD`. En el dashboard, las deudas en USD muestran su monto original y una referencia convertida a soles con la tasa USD/PEN cacheada por el Worker.
