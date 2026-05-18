@@ -35,6 +35,8 @@ export default {
     const url = new URL(request.url);
     const receiptFileMatch = url.pathname.match(/^\/api\/receipts\/([^/]+)\/file$/);
     const transactionMatch = url.pathname.match(/^\/api\/transactions\/([^/]+)$/);
+    const debtMatch = url.pathname.match(/^\/api\/debts\/([^/]+)$/);
+    const debtPaymentMatch = url.pathname.match(/^\/api\/debts\/([^/]+)\/payments$/);
 
     if (request.method === 'OPTIONS') {
       return corsResponse(null, 204);
@@ -219,9 +221,26 @@ export default {
       }
 
       if (url.pathname === '/api/debts' && request.method === 'POST') {
-        requireAdminKey(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
         return json(await upsertDebtFromPayload(env, payload), 201);
+      }
+
+      if (debtMatch && request.method === 'PATCH') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await updateDebtFromDashboard(env, decodeURIComponent(debtMatch[1]), payload, url.searchParams));
+      }
+
+      if (debtMatch && request.method === 'DELETE') {
+        await requireDashboardAccess(request, env);
+        return json(await deleteDebt(env, decodeURIComponent(debtMatch[1]), url.searchParams));
+      }
+
+      if (debtPaymentMatch && request.method === 'POST') {
+        await requireDashboardOrAdminAccess(request, env);
+        const payload = await request.json();
+        return json(await addDebtPayment(env, decodeURIComponent(debtPaymentMatch[1]), payload, url.searchParams), 201);
       }
 
       if (url.pathname === '/api/receipts' && request.method === 'POST') {
@@ -1980,11 +1999,11 @@ async function upsertDebtFromPayload(env, payload) {
 
   const debt = normalizeDebt(payload, chatId);
   if (!debt) throw httpError(400, 'Deuda invalida');
-  await saveDebt(env, debt);
+  const saved = await saveDebt(env, debt);
 
   return {
     ok: true,
-    debt: debtShape(debt),
+    debt: debtShape(saved),
   };
 }
 
@@ -2047,6 +2066,126 @@ async function saveDebt(env, debt) {
     debt.status,
     debt.notes,
   ).run();
+
+  return env.DB.prepare('SELECT * FROM debts WHERE id = ? AND chat_id = ?')
+    .bind(debt.id, debt.chat_id)
+    .first();
+}
+
+async function updateDebtFromDashboard(env, id, payload, params) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const cleanId = String(id || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  if (!cleanId) throw httpError(400, 'id requerido');
+
+  const existing = await env.DB.prepare('SELECT * FROM debts WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .first();
+  if (!existing) throw httpError(404, 'Deuda no encontrada');
+
+  const name = normalizeKey(payload.nombre ?? payload.name ?? existing.name);
+  const totalAmount = parseAmount(payload.total ?? payload.total_amount ?? payload.totalAmount ?? existing.total_amount);
+  const paidAmount = parseAmount(payload.pagado ?? payload.paid_amount ?? payload.paidAmount ?? existing.paid_amount);
+  const currency = normalizeCurrency(payload.currency ?? existing.currency);
+  const dueDate = normalizeDateOnly(payload.vencimiento ?? payload.due_date ?? payload.dueDate ?? existing.due_date ?? '');
+  const notes = String(payload.notas ?? payload.notes ?? existing.notes ?? '').trim().slice(0, 240);
+  const statusRaw = normalizeKey(payload.estado ?? payload.status ?? existing.status ?? '');
+  const paid = round(Math.min(Math.max(paidAmount, 0), totalAmount));
+  const status = statusRaw === 'pagada' || statusRaw === 'pagado' || paid >= totalAmount ? 'pagada' : 'activa';
+
+  if (!name) throw httpError(400, 'nombre requerido');
+  if (totalAmount <= 0) throw httpError(400, 'total invalido');
+
+  await env.DB.prepare(`
+    UPDATE debts
+    SET name = ?,
+        total_amount = ?,
+        paid_amount = ?,
+        currency = ?,
+        due_date = ?,
+        status = ?,
+        notes = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND chat_id = ?
+  `).bind(name, round(totalAmount), paid, currency, dueDate || null, status, notes, cleanId, chatId).run();
+
+  const saved = await env.DB.prepare('SELECT * FROM debts WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .first();
+  return { ok: true, debt: debtShape(saved) };
+}
+
+async function deleteDebt(env, id, params) {
+  const chatId = String(params.get('chat_id') || env.DEFAULT_CHAT_ID || '').trim();
+  const cleanId = String(id || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  if (!cleanId) throw httpError(400, 'id requerido');
+
+  const existing = await env.DB.prepare('SELECT id FROM debts WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .first();
+  if (!existing) throw httpError(404, 'Deuda no encontrada');
+
+  await env.DB.prepare('DELETE FROM debt_payments WHERE debt_id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .run();
+  await env.DB.prepare('DELETE FROM debts WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .run();
+
+  return { ok: true, deleted: true, id: cleanId };
+}
+
+async function addDebtPayment(env, id, payload, params) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const cleanId = String(id || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  if (!cleanId) throw httpError(400, 'id requerido');
+
+  const existing = await env.DB.prepare('SELECT * FROM debts WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .first();
+  if (!existing) throw httpError(404, 'Deuda no encontrada');
+
+  const amount = parseAmount(payload.amount ?? payload.monto ?? 0);
+  const currency = normalizeCurrency(payload.currency || existing.currency || 'PEN');
+  const paymentDate = normalizeDateOnly(payload.paymentDate || payload.payment_date || payload.fecha || localDateKey(new Date())) || localDateKey(new Date());
+  const notes = String(payload.notes || payload.notas || '').trim().slice(0, 200);
+
+  if (amount <= 0) throw httpError(400, 'monto invalido');
+  if (currency !== normalizeCurrency(existing.currency || 'PEN')) {
+    throw httpError(400, `La deuda esta en ${existing.currency || 'PEN'}. Registra el pago en la misma moneda.`);
+  }
+
+  const currentPaid = Number(existing.paid_amount || 0);
+  const totalAmount = Number(existing.total_amount || 0);
+  const appliedAmount = round(Math.min(amount, Math.max(totalAmount - currentPaid, 0)));
+  if (appliedAmount <= 0) throw httpError(400, 'La deuda ya esta pagada');
+
+  const paymentId = String(payload.id || `debtpay:${cleanId}:${Date.now()}`).slice(0, 180);
+  await env.DB.prepare(`
+    INSERT INTO debt_payments (id, debt_id, chat_id, amount, currency, payment_date, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).bind(paymentId, cleanId, chatId, appliedAmount, currency, paymentDate, notes).run();
+
+  const nextPaid = round(Math.min(totalAmount, currentPaid + appliedAmount));
+  const nextStatus = nextPaid >= totalAmount ? 'pagada' : 'activa';
+  await env.DB.prepare(`
+    UPDATE debts
+    SET paid_amount = ?,
+        status = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND chat_id = ?
+  `).bind(nextPaid, nextStatus, cleanId, chatId).run();
+
+  const debt = await env.DB.prepare('SELECT * FROM debts WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .first();
+  const payment = await env.DB.prepare('SELECT * FROM debt_payments WHERE id = ?')
+    .bind(paymentId)
+    .first();
+
+  return { ok: true, debt: debtShape(debt), payment: debtPaymentShape(payment) };
 }
 
 async function lastMonths(env, chatId, now) {
@@ -2172,7 +2311,27 @@ async function debtsList(env, chatId) {
       total_amount - paid_amount DESC
   `).bind(chatId).all();
 
-  return (rows.results || []).map(debtShape);
+  const debts = rows.results || [];
+  if (!debts.length) return [];
+
+  const paymentsRows = await env.DB.prepare(`
+    SELECT id, debt_id, chat_id, amount, currency, payment_date, notes, created_at
+    FROM debt_payments
+    WHERE chat_id = ?
+    ORDER BY payment_date DESC, created_at DESC
+  `).bind(chatId).all();
+
+  const paymentsByDebt = {};
+  for (const payment of paymentsRows.results || []) {
+    const key = payment.debt_id;
+    if (!paymentsByDebt[key]) paymentsByDebt[key] = [];
+    paymentsByDebt[key].push(payment);
+  }
+
+  return debts.map((row) => debtShape({
+    ...row,
+    payments: paymentsByDebt[row.id] || [],
+  }));
 }
 
 function debtShape(row) {
@@ -2190,6 +2349,19 @@ function debtShape(row) {
     vencimiento: row.due_date || '',
     estado: row.status || (pending > 0 ? 'activa' : 'pagada'),
     notas: row.notes || '',
+    payments: (row.payments || []).map(debtPaymentShape),
+  };
+}
+
+function debtPaymentShape(row) {
+  return {
+    id: row.id,
+    debtId: row.debt_id || row.debtId || '',
+    amount: round(row.amount),
+    currency: normalizeCurrency(row.currency || 'PEN'),
+    paymentDate: row.payment_date || row.paymentDate || '',
+    notes: row.notes || '',
+    createdAt: row.created_at || row.createdAt || '',
   };
 }
 

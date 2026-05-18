@@ -641,6 +641,8 @@ regla presupuesto comida incluye supermercado
 
 Las deudas pueden registrarse en `PEN` o `USD`. El dashboard muestra el monto original y, para USD, una conversion referencial a soles usando la tasa USD/PEN que consulta y cachea el Worker.
 
+En el dashboard, abre `Compromisos` para administrar deudas desde la interfaz: crear, editar, registrar pagos y eliminar. Los pagos quedan en `debt_payments` dentro de D1 y se muestran como historial debajo de cada deuda.
+
 Luego envia una foto clara de un recibo.
 
 El flujo correcto es:
