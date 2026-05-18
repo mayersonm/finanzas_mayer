@@ -117,6 +117,17 @@ export interface Debt {
   estado?: 'activa' | 'pagada' | string;
   notas?: string;
   currency?: Currency | 'PEN' | 'USD';
+  payments?: DebtPayment[];
+}
+
+export interface DebtPayment {
+  id: string;
+  debtId?: string;
+  amount: number;
+  currency?: Currency | 'PEN' | 'USD';
+  paymentDate: string;
+  notes?: string;
+  createdAt?: string;
 }
 
 export interface SmartAlert {

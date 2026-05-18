@@ -156,6 +156,61 @@ function guardarDeudaD1(debt) {
   }
 }
 
+function guardarPagoDeudaD1(debt, amount, paymentDate, notes) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiUrl = props.getProperty('d1_api_url');
+    const adminKey = props.getProperty('d1_admin_key');
+
+    if (!apiUrl || !adminKey) {
+      Logger.log('Pago deuda D1 omitido: faltan d1_api_url o d1_admin_key');
+      return false;
+    }
+
+    if (!debt || !debt.nombre || !amount) {
+      Logger.log('Pago deuda D1 omitido: faltan deuda o monto');
+      return false;
+    }
+
+    const debtId = debt.id || ['debt', String(debt.chatId), normalizarClaveDeudaD1_(debt.nombre)].join(':').slice(0, 180);
+    const payload = {
+      chat_id: String(debt.chatId),
+      amount: Number(amount || 0),
+      currency: normalizarMoneda_(debt.currency || debt.moneda) || 'PEN',
+      paymentDate: paymentDate || Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd'),
+      notes: notes || 'Telegram',
+    };
+
+    const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/debts/' + encodeURIComponent(debtId) + '/payments', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-admin-key': adminKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+
+    const code = resp.getResponseCode();
+    if (code < 200 || code >= 300) {
+      Logger.log('Error pago deuda D1 HTTP ' + code + ': ' + resp.getContentText());
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    Logger.log('Error guardarPagoDeudaD1: ' + err);
+    return false;
+  }
+}
+
+function normalizarClaveDeudaD1_(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function actualizarCategoriaD1(tx) {
   try {
     const props = PropertiesService.getScriptProperties();

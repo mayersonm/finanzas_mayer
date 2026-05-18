@@ -121,7 +121,9 @@ function pagarDeuda(chatId, payload) {
   const sheet = hojaDeudas_();
   sheet.getRange(row.rowNumber, 4, 1, 2).setValues([[deuda.pagado, deuda.vencimiento]]);
   sheet.getRange(row.rowNumber, 6).setValue(deuda.estado);
-  guardarDeudaD1(deuda);
+  if (!guardarPagoDeudaD1(deuda, monto, Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd'), 'Telegram')) {
+    guardarDeudaD1(deuda);
+  }
 
   const pendiente = Math.max(deuda.total - deuda.pagado, 0);
   return sendMessage(chatId,
