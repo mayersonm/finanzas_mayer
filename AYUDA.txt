@@ -1,8 +1,5 @@
 cd d1-api
 npm ci
-npx wrangler secret put GOOGLE_CLIENT_ID
-npx wrangler secret put GOOGLE_CLIENT_SECRET
-npx wrangler secret put DASHBOARD_URL
 npx wrangler d1 migrations apply finanzas_mayeson --remote
 npm run deploy
 cd ..
@@ -23,11 +20,3 @@ git status
 git add .
 git commit -m "actualizacion general"
 git push origin main
-
-Nuevo usuario:
-1. Entrar al dashboard con Google.
-2. Abrir Setup.
-3. Guardar token de Telegram de BotFather.
-4. Crear entorno.
-5. Activar bot.
-6. Enviar /start al bot.
