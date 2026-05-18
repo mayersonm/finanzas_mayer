@@ -1,5 +1,5 @@
 import { Suspense, lazy, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { apiEndpoint } from './app/api';
+import { apiEndpoint, getUsdToPenRate } from './app/api';
 import { isApiConfigured, SESSION_STORAGE_KEY } from './app/config';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { PasswordPanel } from './components/auth/PasswordPanel';
@@ -49,6 +49,7 @@ export default function App() {
   });
   const [users, setUsers] = useState<DashboardUser[]>([]);
   const [selectedChatId, setSelectedChatId] = useState('');
+  const [exchangeRate, setExchangeRate] = useState(3.85);
 
   const configured = isApiConfigured();
   const realExpenses = useMemo(() => getRealExpenses(data), [data]);
@@ -236,6 +237,7 @@ export default function App() {
     if (!configured || !token) return;
     void fetchData(token);
     void fetchUsers(token);
+    void getUsdToPenRate().then(setExchangeRate).catch(() => setExchangeRate(3.85));
   }, [fetchData, fetchUsers, configured, token]);
 
   useEffect(() => {
@@ -297,7 +299,7 @@ export default function App() {
         <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
           {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} /> : null}
           {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
-          {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
+          {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} exchangeRate={exchangeRate} /> : null}
           {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
           {tab === 'metas' ? <GoalsSection data={data} /> : null}
           {tab === 'configuracion' ? <SettingsSection authToken={token} chatId={selectedChatId} /> : null}

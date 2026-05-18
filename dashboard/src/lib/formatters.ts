@@ -24,3 +24,10 @@ export function formatUpdatedAt(value?: string): string {
     minute: '2-digit',
   });
 }
+
+export function convertCurrency(amount: number, fromCurrency: string, toCurrency: string = 'PEN', rate: number = 3.85): number {
+  if (fromCurrency === toCurrency) return amount;
+  if (fromCurrency === 'USD' && toCurrency === 'PEN') return amount * rate;
+  if (fromCurrency === 'PEN' && toCurrency === 'USD') return amount / rate;
+  return amount;
+}
