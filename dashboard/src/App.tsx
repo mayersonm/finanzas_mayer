@@ -7,19 +7,19 @@ import { AppHeader } from './components/layout/AppHeader';
 import { DashboardTabs } from './components/layout/DashboardTabs';
 import { MOCK_DASHBOARD } from './data/mockDashboard';
 import { getRealExpenses } from './lib/finance';
-import type { ApiStatus, DashboardData, DashboardUser, OnboardingStatus, TabId } from './types/dashboard';
+import type { ApiStatus, DashboardData, DashboardUser, TabId } from './types/dashboard';
 
 const AnalysisSection = lazy(() => import('./features/analysis/AnalysisSection').then((mod) => ({ default: mod.AnalysisSection })));
-const AdminSection = lazy(() => import('./features/admin/AdminSection').then((mod) => ({ default: mod.AdminSection })));
 const CommitmentsSection = lazy(() => import('./features/commitments/CommitmentsSection').then((mod) => ({ default: mod.CommitmentsSection })));
 const GoalsSection = lazy(() => import('./features/goals/GoalsSection').then((mod) => ({ default: mod.GoalsSection })));
-const HealthSection = lazy(() => import('./features/health/HealthSection').then((mod) => ({ default: mod.HealthSection })));
 const MovementsSection = lazy(() => import('./features/movements/MovementsSection').then((mod) => ({ default: mod.MovementsSection })));
-const OnboardingSection = lazy(() => import('./features/onboarding/OnboardingSection').then((mod) => ({ default: mod.OnboardingSection })));
 const OverviewSection = lazy(() => import('./features/overview/OverviewSection').then((mod) => ({ default: mod.OverviewSection })));
 const SettingsSection = lazy(() => import('./features/settings/SettingsSection').then((mod) => ({ default: mod.SettingsSection })));
 
 type Theme = 'light' | 'dark';
+
+const LOGIN_EMAIL_STORAGE_KEY = 'finanzas_dashboard_email';
+const DEFAULT_LOGIN_EMAIL = 'mayersonm@gmail.com';
 
 interface FetchOptions {
   sync?: boolean;
@@ -31,10 +31,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<ApiStatus>('demo');
   const [token, setToken] = useState<string | null>(() => window.localStorage.getItem(SESSION_STORAGE_KEY));
+  const [loginEmail, setLoginEmail] = useState(() => window.localStorage.getItem(LOGIN_EMAIL_STORAGE_KEY) || DEFAULT_LOGIN_EMAIL);
   const [password, setPassword] = useState('');
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [showPasswordPanel, setShowPasswordPanel] = useState(false);
@@ -51,10 +49,16 @@ export default function App() {
   });
   const [users, setUsers] = useState<DashboardUser[]>([]);
   const [selectedChatId, setSelectedChatId] = useState('');
-  const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
 
   const configured = isApiConfigured();
   const realExpenses = useMemo(() => getRealExpenses(data), [data]);
+
+  const clearSession = useCallback((message = 'Sesion expirada. Ingresa nuevamente.') => {
+    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    setToken(null);
+    setAuthError(message);
+    setStatus('error');
+  }, []);
 
   const fetchData = useCallback(async (sessionToken?: string | null, options: FetchOptions = {}) => {
     const activeToken = sessionToken ?? token;
@@ -65,16 +69,11 @@ export default function App() {
       if (options.sync) {
         const syncResponse = await fetch(apiEndpoint('sync'), {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${activeToken}`,
-          },
+          headers: { Authorization: `Bearer ${activeToken}` },
         });
 
         if (syncResponse.status === 401) {
-          window.localStorage.removeItem(SESSION_STORAGE_KEY);
-          setToken(null);
-          setAuthError('Sesion expirada. Ingresa nuevamente.');
-          setStatus('error');
+          clearSession();
           return;
         }
 
@@ -88,21 +87,15 @@ export default function App() {
       if (selectedChatId) url.searchParams.set('chat_id', selectedChatId);
 
       const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: `Bearer ${activeToken}`,
-        },
+        headers: { Authorization: `Bearer ${activeToken}` },
       });
 
       if (response.status === 401) {
-        window.localStorage.removeItem(SESSION_STORAGE_KEY);
-        setToken(null);
-        setAuthError('Sesion expirada. Ingresa nuevamente.');
-        setStatus('error');
+        clearSession();
         return;
       }
 
       const nextData = (await response.json()) as DashboardData;
-
       if (!response.ok || nextData.ok === false || nextData.error) {
         throw new Error(nextData.error || 'Respuesta invalida');
       }
@@ -115,7 +108,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [configured, selectedChatId, token]);
+  }, [clearSession, configured, selectedChatId, token]);
 
   const fetchUsers = useCallback(async (sessionToken?: string | null) => {
     const activeToken = sessionToken ?? token;
@@ -125,6 +118,12 @@ export default function App() {
       const response = await fetch(apiEndpoint('users'), {
         headers: { Authorization: `Bearer ${activeToken}` },
       });
+
+      if (response.status === 401) {
+        clearSession();
+        return;
+      }
+
       const result = await response.json() as { ok?: boolean; users?: DashboardUser[]; defaultChatId?: string };
       if (response.ok && result.ok !== false) {
         setUsers(result.users || []);
@@ -133,41 +132,22 @@ export default function App() {
     } catch (error) {
       console.error('Users error:', error);
     }
-  }, [configured, token]);
+  }, [clearSession, configured, token]);
 
-  const fetchOnboarding = useCallback(async (sessionToken?: string | null) => {
-    const activeToken = sessionToken ?? token;
-    if (!configured || !activeToken) return;
-
-    try {
-      const response = await fetch(apiEndpoint('onboarding/status'), {
-        headers: { Authorization: `Bearer ${activeToken}` },
-      });
-      const result = await response.json() as OnboardingStatus;
-      if (response.ok && result.ok !== false) {
-        setOnboarding(result);
-      }
-    } catch (error) {
-      console.error('Onboarding error:', error);
-    }
-  }, [configured, token]);
-
-  const handleAuthSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+  const handleLogin = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const cleanEmail = loginEmail.trim().toLowerCase();
     const cleanPassword = password.trim();
-    const cleanEmail = email.trim();
-    if (!cleanPassword || (authMode === 'register' && !cleanEmail)) return;
+    if (!cleanEmail || !cleanPassword) return;
 
     setAuthLoading(true);
     setAuthError('');
 
     try {
-      const response = await fetch(apiEndpoint(authMode === 'register' ? 'register' : 'login'), {
+      const response = await fetch(apiEndpoint('login'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: cleanEmail, password: cleanPassword, name: name.trim() }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
       });
       const result = await response.json() as { ok?: boolean; token?: string; error?: string };
 
@@ -176,27 +156,20 @@ export default function App() {
       }
 
       window.localStorage.setItem(SESSION_STORAGE_KEY, result.token);
+      window.localStorage.setItem(LOGIN_EMAIL_STORAGE_KEY, cleanEmail);
       setToken(result.token);
+      setLoginEmail(cleanEmail);
       setPassword('');
-      setAuthMode('login');
       setStatus('demo');
       await fetchUsers(result.token);
-      await fetchOnboarding(result.token);
       await fetchData(result.token);
     } catch (error) {
       console.error('Login error:', error);
-      setAuthError(authMode === 'register' ? 'No se pudo registrar. Revisa correo y clave.' : 'Credenciales incorrectas o API no disponible.');
+      setAuthError('Usuario, clave o API no disponible.');
     } finally {
       setAuthLoading(false);
     }
-  }, [authMode, email, fetchData, fetchOnboarding, fetchUsers, name, password]);
-
-  const handleGoogleLogin = useCallback(() => {
-    const returnTo = `${window.location.origin}${window.location.pathname}`;
-    const url = new URL(apiEndpoint('auth/google/start'));
-    url.searchParams.set('return_to', returnTo);
-    window.location.href = url.toString();
-  }, []);
+  }, [fetchData, fetchUsers, loginEmail, password]);
 
   const handleLogout = useCallback(() => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -206,14 +179,13 @@ export default function App() {
     setAuthError('');
     setUsers([]);
     setSelectedChatId('');
-    setOnboarding(null);
     void fetch(apiEndpoint('logout'), { method: 'POST' }).catch(() => undefined);
   }, []);
 
   const handleChangePassword = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
     if (!token) return;
+
     if (newPassword.length < 12) {
       setPasswordError('La nueva clave debe tener al menos 12 caracteres.');
       setPasswordSuccess('');
@@ -237,10 +209,7 @@ export default function App() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          currentPassword,
-          newPassword,
-        }),
+        body: JSON.stringify({ currentPassword, newPassword }),
       });
       const result = await response.json() as { ok?: boolean; token?: string; error?: string };
 
@@ -264,30 +233,10 @@ export default function App() {
   }, [confirmPassword, currentPassword, fetchData, newPassword, token]);
 
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const sessionToken = url.searchParams.get('session_token');
-    if (!sessionToken) return;
-    window.localStorage.setItem(SESSION_STORAGE_KEY, sessionToken);
-    setToken(sessionToken);
-    url.searchParams.delete('session_token');
-    window.history.replaceState({}, '', url.toString());
-    void fetchUsers(sessionToken);
-    void fetchOnboarding(sessionToken);
-    void fetchData(sessionToken);
-  }, [fetchData, fetchOnboarding, fetchUsers]);
-
-  useEffect(() => {
     if (!configured || !token) return;
     void fetchData(token);
     void fetchUsers(token);
-    void fetchOnboarding(token);
-  }, [fetchData, fetchOnboarding, fetchUsers, configured, token]);
-
-  useEffect(() => {
-    if (data.onboardingRequired && tab === 'inicio') {
-      setTab('setup');
-    }
-  }, [data.onboardingRequired, tab]);
+  }, [fetchData, fetchUsers, configured, token]);
 
   useEffect(() => {
     if (!configured || !token) return undefined;
@@ -304,34 +253,27 @@ export default function App() {
   if (configured && !token) {
     return (
       <LoginScreen
+        email={loginEmail}
         password={password}
-        email={email}
-        name={name}
-        mode={authMode}
         error={authError}
         loading={authLoading}
+        onEmailChange={setLoginEmail}
         onPasswordChange={setPassword}
-        onEmailChange={setEmail}
-        onNameChange={setName}
-        onModeChange={setAuthMode}
-        onGoogleLogin={handleGoogleLogin}
-        onSubmit={handleAuthSubmit}
+        onSubmit={handleLogin}
       />
     );
   }
 
-  const appName = onboarding?.appName || data.appName || 'Finanzas personales';
-
   return (
     <main className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-6 sm:py-5 lg:px-8">
-      <div  className={showPasswordPanel ? 'pointer-events-none blur-sm' : ''}>
-         <AppHeader
-          data         ={data}
-          loading      ={loading}
-          status       ={status}
-          isConfigured ={configured}
-          onRefresh    ={() => void fetchData(undefined, { sync: true })}
-          theme        ={theme}
+      <div className={showPasswordPanel ? 'pointer-events-none blur-sm' : ''}>
+        <AppHeader
+          data={data}
+          loading={loading}
+          status={status}
+          isConfigured={configured}
+          onRefresh={() => void fetchData(undefined, { sync: true })}
+          theme={theme}
           onToggleTheme={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
           onTogglePasswordPanel={() => {
             setPasswordError('');
@@ -342,24 +284,26 @@ export default function App() {
           users={users}
           selectedChatId={selectedChatId}
           onSelectedChatIdChange={setSelectedChatId}
-          appName={appName}
         />
 
         <DashboardTabs activeTab={tab} onTabChange={setTab} />
 
+        {!configured ? (
+          <div className="rounded-tremor-default border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+            Configura `VITE_GAS_API_URL` para conectar el dashboard con D1.
+          </div>
+        ) : null}
+
         <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
           {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} /> : null}
-          {tab === 'setup' ? <OnboardingSection authToken={token} status={onboarding} onRefresh={() => fetchOnboarding()} onGoogleLogin={handleGoogleLogin} /> : null}
           {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
           {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} /> : null}
           {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
           {tab === 'metas' ? <GoalsSection data={data} /> : null}
-          {tab === 'salud' ? <HealthSection authToken={token} /> : null}
           {tab === 'configuracion' ? <SettingsSection authToken={token} chatId={selectedChatId} /> : null}
-          {tab === 'admin' ? <AdminSection authToken={token} chatId={selectedChatId} users={users} /> : null}
         </Suspense>
       </div>
-     
+
       {showPasswordPanel ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
           <div className="w-full max-w-xl">
@@ -379,7 +323,6 @@ export default function App() {
           </div>
         </div>
       ) : null}
-
     </main>
   );
 }

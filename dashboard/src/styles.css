@@ -40,7 +40,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -129,7 +130,9 @@ button {
   color: rgb(190, 18, 60) !important;
 }
 
-:root[data-theme="light"] input {
+:root[data-theme="light"] input,
+:root[data-theme="light"] select,
+:root[data-theme="light"] .form-input {
   background-color: rgb(255, 255, 255) !important;
   border-color: rgb(203, 213, 225) !important;
   color: rgb(15, 23, 42) !important;

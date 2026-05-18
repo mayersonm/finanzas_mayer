@@ -30,19 +30,6 @@ const VALID_CATEGORIES = [
   'otro',
 ];
 
-const GOOGLE_OAUTH_SCOPES = [
-  'openid',
-  'email',
-  'profile',
-  'https://www.googleapis.com/auth/script.projects',
-  'https://www.googleapis.com/auth/script.deployments',
-  'https://www.googleapis.com/auth/spreadsheets',
-  'https://www.googleapis.com/auth/drive.file',
-];
-
-const APPS_SCRIPT_TEMPLATE_MANIFEST_KEY = 'templates/apps-script/manifest.json';
-const APPS_SCRIPT_TEMPLATE_PREFIX = 'templates/apps-script/';
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -63,48 +50,9 @@ export default {
         return json(await login(env, payload));
       }
 
-      if (url.pathname === '/api/register' && request.method === 'POST') {
-        const payload = await request.json();
-        return json(await registerUser(env, payload), 201);
-      }
-
-      if (url.pathname === '/api/auth/google/start' && request.method === 'GET') {
-        return await googleStart(request, env);
-      }
-
-      if (url.pathname === '/api/auth/google/callback' && request.method === 'GET') {
-        return await googleCallback(request, env);
-      }
-
-      if (url.pathname === '/api/installations/config' && (request.method === 'GET' || request.method === 'POST')) {
-        const payload = request.method === 'POST' ? await request.json().catch(() => ({})) : {};
-        return json(await installationRuntimeConfig(env, url.searchParams, payload, request));
-      }
-
-      if (url.pathname === '/api/onboarding/status' && request.method === 'GET') {
-        const session = await requireDashboardAccess(request, env);
-        return json(await onboardingStatus(env, session));
-      }
-
-      if (url.pathname === '/api/onboarding/telegram' && request.method === 'POST') {
-        const session = await requireDashboardAccess(request, env);
-        const payload = await request.json();
-        return json(await saveOnboardingTelegram(env, session, payload, request));
-      }
-
-      if (url.pathname === '/api/onboarding/provision' && request.method === 'POST') {
-        const session = await requireDashboardAccess(request, env);
-        return json(await provisionGoogleWorkspace(env, session, request), 201);
-      }
-
-      if (url.pathname === '/api/onboarding/webhook' && request.method === 'POST') {
-        const session = await requireDashboardAccess(request, env);
-        return json(await configureInstallationWebhook(env, session));
-      }
-
       if (url.pathname === '/api/session' && request.method === 'GET') {
-        const session = await requireDashboardAccess(request, env);
-        return json({ ok: true, authenticated: true, user: sessionUserShape(session) });
+        await requireDashboardAccess(request, env);
+        return json({ ok: true, authenticated: true });
       }
 
       if (url.pathname === '/api/logout' && request.method === 'POST') {
@@ -118,36 +66,36 @@ export default {
       }
 
       if (url.pathname === '/api/settings' && request.method === 'GET') {
-        const session = await requireDashboardAccess(request, env);
-        return json(await dashboardSettings(env, url.searchParams, session));
+        await requireDashboardAccess(request, env);
+        return json(await dashboardSettings(env, url.searchParams));
       }
 
       if (url.pathname === '/api/settings' && request.method === 'POST') {
-        const session = await requireDashboardAccess(request, env);
+        await requireDashboardAccess(request, env);
         const payload = await request.json();
-        return json(await updateDashboardSettings(env, payload, url.searchParams, session));
+        return json(await updateDashboardSettings(env, payload, url.searchParams));
       }
 
       if (url.pathname === '/api/profile' && request.method === 'GET') {
-        const session = await requireDashboardAccess(request, env);
-        return json(await profile(env, url.searchParams, session));
+        await requireDashboardAccess(request, env);
+        return json(await profile(env, url.searchParams));
       }
 
       if (url.pathname === '/api/categories' && request.method === 'GET') {
-        const session = await requireDashboardAccess(request, env);
-        return json(await categoryDefinitions(env, url.searchParams, session));
+        await requireDashboardAccess(request, env);
+        return json(await categoryDefinitions(env, url.searchParams));
       }
 
       if (url.pathname === '/api/categories' && request.method === 'POST') {
-        const session = await requireDashboardAccess(request, env);
+        await requireDashboardAccess(request, env);
         const payload = await request.json();
-        return json(await upsertCategoryDefinition(env, payload, url.searchParams, session), 201);
+        return json(await upsertCategoryDefinition(env, payload, url.searchParams), 201);
       }
 
       if (url.pathname === '/api/categories/delete' && request.method === 'POST') {
-        const session = await requireDashboardAccess(request, env);
+        await requireDashboardAccess(request, env);
         const payload = await request.json();
-        return json(await disableCategoryDefinition(env, payload, url.searchParams, session));
+        return json(await disableCategoryDefinition(env, payload, url.searchParams));
       }
 
       if (url.pathname === '/api/system-health' && request.method === 'GET') {
@@ -156,49 +104,49 @@ export default {
       }
 
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
-        const session = await requireDashboardAccess(request, env);
-        return json(await dashboard(env, url.searchParams, session));
+        await requireDashboardAccess(request, env);
+        return json(await dashboard(env, url.searchParams));
       }
 
       if (url.pathname === '/api/rules' && request.method === 'GET') {
-        const session = await requireDashboardOrAdminAccess(request, env);
-        return json(await rulesList(env, url.searchParams, session));
+        await requireDashboardOrAdminAccess(request, env);
+        return json(await rulesList(env, url.searchParams));
       }
 
       if (url.pathname === '/api/rules/classify' && request.method === 'POST') {
-        await requireAdminAccess(request, env);
+        requireAdminKey(request, env);
         const payload = await request.json();
         return json(await classifyRulePayload(env, payload));
       }
 
       if (url.pathname === '/api/rules/budget/keys' && request.method === 'POST') {
-        await requireAdminAccess(request, env);
+        requireAdminKey(request, env);
         const payload = await request.json();
         return json(await budgetKeysPayload(env, payload));
       }
 
       if (url.pathname === '/api/rules/category' && request.method === 'POST') {
-        const session = await requireDashboardOrAdminAccess(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
-        return json(await upsertCategoryRule(env, await scopedRulePayload(env, url.searchParams, session, payload)), 201);
+        return json(await upsertCategoryRule(env, payload), 201);
       }
 
       if (url.pathname === '/api/rules/category/delete' && request.method === 'POST') {
-        const session = await requireDashboardOrAdminAccess(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
-        return json(await deleteCategoryRule(env, await scopedRulePayload(env, url.searchParams, session, payload)));
+        return json(await deleteCategoryRule(env, payload));
       }
 
       if (url.pathname === '/api/rules/budget' && request.method === 'POST') {
-        const session = await requireDashboardOrAdminAccess(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
-        return json(await upsertBudgetCategoryRule(env, await scopedRulePayload(env, url.searchParams, session, payload)), 201);
+        return json(await upsertBudgetCategoryRule(env, payload), 201);
       }
 
       if (url.pathname === '/api/rules/budget/delete' && request.method === 'POST') {
-        const session = await requireDashboardOrAdminAccess(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         const payload = await request.json();
-        return json(await deleteBudgetCategoryRule(env, await scopedRulePayload(env, url.searchParams, session, payload)));
+        return json(await deleteBudgetCategoryRule(env, payload));
       }
 
       if (url.pathname === '/api/sync' && request.method === 'POST') {
@@ -207,25 +155,25 @@ export default {
       }
 
       if (url.pathname === '/api/transactions' && request.method === 'GET') {
-        const session = await requireDashboardAccess(request, env);
-        return json(await transactions(env, url.searchParams, session));
+        await requireDashboardAccess(request, env);
+        return json(await transactions(env, url.searchParams));
       }
 
       if (url.pathname === '/api/users' && request.method === 'GET') {
-        const session = await requireDashboardAccess(request, env);
-        return json(await usersList(env, session));
+        await requireDashboardAccess(request, env);
+        return json(await usersList(env));
       }
 
       if (url.pathname === '/api/users/link' && request.method === 'POST') {
-        const adminAccess = await requireAdminAccess(request, env);
+        requireAdminKey(request, env);
         const payload = await request.json();
-        return json(await linkTelegramUser(env, payload, adminAccess), 201);
+        return json(await linkTelegramUser(env, payload), 201);
       }
 
       if (url.pathname === '/api/transactions' && request.method === 'POST') {
-        const adminAccess = await requireAdminAccess(request, env);
+        requireAdminKey(request, env);
         const payload = await request.json();
-        return json(await insertTransaction(env, await scopedAdminPayload(env, payload, adminAccess)), 201);
+        return json(await insertTransaction(env, payload), 201);
       }
 
       if (transactionMatch && request.method === 'DELETE') {
@@ -244,47 +192,46 @@ export default {
       }
 
       if (url.pathname === '/api/transactions/delete' && request.method === 'POST') {
-        const adminAccess = await requireAdminAccess(request, env);
+        requireAdminKey(request, env);
         const payload = await request.json();
-        const scopedPayload = await scopedAdminPayload(env, payload, adminAccess);
         return json(await deleteTransaction(env, {
-          id: String(scopedPayload.id || scopedPayload.transaction_id || scopedPayload.transactionId || '').trim(),
-          chatId: String(scopedPayload.chat_id || scopedPayload.chatId || env.DEFAULT_CHAT_ID || '').trim(),
+          id: String(payload.id || payload.transaction_id || payload.transactionId || '').trim(),
+          chatId: String(payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim(),
           deleteFromGas: false,
         }));
       }
 
       if (url.pathname === '/api/transactions/category' && request.method === 'POST') {
-        const adminAccess = await requireAdminAccess(request, env);
+        requireAdminKey(request, env);
         const payload = await request.json();
-        return json(await updateTransactionCategory(env, await scopedAdminPayload(env, payload, adminAccess)));
+        return json(await updateTransactionCategory(env, payload));
       }
 
       if (url.pathname === '/api/transactions/payment' && request.method === 'POST') {
-        const adminAccess = await requireAdminAccess(request, env);
+        requireAdminKey(request, env);
         const payload = await request.json();
-        return json(await updateTransactionPayment(env, await scopedAdminPayload(env, payload, adminAccess)));
+        return json(await updateTransactionPayment(env, payload));
       }
 
       if (url.pathname === '/api/debts' && request.method === 'POST') {
-        const adminAccess = await requireAdminAccess(request, env);
+        requireAdminKey(request, env);
         const payload = await request.json();
-        return json(await upsertDebtFromPayload(env, await scopedAdminPayload(env, payload, adminAccess)), 201);
+        return json(await upsertDebtFromPayload(env, payload), 201);
       }
 
       if (url.pathname === '/api/receipts' && request.method === 'POST') {
-        const adminAccess = await requireAdminAccess(request, env);
+        requireAdminKey(request, env);
         const payload = await request.json();
-        return json(await uploadReceipt(env, await scopedAdminPayload(env, payload, adminAccess)), 201);
+        return json(await uploadReceipt(env, payload), 201);
       }
 
       if (receiptFileMatch && request.method === 'GET') {
         await requireDashboardAccess(request, env);
-        return await receiptFile(env, decodeURIComponent(receiptFileMatch[1]));
+        return receiptFile(env, decodeURIComponent(receiptFileMatch[1]));
       }
 
       if (url.pathname === '/api/sync/gas' && request.method === 'POST') {
-        await requireAdminAccess(request, env);
+        requireAdminKey(request, env);
         return json(await syncFromGas(env, url.searchParams));
       }
 
@@ -319,75 +266,26 @@ async function health(env) {
 }
 
 async function login(env, payload) {
+  const email = String(payload?.email || '').trim().toLowerCase();
   const password = String(payload?.password || '');
-  const email = normalizeEmail(payload?.email || '');
+  const expectedEmail = await dashboardLoginEmail(env);
 
+  if (email && email !== expectedEmail) {
+    throw httpError(401, 'Credenciales invalidas');
+  }
   if (!password) {
     throw httpError(400, 'Password requerido');
-  }
-
-  if (email) {
-    const user = await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ? AND active = 1')
-      .bind(email)
-      .first();
-    const expected = user?.password_hash || '';
-    if (!user || !expected || !(await constantTimeEqual(await sha256Hex(password), expected))) {
-      throw httpError(401, 'Credenciales invalidas');
-    }
-
-    return sessionForUser(env, user);
   }
 
   if (!(await isValidLoginPassword(env, password))) {
     throw httpError(401, 'Credenciales invalidas');
   }
 
-  const adminUser = await ensureUserForChat(env, env.DEFAULT_CHAT_ID);
-  return sessionForUser(env, {
-    id: adminUser.id,
-    email: adminUser.email || '',
-    name: adminUser.name || adminUser.label || 'Admin',
-    role: 'admin',
-  });
-}
-
-async function registerUser(env, payload) {
-  const email = normalizeEmail(payload?.email || '');
-  const name = String(payload?.name || payload?.nombre || '').trim().slice(0, 120);
-  const password = String(payload?.password || '');
-
-  if (!email) throw httpError(400, 'email requerido');
-  if (password.length < 12) throw httpError(400, 'La clave debe tener al menos 12 caracteres');
-
-  const existing = await env.DB.prepare('SELECT id FROM users WHERE lower(email) = ?')
-    .bind(email)
-    .first();
-  if (existing) throw httpError(409, 'Ya existe un usuario con ese correo');
-
-  const id = `user:${(await sha256Hex(email)).slice(0, 24)}`;
-  const passwordHash = await sha256Hex(password);
-  await env.DB.prepare(`
-    INSERT INTO users (id, email, name, role, password_hash, active, updated_at)
-    VALUES (?, ?, ?, 'user', ?, 1, CURRENT_TIMESTAMP)
-  `).bind(id, email, name || email, passwordHash).run();
-
-  await env.DB.prepare(`
-    INSERT OR IGNORE INTO user_settings (user_id, updated_at)
-    VALUES (?, CURRENT_TIMESTAMP)
-  `).bind(id).run();
-
-  return sessionForUser(env, { id, email, name: name || email, role: 'user' });
-}
-
-async function sessionForUser(env, user) {
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = now + 60 * 60 * 12;
   const token = await signSessionToken(env, {
     sub: 'dashboard',
-    userId: user.id || '',
-    email: user.email || '',
-    name: user.name || '',
-    role: user.role || 'user',
+    email: expectedEmail,
     iat: now,
     exp: expiresAt,
   });
@@ -397,639 +295,10 @@ async function sessionForUser(env, user) {
     token,
     expiresAt,
     user: {
-      id: user.id || '',
-      email: user.email || '',
-      name: user.name || '',
-      role: user.role || 'user',
+      email: expectedEmail,
+      name: 'Mayerson',
     },
   };
-}
-
-async function googleStart(request, env) {
-  if (!env.GOOGLE_CLIENT_ID) throw httpError(500, 'GOOGLE_CLIENT_ID no configurado');
-  const url = new URL(request.url);
-  const returnTo = url.searchParams.get('return_to') || url.origin;
-  const state = base64UrlEncode(JSON.stringify({ returnTo }));
-  const redirectUri = googleRedirectUri(request, env);
-  const auth = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-  auth.searchParams.set('client_id', env.GOOGLE_CLIENT_ID);
-  auth.searchParams.set('redirect_uri', redirectUri);
-  auth.searchParams.set('response_type', 'code');
-  auth.searchParams.set('scope', GOOGLE_OAUTH_SCOPES.join(' '));
-  auth.searchParams.set('state', state);
-  auth.searchParams.set('access_type', 'offline');
-  auth.searchParams.set('include_granted_scopes', 'true');
-  auth.searchParams.set('prompt', 'consent select_account');
-  return Response.redirect(auth.toString(), 302);
-}
-
-async function googleCallback(request, env) {
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-    throw httpError(500, 'Google OAuth no configurado');
-  }
-
-  const url = new URL(request.url);
-  const code = url.searchParams.get('code');
-  const state = url.searchParams.get('state') || '';
-  if (!code) throw httpError(400, 'Falta code');
-
-  let returnTo = url.origin;
-  try {
-    const parsed = JSON.parse(base64UrlDecode(state));
-    if (parsed.returnTo) returnTo = parsed.returnTo;
-  } catch (_error) {
-    returnTo = url.origin;
-  }
-
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code,
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: googleRedirectUri(request, env),
-      grant_type: 'authorization_code',
-    }),
-  });
-  const tokenData = await tokenResponse.json();
-  if (!tokenResponse.ok || !tokenData.id_token) throw httpError(401, 'Google no pudo autenticar');
-
-  const claims = parseJwtPayload(tokenData.id_token);
-  const email = normalizeEmail(claims.email || '');
-  if (!email) throw httpError(400, 'Google no devolvio email');
-
-  const existing = await env.DB.prepare('SELECT * FROM users WHERE google_sub = ? OR lower(email) = ? ORDER BY updated_at DESC LIMIT 1')
-    .bind(claims.sub, email)
-    .first();
-  const id = existing?.id || `google:${claims.sub}`;
-  const displayName = String(claims.name || existing?.name || email).slice(0, 120);
-  await env.DB.prepare(`
-    INSERT INTO users (id, email, name, google_sub, role, active, updated_at)
-    VALUES (?, ?, ?, ?, 'user', 1, CURRENT_TIMESTAMP)
-    ON CONFLICT(id) DO UPDATE SET
-      email = excluded.email,
-      name = excluded.name,
-      google_sub = excluded.google_sub,
-      active = 1,
-      updated_at = CURRENT_TIMESTAMP
-  `).bind(id, email, displayName, claims.sub).run();
-
-  await env.DB.prepare(`
-    INSERT OR IGNORE INTO user_settings (user_id, updated_at)
-    VALUES (?, CURRENT_TIMESTAMP)
-  `).bind(id).run();
-
-  if (tokenData.refresh_token) {
-    await saveGoogleRefreshToken(env, id, tokenData);
-  } else if (!(await hasGoogleRefreshToken(env, id))) {
-    throw httpError(401, 'Google no devolvio refresh_token. Vuelve a entrar con Google y acepta los permisos.');
-  }
-
-  const session = await sessionForUser(env, {
-    id,
-    email,
-    name: displayName,
-    role: 'user',
-  });
-  const target = new URL(returnTo);
-  target.searchParams.set('session_token', session.token);
-  return Response.redirect(target.toString(), 302);
-}
-
-async function saveGoogleRefreshToken(env, userId, tokenData) {
-  const refreshToken = String(tokenData.refresh_token || '');
-  if (!refreshToken) return;
-
-  const encrypted = await encryptText(env, refreshToken);
-  const expiresAt = Math.floor(Date.now() / 1000) + Number(tokenData.expires_in || 3600);
-  await env.DB.prepare(`
-    INSERT INTO user_google_tokens (user_id, refresh_token_enc, scope, token_type, expires_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(user_id) DO UPDATE SET
-      refresh_token_enc = excluded.refresh_token_enc,
-      scope = excluded.scope,
-      token_type = excluded.token_type,
-      expires_at = excluded.expires_at,
-      updated_at = CURRENT_TIMESTAMP
-  `).bind(userId, encrypted, String(tokenData.scope || ''), String(tokenData.token_type || ''), expiresAt).run();
-}
-
-async function hasGoogleRefreshToken(env, userId) {
-  const row = await env.DB.prepare('SELECT refresh_token_enc FROM user_google_tokens WHERE user_id = ?')
-    .bind(userId)
-    .first();
-  return Boolean(row?.refresh_token_enc);
-}
-
-async function googleAccessTokenForUser(env, userId) {
-  const row = await env.DB.prepare('SELECT refresh_token_enc FROM user_google_tokens WHERE user_id = ?')
-    .bind(userId)
-    .first();
-  if (!row?.refresh_token_enc) {
-    throw httpError(400, 'Vuelve a autenticar con Google para permitir crear Apps Script y Sheets.');
-  }
-
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-    throw httpError(500, 'Google OAuth no configurado');
-  }
-
-  const refreshToken = await decryptText(env, row.refresh_token_enc);
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-  const data = await response.json();
-  if (!response.ok || !data.access_token) {
-    throw httpError(401, data.error_description || data.error || 'Google no devolvio access_token');
-  }
-  return data.access_token;
-}
-
-async function onboardingStatus(env, session) {
-  const user = await getSessionUser(env, session);
-  const installation = await getInstallation(env, user.id);
-  const hasGoogle = await hasGoogleRefreshToken(env, user.id);
-  const links = await env.DB.prepare('SELECT chat_id, label, active FROM user_chat_links WHERE user_id = ? AND active = 1 ORDER BY updated_at DESC')
-    .bind(user.id)
-    .all();
-
-  return {
-    ok: true,
-    user: sessionUserShape({ ...session, name: user.name, email: user.email }),
-    appName: appNameForUser(user),
-    google: {
-      connected: hasGoogle,
-      requiredScopes: GOOGLE_OAUTH_SCOPES,
-    },
-    installation: installationShape(installation),
-    telegram: {
-      configured: Boolean(installation?.telegram_bot_token_enc),
-      linkedChats: (links.results || []).map((row) => ({
-        chatId: row.chat_id,
-        label: row.label || `Chat ${row.chat_id}`,
-      })),
-    },
-  };
-}
-
-async function saveOnboardingTelegram(env, session, payload, request) {
-  const user = await getSessionUser(env, session);
-  const token = String(payload?.telegramBotToken || payload?.telegram_bot_token || '').trim();
-  if (!/^(\d+):[A-Za-z0-9_-]{20,}$/.test(token)) {
-    throw httpError(400, 'Token de Telegram invalido. Copialo desde BotFather.');
-  }
-
-  const installation = await ensureInstallation(env, user, request);
-  await env.DB.prepare(`
-    UPDATE user_installations
-    SET telegram_bot_token_enc = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND user_id = ?
-  `).bind(await encryptText(env, token), installation.id, user.id).run();
-
-  const next = await getInstallation(env, user.id);
-  return {
-    ok: true,
-    message: 'Token de Telegram guardado.',
-    installation: installationShape(next),
-    telegram: { configured: true },
-  };
-}
-
-async function provisionGoogleWorkspace(env, session, request) {
-  const user = await getSessionUser(env, session);
-  const installation = await ensureInstallation(env, user, request);
-  if (installation.script_id && installation.spreadsheet_id) {
-    return { ok: true, reused: true, installation: installationShape(installation) };
-  }
-
-  const appName = appNameForUser(user);
-  const accessToken = await googleAccessTokenForUser(env, user.id);
-
-  try {
-    const spreadsheet = await createGoogleSpreadsheet(accessToken, appName);
-    const script = await createAppsScriptProject(accessToken, appName, spreadsheet.spreadsheetId);
-    const installSecret = await issueInstallSecret(env, installation.id);
-    const files = await buildAppsScriptFiles(env, {
-      appName,
-      user,
-      installId: installation.id,
-      installSecret,
-      spreadsheetId: spreadsheet.spreadsheetId,
-      workerUrl: workerPublicUrl(env, request),
-    });
-
-    await googleJson(accessToken, `https://script.googleapis.com/v1/projects/${encodeURIComponent(script.scriptId)}/content`, {
-      method: 'PUT',
-      body: { files },
-    });
-    const version = await googleJson(accessToken, `https://script.googleapis.com/v1/projects/${encodeURIComponent(script.scriptId)}/versions`, {
-      method: 'POST',
-      body: { description: `${appName} inicial` },
-    });
-    const deployment = await googleJson(accessToken, `https://script.googleapis.com/v1/projects/${encodeURIComponent(script.scriptId)}/deployments`, {
-      method: 'POST',
-      body: {
-        versionNumber: version.versionNumber,
-        manifestFileName: 'appsscript',
-        description: `${appName} Telegram Web App`,
-      },
-    });
-    const webAppUrl = deploymentWebAppUrl(deployment);
-
-    await env.DB.prepare(`
-      UPDATE user_installations
-      SET app_name = ?,
-          spreadsheet_id = ?,
-          script_id = ?,
-          deployment_id = ?,
-          web_app_url = ?,
-          status = 'provisioned',
-          last_error = '',
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ?
-    `).bind(appName, spreadsheet.spreadsheetId, script.scriptId, deployment.deploymentId || '', webAppUrl, installation.id, user.id).run();
-
-    const next = await getInstallation(env, user.id);
-    return { ok: true, installation: installationShape(next) };
-  } catch (error) {
-    await env.DB.prepare(`
-      UPDATE user_installations
-      SET status = 'error', last_error = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ?
-    `).bind(String(error?.message || error).slice(0, 500), installation.id, user.id).run();
-    throw error;
-  }
-}
-
-async function configureInstallationWebhook(env, session) {
-  const user = await getSessionUser(env, session);
-  const installation = await getInstallation(env, user.id);
-  if (!installation?.web_app_url) throw httpError(400, 'Primero crea el Apps Script.');
-  if (!installation?.telegram_bot_token_enc) throw httpError(400, 'Primero guarda el token de Telegram.');
-
-  const token = await decryptText(env, installation.telegram_bot_token_enc);
-  const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ url: installation.web_app_url }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.ok === false) {
-    throw httpError(502, data.description || 'Telegram no pudo configurar el webhook');
-  }
-
-  await env.DB.prepare(`
-    UPDATE user_installations
-    SET status = 'ready', last_error = '', updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND user_id = ?
-  `).bind(installation.id, user.id).run();
-
-  return {
-    ok: true,
-    message: 'Webhook de Telegram configurado.',
-    installation: installationShape(await getInstallation(env, user.id)),
-  };
-}
-
-async function installationRuntimeConfig(env, params, payload, request) {
-  const installId = String(params.get('install_id') || payload.install_id || payload.installId || '').trim();
-  const installSecret = String(params.get('install_secret') || payload.install_secret || payload.installSecret || '').trim();
-  if (!installId || !installSecret) throw httpError(400, 'install_id e install_secret requeridos');
-
-  const installation = await env.DB.prepare(`
-    SELECT i.*, u.email, u.name
-    FROM user_installations i
-    JOIN users u ON u.id = i.user_id
-    WHERE i.id = ? AND u.active = 1
-  `).bind(installId).first();
-  if (!installation?.install_secret_hash) throw httpError(404, 'Instalacion no encontrada');
-  if (!(await constantTimeEqual(await sha256Hex(installSecret), installation.install_secret_hash))) {
-    throw httpError(401, 'Install secret invalido');
-  }
-
-  return {
-    ok: true,
-    appName: installation.app_name || appNameForUser(installation),
-    userName: installation.name || installation.email || '',
-    sheetId: installation.spreadsheet_id || '',
-    webappUrl: installation.web_app_url || '',
-    workerUrl: workerPublicUrl(env, request),
-    d1ApiUrl: workerPublicUrl(env, request),
-    d1AdminKey: installSecret,
-    dashboardUrl: env.DASHBOARD_URL || env.DASHBOARD_PAGES_URL || '',
-    telegramBotToken: installation.telegram_bot_token_enc ? await decryptText(env, installation.telegram_bot_token_enc) : '',
-  };
-}
-
-async function getSessionUser(env, session) {
-  if (!session?.userId || session.role === 'admin') {
-    const admin = await ensureUserForChat(env, env.DEFAULT_CHAT_ID);
-    return { id: admin.id, email: admin.email || session?.email || '', name: admin.name || admin.label || session?.name || 'Admin', role: 'admin' };
-  }
-
-  const user = await env.DB.prepare('SELECT id, email, name, role FROM users WHERE id = ? AND active = 1')
-    .bind(session.userId)
-    .first();
-  if (!user) throw httpError(404, 'Usuario no encontrado');
-  return user;
-}
-
-function appNameForUser(user) {
-  const rawName = String(user?.name || user?.email || 'Usuario').trim();
-  const firstName = rawName.split(/\s+/)[0] || rawName || 'Usuario';
-  return `Finanzas ${firstName}`.slice(0, 80);
-}
-
-function workerPublicUrl(env, request) {
-  if (env.WORKER_PUBLIC_URL) return String(env.WORKER_PUBLIC_URL).replace(/\/$/, '');
-  const url = new URL(request.url);
-  return url.origin.replace(/\/$/, '');
-}
-
-async function getInstallation(env, userId) {
-  return env.DB.prepare('SELECT * FROM user_installations WHERE user_id = ? AND provider = ?')
-    .bind(userId, 'google')
-    .first();
-}
-
-async function ensureInstallation(env, user, request) {
-  const existing = await getInstallation(env, user.id);
-  if (existing) return existing;
-
-  const id = `install:${(await sha256Hex(`${user.id}|google`)).slice(0, 32)}`;
-  const appName = appNameForUser(user);
-  await env.DB.prepare(`
-    INSERT INTO user_installations (id, user_id, provider, app_name, status, updated_at)
-    VALUES (?, ?, 'google', ?, 'pending', CURRENT_TIMESTAMP)
-  `).bind(id, user.id, appName).run();
-
-  const installSecret = randomSecret();
-  await env.DB.prepare(`
-    UPDATE user_installations
-    SET install_secret_hash = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).bind(await sha256Hex(installSecret), id).run();
-
-  return {
-    id,
-    user_id: user.id,
-    provider: 'google',
-    app_name: appName,
-    spreadsheet_id: '',
-    script_id: '',
-    deployment_id: '',
-    web_app_url: '',
-    install_secret_hash: await sha256Hex(installSecret),
-    telegram_bot_token_enc: '',
-    status: 'pending',
-    last_error: '',
-    created_at: '',
-    updated_at: '',
-    worker_url: workerPublicUrl(env, request),
-  };
-}
-
-async function issueInstallSecret(env, installationId) {
-  const secret = randomSecret();
-  await env.DB.prepare(`
-    UPDATE user_installations
-    SET install_secret_hash = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).bind(await sha256Hex(secret), installationId).run();
-  return secret;
-}
-
-function installationShape(row) {
-  if (!row) {
-    return {
-      exists: false,
-      status: 'pending',
-      appName: '',
-      spreadsheetId: '',
-      scriptId: '',
-      deploymentId: '',
-      webAppUrl: '',
-      telegramConfigured: false,
-      lastError: '',
-    };
-  }
-
-  return {
-    exists: true,
-    id: row.id,
-    status: row.status || 'pending',
-    appName: row.app_name || '',
-    spreadsheetId: row.spreadsheet_id || '',
-    scriptId: row.script_id || '',
-    deploymentId: row.deployment_id || '',
-    webAppUrl: row.web_app_url || '',
-    telegramConfigured: Boolean(row.telegram_bot_token_enc),
-    lastError: row.last_error || '',
-    updatedAt: row.updated_at || '',
-  };
-}
-
-async function createGoogleSpreadsheet(accessToken, appName) {
-  const sheets = [
-    'Transacciones',
-    'Presupuestos',
-    'Metas',
-    'Fijos',
-    'Deudas',
-    'CierresMensuales',
-  ].map((title) => ({ properties: { title } }));
-
-  const spreadsheet = await googleJson(accessToken, 'https://sheets.googleapis.com/v4/spreadsheets', {
-    method: 'POST',
-    body: {
-      properties: { title: `${appName} - Datos` },
-      sheets,
-    },
-  });
-
-  const headers = [
-    { range: 'Transacciones!A1:K1', values: [['Fecha', 'Hora', 'Tipo', 'Descripcion', 'Categoria', 'Monto', 'ChatID', 'Pago', 'FechaPago', 'Tarjeta', 'Moneda']] },
-    { range: 'Presupuestos!A1:C1', values: [['ChatID', 'Categoria', 'Limite']] },
-    { range: 'Metas!A1:E1', values: [['ChatID', 'Nombre', 'Objetivo', 'Ahorrado', 'Creada']] },
-    { range: 'Fijos!A1:E1', values: [['ChatID', 'Nombre', 'Monto', 'Categoria', 'Activo']] },
-    { range: 'Deudas!A1:G1', values: [['ChatID', 'Nombre', 'Total', 'Pagado', 'Vencimiento', 'Estado', 'Notas']] },
-    { range: 'CierresMensuales!A1:E1', values: [['Mes', 'Ingresos', 'Gastos', 'Balance', 'Creado']] },
-  ];
-
-  await googleJson(accessToken, `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheet.spreadsheetId)}/values:batchUpdate`, {
-    method: 'POST',
-    body: {
-      valueInputOption: 'RAW',
-      data: headers,
-    },
-  });
-
-  return spreadsheet;
-}
-
-async function createAppsScriptProject(accessToken, appName, spreadsheetId) {
-  return googleJson(accessToken, 'https://script.googleapis.com/v1/projects', {
-    method: 'POST',
-    body: {
-      title: appName,
-      parentId: spreadsheetId,
-    },
-  });
-}
-
-async function googleJson(accessToken, url, options = {}) {
-  const response = await fetch(url, {
-    method: options.method || 'GET',
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      'content-type': 'application/json',
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message = data?.error?.message || data?.error_description || data?.error || `Google HTTP ${response.status}`;
-    throw httpError(response.status, message);
-  }
-  return data;
-}
-
-async function buildAppsScriptFiles(env, context) {
-  const template = await loadAppsScriptTemplate(env);
-  return template.map((file) => {
-    if (file.name === '00_Config' && file.type === 'SERVER_JS') {
-      return {
-        ...file,
-        source: generatedAppsScriptConfig(context),
-      };
-    }
-
-    if (file.type === 'SERVER_JS') {
-      return {
-        ...file,
-        source: personalizeAppsScriptSource(file.source, context.appName, context.user),
-      };
-    }
-
-    return file;
-  });
-}
-
-async function loadAppsScriptTemplate(env) {
-  if (!env.RECEIPTS_BUCKET) throw httpError(500, 'RECEIPTS_BUCKET no configurado');
-  const manifestObject = await env.RECEIPTS_BUCKET.get(APPS_SCRIPT_TEMPLATE_MANIFEST_KEY);
-  if (!manifestObject) {
-    throw httpError(500, 'Falta el template Apps Script en R2. Sube templates/apps-script/manifest.json.');
-  }
-
-  const manifest = JSON.parse(await manifestObject.text());
-  const files = [];
-  for (const item of manifest.files || []) {
-    const key = `${APPS_SCRIPT_TEMPLATE_PREFIX}${item.file}`;
-    const object = await env.RECEIPTS_BUCKET.get(key);
-    if (!object) throw httpError(500, `Falta template en R2: ${key}`);
-    const source = await object.text();
-    files.push({
-      name: item.name,
-      type: item.type,
-      source,
-    });
-  }
-
-  if (!files.some((file) => file.name === 'appsscript' && file.type === 'JSON')) {
-    throw httpError(500, 'El template debe incluir appsscript.json como archivo JSON.');
-  }
-
-  return files;
-}
-
-function generatedAppsScriptConfig({ appName, installId, installSecret, spreadsheetId, workerUrl }) {
-  return `// ============================================================\n` +
-    `//  BOT DE FINANZAS PERSONALES - ${escapeJsComment(appName)}\n` +
-    `//  Configuracion provisionada desde Cloudflare D1/R2\n` +
-    `// ============================================================\n\n` +
-    `const INSTALL_ID = '${escapeJsString(installId)}';\n` +
-    `const INSTALL_SECRET = '${escapeJsString(installSecret)}';\n` +
-    `const INSTALL_WORKER_URL = '${escapeJsString(workerUrl)}';\n\n` +
-    `ensureInstallProperties_();\n\n` +
-    `const TOKEN      = getRequiredScriptProperty_('telegram_bot_token');\n` +
-    `const WEBAPP_URL = PropertiesService.getScriptProperties().getProperty('webapp_url') || '';\n` +
-    `const SHEET_ID   = getRequiredScriptProperty_('sheet_id');\n` +
-    `const WORKER_URL = getRequiredScriptProperty_('worker_url');\n` +
-    `const APP_NAME   = PropertiesService.getScriptProperties().getProperty('app_name') || '${escapeJsString(appName)}';\n\n` +
-    `const CATS_GASTO   = ['comida','supermercado','transporte','servicios','entretenimiento','salud','ropa','educacion','otro'];\n` +
-    `const CATS_INGRESO = ['salario','freelance','inversion','venta','otro'];\n\n` +
-    `function ensureInstallProperties_() {\n` +
-    `  const props = PropertiesService.getScriptProperties();\n` +
-    `  const cache = CacheService.getScriptCache();\n` +
-    `  if (cache.get('install_config_ok') && props.getProperty('sheet_id')) return;\n\n` +
-    `  const resp = UrlFetchApp.fetch(INSTALL_WORKER_URL.replace(/\\/$/, '') + '/api/installations/config', {\n` +
-    `    method: 'post',\n` +
-    `    contentType: 'application/json',\n` +
-    `    payload: JSON.stringify({ install_id: INSTALL_ID, install_secret: INSTALL_SECRET }),\n` +
-    `    muteHttpExceptions: true,\n` +
-    `  });\n` +
-    `  const code = resp.getResponseCode();\n` +
-    `  const body = JSON.parse(resp.getContentText() || '{}');\n` +
-    `  if (code < 200 || code >= 300 || body.ok === false) throw new Error(body.error || ('No se pudo cargar config D1: HTTP ' + code));\n\n` +
-    `  const updates = {\n` +
-    `    app_name: body.appName || '${escapeJsString(appName)}',\n` +
-    `    telegram_bot_token: body.telegramBotToken || props.getProperty('telegram_bot_token') || '',\n` +
-    `    webapp_url: body.webappUrl || props.getProperty('webapp_url') || '',\n` +
-    `    sheet_id: body.sheetId || '${escapeJsString(spreadsheetId)}',\n` +
-    `    worker_url: body.workerUrl || INSTALL_WORKER_URL,\n` +
-    `    d1_api_url: body.d1ApiUrl || body.workerUrl || INSTALL_WORKER_URL,\n` +
-    `    d1_admin_key: body.d1AdminKey || INSTALL_SECRET,\n` +
-    `    dashboard_api_key: body.d1AdminKey || INSTALL_SECRET,\n` +
-    `    dashboard_url: body.dashboardUrl || props.getProperty('dashboard_url') || '',\n` +
-    `  };\n` +
-    `  Object.keys(updates).forEach(function (key) {\n` +
-    `    if (updates[key]) props.setProperty(key, String(updates[key]));\n` +
-    `  });\n` +
-    `  cache.put('install_config_ok', '1', 300);\n` +
-    `}\n\n` +
-    `function getRequiredScriptProperty_(name) {\n` +
-    `  const value = PropertiesService.getScriptProperties().getProperty(name);\n` +
-    `  if (!value) throw new Error('Falta Script Property: ' + name);\n` +
-    `  return value;\n` +
-    `}\n`;
-}
-
-function personalizeAppsScriptSource(source, appName, user) {
-  const firstName = String(user?.name || user?.email || 'Usuario').split(/\s+/)[0] || 'Usuario';
-  return String(source || '')
-    .replace(/Finanzas Mayeson/g, appName)
-    .replace(/FINANZAS MAYESON/g, appName.toUpperCase())
-    .replace(/Mayeson/g, firstName)
-    .replace(/MAYESON/g, firstName.toUpperCase())
-    .replace(/1538086276/g, '');
-}
-
-function deploymentWebAppUrl(deployment) {
-  const entry = (deployment.entryPoints || []).find((item) => item.entryPointType === 'WEB_APP');
-  return entry?.webApp?.url || '';
-}
-
-function escapeJsString(value) {
-  return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, ' ');
-}
-
-function escapeJsComment(value) {
-  return String(value || '').replace(/\r?\n/g, ' ').replace(/\*\//g, '* /');
-}
-
-function randomSecret() {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return base64UrlEncodeBytes(bytes);
 }
 
 async function changePassword(env, payload) {
@@ -1066,20 +335,24 @@ async function changePassword(env, payload) {
   };
 }
 
-async function dashboardSettings(env, params = new URLSearchParams(), session = null) {
-  const gasConfig = await gasConfigRequest(env, 'config');
-  const user = await resolveUserForRequest(env, params, session);
+async function dashboardLoginEmail(env) {
+  const stored = String(await getAppSetting(env, 'dashboard_login_email') || '').trim().toLowerCase();
+  const configured = String(env.LOGIN_EMAIL || env.DASHBOARD_LOGIN_EMAIL || '').trim().toLowerCase();
+  return stored || configured || 'mayersonm@gmail.com';
+}
+
+async function dashboardSettings(env, params = new URLSearchParams()) {
+  const chatId = getChatId(env, params);
+  const user = await ensureUserForChat(env, chatId);
   const userSettings = await getUserSettings(env, user.id);
 
   return {
     ok: true,
     user,
-    config: normalizeSettingsConfig({
-      ...(gasConfig.config || {}),
-      ...userSettingsToConfig(userSettings),
-    }),
+    config: normalizeSettingsConfig(userSettingsToConfig(userSettings)),
     secrets: {
-      ...(gasConfig.secrets || {}),
+      dashboardApiKey: Boolean(env.DASHBOARD_API_KEY),
+      d1AdminKey: Boolean(env.ADMIN_KEY),
       workerGasApiUrl: Boolean(env.GAS_API_URL),
       workerGasApiKey: Boolean(env.GAS_API_KEY),
       workerAdminKey: Boolean(env.ADMIN_KEY),
@@ -1087,48 +360,27 @@ async function dashboardSettings(env, params = new URLSearchParams(), session = 
       workerSessionSecret: Boolean(env.SESSION_SECRET),
       r2Bucket: Boolean(env.RECEIPTS_BUCKET),
     },
-    updatedAt: gasConfig.updatedAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 }
 
-async function updateDashboardSettings(env, payload, params = new URLSearchParams(), session = null) {
-  const user = await resolveUserForRequest(env, params, session, payload);
+async function updateDashboardSettings(env, payload, params = new URLSearchParams()) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const user = await ensureUserForChat(env, chatId);
   const config = normalizeSettingsConfig(payload || {});
   await upsertUserSettings(env, user.id, config);
-
-  if (session && session.role !== 'admin') {
-    return {
-      ok: true,
-      user,
-      saved: ['user_settings'],
-      config,
-    };
-  }
-
-  const gasParams = new URLSearchParams({
-    creditCutoffDay: String(config.creditCutoffDay),
-    creditDueDay: String(config.creditDueDay),
-    creditCardName: config.creditCardName,
-    receiptImageMaxBytes: String(config.receiptImageMaxBytes),
-    claudeModel: config.claudeModel,
-    financeEmailTo: config.financeEmailTo,
-    dailyEmailTo: config.dailyEmailTo,
-    monthlyEmailTo: config.monthlyEmailTo,
-    yearlyEmailTo: config.yearlyEmailTo,
-  });
-
-  const gasConfig = await gasConfigRequest(env, 'update_config', gasParams);
 
   return {
     ok: true,
     user,
-    saved: gasConfig.saved || [],
+    saved: ['d1:user_settings'],
     config,
   };
 }
 
-async function profile(env, params, session = null) {
-  const user = await resolveUserForRequest(env, params, session);
+async function profile(env, params) {
+  const chatId = getChatId(env, params);
+  const user = await ensureUserForChat(env, chatId);
   const settings = await getUserSettings(env, user.id);
   const links = await env.DB.prepare(`
     SELECT chat_id, label, active, updated_at
@@ -1150,8 +402,9 @@ async function profile(env, params, session = null) {
   };
 }
 
-async function categoryDefinitions(env, params, session = null) {
-  const user = await resolveUserForRequest(env, params, session);
+async function categoryDefinitions(env, params) {
+  const chatId = getChatId(env, params);
+  const user = await ensureUserForChat(env, chatId);
   const rows = await env.DB.prepare(`
     SELECT id, user_id, category, type, color, active, sort_order, updated_at
     FROM category_definitions
@@ -1178,8 +431,9 @@ async function categoryDefinitions(env, params, session = null) {
   };
 }
 
-async function upsertCategoryDefinition(env, payload, params, session = null) {
-  const user = await resolveUserForRequest(env, params, session, payload);
+async function upsertCategoryDefinition(env, payload, params) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const user = await ensureUserForChat(env, chatId);
   const type = String(payload.type || payload.tipo || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
   const category = normalizeBaseCategory(payload.category || payload.cat || payload.nombre || '') || normalizeKey(payload.category || payload.cat || payload.nombre || '');
   const color = /^#[0-9a-f]{6}$/i.test(String(payload.color || '')) ? String(payload.color) : (COLORS[category] || COLORS.otro);
@@ -1204,8 +458,9 @@ async function upsertCategoryDefinition(env, payload, params, session = null) {
   };
 }
 
-async function disableCategoryDefinition(env, payload, params, session = null) {
-  const user = await resolveUserForRequest(env, params, session, payload);
+async function disableCategoryDefinition(env, payload, params) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const user = await ensureUserForChat(env, chatId);
   const type = String(payload.type || payload.tipo || 'gasto').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
   const category = normalizeBaseCategory(payload.category || payload.cat || '') || normalizeKey(payload.category || payload.cat || '');
 
@@ -1253,19 +508,18 @@ async function systemHealth(env) {
   });
 
   [
+    ['dashboardApiKey', 'DASHBOARD_API_KEY', env.DASHBOARD_API_KEY, 'error'],
     ['gasApiUrl', 'GAS_API_URL', env.GAS_API_URL],
     ['gasApiKey', 'GAS_API_KEY', env.GAS_API_KEY],
     ['adminKey', 'ADMIN_KEY', env.ADMIN_KEY],
     ['defaultChatId', 'DEFAULT_CHAT_ID', env.DEFAULT_CHAT_ID],
     ['sessionSecret', 'SESSION_SECRET', env.SESSION_SECRET],
-    ['googleClientId', 'GOOGLE_CLIENT_ID', env.GOOGLE_CLIENT_ID],
-    ['googleClientSecret', 'GOOGLE_CLIENT_SECRET', env.GOOGLE_CLIENT_SECRET],
-  ].forEach(([id, label, value]) => {
+  ].forEach(([id, label, value, missingStatus = 'error']) => {
     checks.push({
       id,
       label,
-      status: value ? 'ok' : 'error',
-      message: value ? 'Configurado.' : 'Falta configurar este secreto en Worker.',
+      status: value ? 'ok' : missingStatus,
+      message: value ? 'Configurado.' : missingStatus === 'warning' ? 'Opcional si el dashboard no usa login.' : 'Falta configurar este secreto en Worker.',
     });
   });
 
@@ -1383,9 +637,8 @@ function serviceLabel(name) {
   return labels[name] || name;
 }
 
-async function dashboard(env, params, session = null) {
-  const chatId = await getScopedChatId(env, params, session);
-  if (!chatId) return emptyDashboard();
+async function dashboard(env, params) {
+  const chatId = getChatId(env, params);
   const now = new Date();
   const monthKey = formatMonth(now);
   const monthName = monthLongName(now);
@@ -1495,11 +748,8 @@ async function dashboard(env, params, session = null) {
   };
 }
 
-async function transactions(env, params, session = null) {
-  const chatId = await getScopedChatId(env, params, session);
-  if (!chatId) {
-    return { ok: true, total: 0, limit: clamp(Number(params.get('limit') || 100), 1, 500), transacciones: [] };
-  }
+async function transactions(env, params) {
+  const chatId = getChatId(env, params);
   const limit = clamp(Number(params.get('limit') || 100), 1, 500);
   const search = normalizeKey(params.get('q') || params.get('search') || '');
   const category = normalizeBaseCategory(params.get('category') || '');
@@ -1568,74 +818,9 @@ async function transactions(env, params, session = null) {
   };
 }
 
-function emptyDashboard() {
-  const now = new Date();
-  const monthKey = formatMonth(now);
-  return {
-    ok: true,
-    onboardingRequired: true,
-    balance: 0,
-    ingresos: 0,
-    gastos: 0,
-    ingresosMes: 0,
-    gastosMes: 0,
-    balanceMes: 0,
-    movimientos: 0,
-    mes: monthLongName(now),
-    mesKey: monthKey,
-    transacciones: [],
-    categorias: [],
-    budgetRules: [],
-    meses: [],
-    presupuestos: [],
-    fijos: [],
-    deudas: [],
-    gastosReales: { totalFijos: 0, totalPresupuesto: 0, total: 0 },
-    metas: [],
-    alertas: [{
-      level: 'info',
-      title: 'Vincula Telegram',
-      message: 'Envia al bot: perfil Tu Nombre tu@gmail.com para asociar tu Chat ID.',
-    }],
-    insights: [],
-    emailConfig: { configured: false },
-    source: 'empty_user',
-    updatedAt: localIso(now),
-  };
-}
-
-async function usersList(env, session = null) {
+async function usersList(env) {
+  await ensureUserForChat(env, env.DEFAULT_CHAT_ID);
   await ensureKnownUsers(env);
-  if (session && session.role !== 'admin' && session.userId) {
-    const rows = await env.DB.prepare(`
-      SELECT
-        l.chat_id,
-        l.label,
-        l.active,
-        u.id AS user_id,
-        u.email,
-        u.name,
-        u.role,
-        COUNT(t.id) AS transactions,
-        MAX(t.updated_at) AS lastActivity
-      FROM users u
-      LEFT JOIN user_chat_links l ON l.user_id = u.id AND l.active = 1
-      LEFT JOIN transactions t ON t.chat_id = l.chat_id
-      WHERE u.id = ? AND u.active = 1
-      GROUP BY l.chat_id, l.label, l.active, u.id, u.email, u.name, u.role
-      ORDER BY lastActivity DESC
-    `).bind(session.userId).all();
-
-    return {
-      ok: true,
-      defaultChatId: '',
-      users: (rows.results || [])
-        .filter((row) => row.chat_id)
-        .map(userListShape),
-      onboardingRequired: !(rows.results || []).some((row) => row.chat_id),
-    };
-  }
-
   const rows = await env.DB.prepare(`
     SELECT
       l.chat_id,
@@ -1659,58 +844,27 @@ async function usersList(env, session = null) {
   return {
     ok: true,
     defaultChatId: env.DEFAULT_CHAT_ID || '',
-    users: (rows.results || []).map(userListShape),
+    users: (rows.results || []).map((row) => ({
+      chatId: row.chat_id,
+      userId: row.user_id,
+      email: row.email || '',
+      name: row.name || '',
+      role: row.role || 'user',
+      active: Boolean(row.active),
+      label: row.label || row.name || (row.chat_id === env.DEFAULT_CHAT_ID ? `Principal (${row.chat_id})` : `Chat ${row.chat_id}`),
+      transactions: Number(row.transactions || 0),
+      lastActivity: row.lastActivity || '',
+    })),
   };
 }
 
-function userListShape(row) {
-  return {
-    chatId: row.chat_id,
-    userId: row.user_id,
-    email: row.email || '',
-    name: row.name || '',
-    role: row.role || 'user',
-    active: Boolean(row.active),
-    label: row.label || row.name || `Chat ${row.chat_id}`,
-    transactions: Number(row.transactions || 0),
-    lastActivity: row.lastActivity || '',
-  };
-}
-
-async function linkTelegramUser(env, payload, adminAccess = null) {
+async function linkTelegramUser(env, payload) {
   const chatId = String(payload.chat_id || payload.chatId || '').trim();
   const name = String(payload.name || payload.nombre || '').trim().slice(0, 120);
-  const email = normalizeEmail(payload.email || '');
+  const email = String(payload.email || '').trim().toLowerCase().slice(0, 180);
   if (!chatId) throw httpError(400, 'chat_id requerido');
 
-  let existing = null;
-  if (adminAccess?.userId) {
-    const user = await env.DB.prepare('SELECT * FROM users WHERE id = ? AND active = 1')
-      .bind(adminAccess.userId)
-      .first();
-    if (!user) throw httpError(404, 'Usuario de instalacion no encontrado');
-    existing = {
-      id: user.id,
-      email: user.email || '',
-      name: user.name || '',
-      role: user.role || 'user',
-      chatId,
-      label: user.name || user.email || `Chat ${chatId}`,
-    };
-  } else {
-    const userByEmail = email
-      ? await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ? AND active = 1').bind(email).first()
-      : null;
-    existing = userByEmail ? {
-      id: userByEmail.id,
-      email: userByEmail.email || '',
-      name: userByEmail.name || '',
-      role: userByEmail.role || 'user',
-      chatId,
-      label: userByEmail.name || email,
-    } : await ensureUserForChat(env, chatId);
-  }
-
+  const existing = await ensureUserForChat(env, chatId);
   const nextName = name || existing.name || existing.label || `Chat ${chatId}`;
   const nextEmail = email || existing.email || '';
 
@@ -1723,14 +877,10 @@ async function linkTelegramUser(env, payload, adminAccess = null) {
   `).bind(nextName, nextEmail, nextEmail, existing.id).run();
 
   await env.DB.prepare(`
-    INSERT INTO user_chat_links (id, user_id, chat_id, label, active, updated_at)
-    VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-    ON CONFLICT(chat_id) DO UPDATE SET
-      user_id = excluded.user_id,
-      label = excluded.label,
-      active = 1,
-      updated_at = CURRENT_TIMESTAMP
-  `).bind(`link:${safeObjectSegment(chatId)}`, existing.id, chatId, nextName).run();
+    UPDATE user_chat_links
+    SET label = ?, active = 1, updated_at = CURRENT_TIMESTAMP
+    WHERE chat_id = ?
+  `).bind(nextName, chatId).run();
 
   return {
     ok: true,
@@ -1741,41 +891,6 @@ async function linkTelegramUser(env, payload, adminAccess = null) {
       label: nextName,
     },
   };
-}
-
-async function scopedAdminPayload(env, payload, adminAccess) {
-  if (!adminAccess?.userId) return payload;
-
-  const chatId = String(payload.chat_id || payload.chatId || '').trim();
-  if (!chatId) throw httpError(400, 'chat_id requerido para esta instalacion');
-
-  await ensureChatLinkedToInstallation(env, adminAccess.userId, chatId);
-  return { ...payload, chat_id: chatId, chatId };
-}
-
-async function ensureChatLinkedToInstallation(env, userId, chatId) {
-  const existing = await env.DB.prepare('SELECT user_id FROM user_chat_links WHERE chat_id = ? AND active = 1')
-    .bind(chatId)
-    .first();
-  if (existing && existing.user_id !== userId) {
-    throw httpError(403, 'Este Chat ID ya esta vinculado a otro usuario');
-  }
-  if (existing) return;
-
-  const user = await env.DB.prepare('SELECT name, email FROM users WHERE id = ? AND active = 1')
-    .bind(userId)
-    .first();
-  const label = user?.name || user?.email || `Chat ${chatId}`;
-
-  await env.DB.prepare(`
-    INSERT INTO user_chat_links (id, user_id, chat_id, label, active, updated_at)
-    VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-    ON CONFLICT(chat_id) DO UPDATE SET
-      user_id = excluded.user_id,
-      label = excluded.label,
-      active = 1,
-      updated_at = CURRENT_TIMESTAMP
-  `).bind(`link:${safeObjectSegment(chatId)}`, userId, chatId, label).run();
 }
 
 async function ensureKnownUsers(env) {
@@ -1791,6 +906,16 @@ async function ensureKnownUsers(env) {
   }
 }
 
+async function dashboardEmailForUser(env, userId) {
+  const email = await dashboardLoginEmail(env);
+  if (!email) return '';
+
+  const owner = await env.DB.prepare('SELECT id FROM users WHERE email = ? LIMIT 1')
+    .bind(email)
+    .first();
+  return !owner || owner.id === userId ? email : '';
+}
+
 async function ensureUserForChat(env, chatId) {
   const cleanChatId = String(chatId || env.DEFAULT_CHAT_ID || '').trim();
   if (!cleanChatId) throw httpError(400, 'chat_id requerido');
@@ -1804,24 +929,40 @@ async function ensureUserForChat(env, chatId) {
   `).bind(cleanChatId).first();
 
   if (existing) {
+    let email = existing.email || '';
+    let name = existing.name || '';
+    if (existing.role === 'admin') {
+      const ownerEmail = await dashboardEmailForUser(env, existing.id);
+      if (ownerEmail && (email !== ownerEmail || !name)) {
+        email = ownerEmail;
+        name = name || 'Mayerson';
+        await env.DB.prepare(`
+          UPDATE users
+          SET email = ?, name = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(email, name, existing.id).run();
+      }
+    }
+
     return {
       id: existing.id,
-      email: existing.email || '',
-      name: existing.name || '',
+      email,
+      name,
       role: existing.role || 'user',
       chatId: existing.chat_id,
-      label: existing.label || '',
+      label: existing.label || name || '',
     };
   }
 
   const userId = `user:${safeObjectSegment(cleanChatId)}`.slice(0, 120);
   const role = cleanChatId === String(env.DEFAULT_CHAT_ID || '').trim() ? 'admin' : 'user';
-  const label = role === 'admin' ? 'Principal' : `Chat ${cleanChatId}`;
+  const ownerEmail = role === 'admin' ? await dashboardEmailForUser(env, userId) : '';
+  const label = role === 'admin' ? 'Mayerson' : `Chat ${cleanChatId}`;
 
   await env.DB.prepare(`
-    INSERT OR IGNORE INTO users (id, name, role, active, updated_at)
-    VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
-  `).bind(userId, label, role).run();
+    INSERT OR IGNORE INTO users (id, email, name, role, active, updated_at)
+    VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+  `).bind(userId, ownerEmail, label, role).run();
 
   await env.DB.prepare(`
     INSERT OR IGNORE INTO user_chat_links (id, user_id, chat_id, label, active, updated_at)
@@ -1835,64 +976,12 @@ async function ensureUserForChat(env, chatId) {
 
   return {
     id: userId,
-    email: '',
+    email: ownerEmail,
     name: label,
     role,
     chatId: cleanChatId,
     label,
   };
-}
-
-async function resolveUserForRequest(env, params, session = null, payload = {}) {
-  const requestedChatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || '').trim();
-  if (requestedChatId) {
-    if (session && session.role !== 'admin') {
-      const allowed = await env.DB.prepare('SELECT user_id FROM user_chat_links WHERE chat_id = ? AND user_id = ? AND active = 1')
-        .bind(requestedChatId, session.userId || '')
-        .first();
-      if (!allowed) throw httpError(403, 'Chat ID no vinculado a este usuario');
-    }
-    return ensureUserForChat(env, requestedChatId);
-  }
-
-  if (session && session.userId && session.role !== 'admin') {
-    const user = await env.DB.prepare('SELECT id, email, name, role FROM users WHERE id = ? AND active = 1')
-      .bind(session.userId)
-      .first();
-    if (!user) throw httpError(404, 'Usuario no encontrado');
-    return {
-      id: user.id,
-      email: user.email || '',
-      name: user.name || '',
-      role: user.role || 'user',
-      chatId: '',
-      label: user.name || user.email || '',
-    };
-  }
-
-  return ensureUserForChat(env, env.DEFAULT_CHAT_ID);
-}
-
-async function getScopedChatId(env, params, session = null) {
-  const requestedChatId = String(params.get('chat_id') || '').trim();
-  if (requestedChatId) {
-    if (session && session.role !== 'admin') {
-      const allowed = await env.DB.prepare('SELECT 1 FROM user_chat_links WHERE chat_id = ? AND user_id = ? AND active = 1')
-        .bind(requestedChatId, session.userId || '')
-        .first();
-      if (!allowed) throw httpError(403, 'Chat ID no vinculado a este usuario');
-    }
-    return requestedChatId;
-  }
-
-  if (session && session.role !== 'admin' && session.userId) {
-    const link = await env.DB.prepare('SELECT chat_id FROM user_chat_links WHERE user_id = ? AND active = 1 ORDER BY updated_at DESC LIMIT 1')
-      .bind(session.userId)
-      .first();
-    return link?.chat_id || '';
-  }
-
-  return String(env.DEFAULT_CHAT_ID || '').trim();
 }
 
 async function getUserSettings(env, userId) {
@@ -1954,17 +1043,8 @@ function userSettingsToConfig(settings) {
   };
 }
 
-async function rulesList(env, params, session = null) {
-  const chatId = await getScopedChatId(env, params, session);
-  if (!chatId) {
-    return {
-      ok: true,
-      onboardingRequired: true,
-      categoryRules: [],
-      budgetRules: [],
-    };
-  }
-
+async function rulesList(env, params) {
+  const chatId = getChatId(env, params);
   const categoryRows = await env.DB.prepare(`
     SELECT id, chat_id, keyword, category, priority, active, notes, updated_at
     FROM category_rules
@@ -2035,14 +1115,6 @@ async function budgetKeysPayload(env, payload) {
     category,
     keys: budgetCategoryKeysFromRules(rules, category),
   };
-}
-
-async function scopedRulePayload(env, params, session, payload) {
-  if (!session || session.role === 'admin') return payload;
-
-  const chatId = await getScopedChatId(env, params, session);
-  if (!chatId) throw httpError(400, 'Vincula Telegram antes de crear reglas');
-  return { ...payload, chat_id: chatId, chatId };
 }
 
 async function upsertCategoryRule(env, payload) {
@@ -3347,24 +2419,16 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets
 }
 
 async function requireDashboardAccess(request, env) {
-  if (hasDashboardKey(request, env)) return { sub: 'dashboard', role: 'admin', userId: 'dashboard_key' };
+  if (hasDashboardKey(request, env)) return;
 
   const token = bearer(request);
-  if (token) {
-    const session = await verifySessionToken(env, token);
-    if (session) return session;
-  }
+  if (token && await verifySessionToken(env, token)) return;
 
   throw httpError(401, 'Unauthorized');
 }
 
 async function requireDashboardOrAdminAccess(request, env) {
-  const adminAccess = await adminAccessForRequest(request, env);
-  if (adminAccess) {
-    return adminAccess.scope === 'global'
-      ? { sub: 'dashboard', role: 'admin', userId: 'admin_key' }
-      : { sub: 'dashboard', role: 'installation', userId: adminAccess.userId, installationId: adminAccess.installationId };
-  }
+  if (hasAdminKey(request, env)) return;
   return requireDashboardAccess(request, env);
 }
 
@@ -3376,54 +2440,16 @@ function hasDashboardKey(request, env) {
   return Boolean(expected && provided === expected);
 }
 
-async function requireAdminAccess(request, env) {
-  const access = await adminAccessForRequest(request, env);
-  if (access) return access;
+function requireAdminKey(request, env) {
+  if (hasAdminKey(request, env)) return;
   throw httpError(401, 'Unauthorized');
 }
 
-async function adminAccessForRequest(request, env) {
-  const provided = adminSecretFromRequest(request);
-  if (env.ADMIN_KEY && provided && constantTimeEqual(provided, env.ADMIN_KEY)) {
-    return { role: 'admin', scope: 'global' };
-  }
-
-  if (provided) {
-    const hash = await sha256Hex(provided);
-    const installation = await env.DB.prepare(`
-      SELECT id, user_id, status
-      FROM user_installations
-      WHERE install_secret_hash = ?
-      LIMIT 1
-    `).bind(hash).first();
-
-    if (installation?.user_id) {
-      return {
-        role: 'installation',
-        scope: 'installation',
-        userId: installation.user_id,
-        installationId: installation.id,
-        status: installation.status || '',
-      };
-    }
-  }
-
-  return null;
-}
-
-async function requireAdminKey(request, env) {
-  return requireAdminAccess(request, env);
-}
-
 function hasAdminKey(request, env) {
-  const provided = adminSecretFromRequest(request);
+  const provided = request.headers.get('x-admin-key') || bearer(request);
   const expected = env.ADMIN_KEY;
 
   return Boolean(expected && provided === expected);
-}
-
-function adminSecretFromRequest(request) {
-  return request.headers.get('x-admin-key') || bearer(request);
 }
 
 function bearer(request) {
@@ -3467,42 +2493,16 @@ async function verifySessionToken(env, token) {
   try {
     const payload = JSON.parse(base64UrlDecode(body));
     const now = Math.floor(Date.now() / 1000);
-    return payload?.sub === 'dashboard' && Number(payload.exp || 0) > now ? payload : false;
+    return payload?.sub === 'dashboard' && Number(payload.exp || 0) > now;
   } catch (_error) {
     return false;
   }
-}
-
-function sessionUserShape(session) {
-  return {
-    id: session?.userId || '',
-    email: session?.email || '',
-    name: session?.name || '',
-    role: session?.role || 'user',
-  };
 }
 
 function sessionSecret(env) {
   const secret = env.SESSION_SECRET;
   if (!secret) throw httpError(500, 'SESSION_SECRET no configurado');
   return String(secret);
-}
-
-function googleRedirectUri(request, env) {
-  if (env.GOOGLE_REDIRECT_URI) return String(env.GOOGLE_REDIRECT_URI);
-  const url = new URL(request.url);
-  return `${url.origin}/api/auth/google/callback`;
-}
-
-function parseJwtPayload(token) {
-  const body = String(token || '').split('.')[1] || '';
-  if (!body) return {};
-  return JSON.parse(base64UrlDecode(body));
-}
-
-function normalizeEmail(value) {
-  const email = String(value || '').trim().toLowerCase();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
 }
 
 function getChatId(env, params) {
@@ -3554,29 +2554,6 @@ async function sha256Hex(value) {
     .join('');
 }
 
-async function encryptionKey(env) {
-  const digest = await crypto.subtle.digest('SHA-256', utf8Bytes(env.INSTALLATION_SECRET || sessionSecret(env)));
-  return crypto.subtle.importKey('raw', digest, 'AES-GCM', false, ['encrypt', 'decrypt']);
-}
-
-async function encryptText(env, value) {
-  const iv = new Uint8Array(12);
-  crypto.getRandomValues(iv);
-  const key = await encryptionKey(env);
-  const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, utf8Bytes(value)));
-  return `${base64UrlEncodeBytes(iv)}.${base64UrlEncodeBytes(cipher)}`;
-}
-
-async function decryptText(env, value) {
-  const [ivPart, cipherPart] = String(value || '').split('.');
-  if (!ivPart || !cipherPart) return '';
-  const iv = base64UrlToBytes(ivPart);
-  const cipher = base64UrlToBytes(cipherPart);
-  const key = await encryptionKey(env);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
-  return new TextDecoder().decode(plain);
-}
-
 function utf8Bytes(value) {
   return new TextEncoder().encode(String(value));
 }
@@ -3605,15 +2582,6 @@ function base64UrlDecode(value) {
   const binary = atob(padded);
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
-}
-
-function base64UrlToBytes(value) {
-  const normalized = String(value || '')
-    .replace(/-/g, '+')
-    .replace(/_/g, '/');
-  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
 function constantTimeEqual(a, b) {

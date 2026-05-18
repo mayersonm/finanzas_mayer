@@ -38,7 +38,7 @@ function sendHelp(chatId) {
   }
 
   const help = [
-    `${saludo}, *${APP_NAME.replace(/^Finanzas\s+/i, '')}* 👋`,
+    `${saludo}, *Mayeson* 👋`,
     data.length
       ? 'Tu tablero ya tiene movimientos. Usa estos atajos:'
       : 'Todo esta limpio. Arranca con tus datos reales:',

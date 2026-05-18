@@ -1,39 +1,13 @@
-# Guia de instalacion completa de Finanzas xxxx
+# Guia de instalacion completa de Finanzas Mayeson
 
-Esta guia es para instalar Finanzas xxxx en cualquier dispositivo sin depender de rutas locales. Sigue los pasos en orden: Telegram, Google Sheets, Apps Script, Cloudflare Worker, D1, R2 y dashboard.
+Esta guia es para instalar Finanzas Mayeson en cualquier dispositivo sin depender de rutas locales. Sigue los pasos en orden: Telegram, Google Sheets, Apps Script, Cloudflare Worker, D1, R2 y dashboard.
 
 Hay dos escenarios:
 
 - Mismo proyecto en otro dispositivo: usas el repo, el mismo Apps Script, el mismo Worker, el mismo D1, el mismo R2 y el mismo dashboard.
 - Instalacion desde cero: creas Telegram Bot, Google Sheet, Apps Script, Worker, D1, R2 y Pages desde una cuenta nueva.
-- Nuevo usuario desde el dashboard: entra con Google, abre `Setup`, pega su token de Telegram y el sistema crea su propio Google Sheet + Apps Script con el nombre del usuario.
 
 Nunca subas tokens, claves API, contrasenas ni archivos `.env` a Git.
-
-## Alta nueva desde el dashboard
-
-Usa este camino cuando el Worker, D1, R2 y dashboard principal ya existen.
-
-1. Entra al dashboard.
-2. Pulsa `Continuar con Google`.
-3. Acepta los permisos de Google para crear Sheets y Apps Script.
-4. Abre el tab `Setup`.
-5. Crea un bot nuevo en `@BotFather` y pega el token en `Telegram`.
-6. Pulsa `Crear entorno`.
-7. Pulsa `Activar bot`.
-8. Abre el bot en Telegram y envia:
-
-```text
-/start
-```
-
-El sistema crea un entorno nuevo con este formato:
-
-```text
-Finanzas NombreDelUsuario
-```
-
-Ese usuario empieza desde cero: no ve tus movimientos, no usa tu Chat ID y no escribe con tu `ADMIN_KEY` global.
 
 ## 1. Crear el bot en Telegram
 
@@ -351,13 +325,13 @@ credit_card_name=Tarjeta
 receipt_image_max_bytes=921600
 ```
 
-Genera claves largas para `dashboard_api_key`, `d1_admin_key` y `SESSION_SECRET` con:
+Genera claves largas para `dashboard_api_key`, `DASHBOARD_API_KEY`, `d1_admin_key` y `SESSION_SECRET` con:
 
 ```powershell
 [guid]::NewGuid().ToString("N")
 ```
 
-Ejecuta ese comando tres veces y usa un valor distinto para cada secreto.
+Ejecuta ese comando cuatro veces y usa un valor distinto para cada secreto.
 
 Sobre la IA:
 
@@ -480,6 +454,7 @@ Ese binding es lo que adjunta R2 al Worker. Sin esto, el gasto puede registrarse
 En la carpeta `d1-api`, configura los secretos.
 
 ```powershell
+npx wrangler secret put DASHBOARD_API_KEY
 npx wrangler secret put ADMIN_KEY
 npx wrangler secret put DEFAULT_CHAT_ID
 npx wrangler secret put GAS_API_URL
@@ -491,12 +466,13 @@ npx wrangler secret put SESSION_SECRET
 Que valor poner en cada uno:
 
 ```text
+DASHBOARD_API_KEY -> clave tecnica opcional para llamadas directas al Worker
 ADMIN_KEY       -> mismo valor que d1_admin_key en Apps Script
 DEFAULT_CHAT_ID -> tu Chat ID de Telegram
 GAS_API_URL     -> URL /exec del Apps Script
 GAS_API_KEY     -> mismo valor que dashboard_api_key en Apps Script
-LOGIN_PASSWORD  -> contrasena para entrar al dashboard
-SESSION_SECRET  -> clave larga generada con PowerShell
+LOGIN_PASSWORD  -> clave para entrar al dashboard
+SESSION_SECRET  -> clave larga para firmar sesiones
 ```
 
 Si cambias cualquiera de estos valores despues, vuelve a ejecutar el comando `secret put` correspondiente.
@@ -586,9 +562,9 @@ Abre la URL que muestra Vite, normalmente:
 http://localhost:5173
 ```
 
-Debe aparecer el login. Entra con el valor que configuraste en `LOGIN_PASSWORD`.
+Debe aparecer el login con el usuario `mayersonm@gmail.com`. Entra con el valor que configuraste en `LOGIN_PASSWORD`.
 
-Si no aparece login y se ve modo demo, falta `VITE_GAS_API_URL` o el build se hizo sin esa variable.
+Si se ve modo demo, falta `VITE_GAS_API_URL` o el build se hizo sin esa variable.
 
 ## 14. Desplegar el dashboard en Cloudflare Pages
 
@@ -620,6 +596,7 @@ Debe cargar Movimientos
 Debe cargar Compromisos
 Debe cargar Analisis
 Debe cargar Metas
+Debe cargar Config
 ```
 
 Si quieres conectar Pages a GitHub desde Cloudflare, usa esta configuracion:
@@ -678,12 +655,12 @@ El dashboard muestra el movimiento al actualizar
 Entra al dashboard y revisa:
 
 ```text
-Login
 Inicio
 Movimientos
 Compromisos
 Analisis
 Metas
+Config
 Tema claro y oscuro
 Eliminar movimiento
 Categorias y presupuestos
@@ -695,7 +672,7 @@ Pulsa `Actualizar` para traer datos recientes.
 Si estas en local, el dashboard tambien usa la data real siempre que `.env.local` apunte a:
 
 ```text
-https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/dashboard
+VITE_GAS_API_URL=https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/dashboard
 ```
 
 No necesitas copiar manualmente la base D1 a tu computadora para ver data actualizada. Para desarrollo normal, usa el Worker remoto.
@@ -796,7 +773,7 @@ Who has access Anyone
 
 Revisa que `telegram_bot_token` este bien en Script Properties y vuelve a configurar webhook.
 
-### Dashboard sin login
+### Dashboard no muestra login o esta en demo
 
 Causa comun:
 
@@ -873,7 +850,7 @@ regla presupuesto comida incluye supermercado
 
 ## 19. Orden recomendado cada vez que hagas cambios
 
-Para no romper login, bot o dashboard:
+Para no romper bot o dashboard:
 
 ```text
 1. Baja cambios desde Git.

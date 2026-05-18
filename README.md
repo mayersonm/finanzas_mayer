@@ -48,8 +48,15 @@ Copia `dashboard/.env.example` a `dashboard/.env.local`:
 
 ```text
 VITE_GAS_API_URL=https://tu-worker.workers.dev/api/dashboard
-VITE_DASHBOARD_API_KEY=tu_dashboard_key
 ```
+
+El dashboard usa login normal con usuario y clave. El usuario inicial queda en D1 como `dashboard_login_email=mayersonm@gmail.com`. No hay registro ni login con Google.
+
+La pestana `Config` guarda las preferencias en D1 y concentra:
+
+- configuracion de credito, moneda, recibos y correos;
+- estado operativo de Worker, D1, R2 y Apps Script;
+- administrador de categorias, reglas IA y reglas de presupuesto.
 
 ### Worker D1
 
@@ -63,32 +70,7 @@ npx wrangler secret put GAS_API_URL
 npx wrangler secret put GAS_API_KEY
 npx wrangler secret put LOGIN_PASSWORD
 npx wrangler secret put SESSION_SECRET
-npx wrangler secret put DASHBOARD_URL
-npx wrangler secret put GOOGLE_CLIENT_ID
-npx wrangler secret put GOOGLE_CLIENT_SECRET
 ```
-
-Redirect URI de Google OAuth:
-
-```text
-https://finanzas-d1-api.mayersonm.workers.dev/api/auth/google/callback
-```
-
-Para altas nuevas con Google, el dashboard usa el tab `Setup`:
-
-1. El usuario entra con Google.
-2. Guarda su token de Telegram creado en BotFather.
-3. Crea su propio Google Sheet y Apps Script.
-4. Activa el webhook del bot.
-5. Abre Telegram y envia `/start` para vincular su Chat ID.
-
-El template de Apps Script vive en R2 bajo:
-
-```text
-templates/apps-script/
-```
-
-Cada instalacion recibe nombre propio, por ejemplo `Finanzas Ana`, y una clave por instalacion; ya no usa el `ADMIN_KEY` global para escribir movimientos.
 
 ## Comandos utiles
 
