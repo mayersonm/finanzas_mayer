@@ -2018,7 +2018,9 @@ function normalizeDebt(raw, chatId) {
   const name = normalizeKey(raw.nombre || raw.name || '');
   const totalAmount = parseAmount(raw.total || raw.total_amount || raw.totalAmount || raw.monto || raw.amount || 0);
   const paidAmount = parseAmount(raw.pagado || raw.paid_amount || raw.paidAmount || 0);
-  const currency = normalizeCurrency(raw.currency || raw.moneda || 'PEN');
+  const rawCurrency = raw.currency ?? raw.moneda;
+  const hasCurrency = rawCurrency !== undefined && rawCurrency !== null && String(rawCurrency).trim() !== '';
+  const currency = hasCurrency ? normalizeCurrency(rawCurrency) : 'PEN';
   const dueDate = normalizeDateOnly(raw.vencimiento || raw.due_date || raw.dueDate || raw.fecha || '');
   const statusRaw = normalizeKey(raw.estado || raw.status || '');
   const status = statusRaw === 'pagada' || statusRaw === 'pagado' || paidAmount >= totalAmount
@@ -2035,6 +2037,7 @@ function normalizeDebt(raw, chatId) {
     total_amount: round(totalAmount),
     paid_amount: round(Math.min(Math.max(paidAmount, 0), totalAmount)),
     currency,
+    has_currency: hasCurrency,
     due_date: dueDate,
     status,
     notes,
@@ -2050,7 +2053,7 @@ async function saveDebt(env, debt) {
     ON CONFLICT(chat_id, name) DO UPDATE SET
       total_amount = excluded.total_amount,
       paid_amount = excluded.paid_amount,
-      currency = excluded.currency,
+      currency = CASE WHEN ? = 1 THEN excluded.currency ELSE debts.currency END,
       due_date = excluded.due_date,
       status = excluded.status,
       notes = excluded.notes,
@@ -2065,6 +2068,7 @@ async function saveDebt(env, debt) {
     debt.due_date || null,
     debt.status,
     debt.notes,
+    debt.has_currency ? 1 : 0,
   ).run();
 
   return env.DB.prepare('SELECT * FROM debts WHERE id = ? AND chat_id = ?')

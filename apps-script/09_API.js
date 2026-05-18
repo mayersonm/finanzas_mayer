@@ -464,6 +464,7 @@ function dashReadDebts_(params) {
         total: dashRound_(total),
         pagado: dashRound_(pagado),
         pendiente: dashRound_(pendiente),
+        currency: normalizarMoneda_(row[7]) || 'PEN',
         vencimiento: dashPlainDate_(row[4]),
         estado: String(row[5] || (pendiente > 0 ? 'activa' : 'pagada')).toLowerCase(),
         notas: String(row[6] || ''),
