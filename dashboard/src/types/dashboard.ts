@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'analisis' | 'metas' | 'configuracion';
+export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'inversiones' | 'analisis' | 'metas' | 'configuracion';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {
@@ -128,6 +128,19 @@ export interface DebtPayment {
   paymentDate: string;
   notes?: string;
   createdAt?: string;
+}
+
+export interface Investment {
+  id?: string;
+  name: string;
+  kind: string;
+  amount: number;
+  currentValue: number;
+  currency?: Currency | 'PEN' | 'USD';
+  gain?: number;
+  gainPct?: number;
+  notes?: string;
+  updatedAt?: string;
 }
 
 export interface SmartAlert {
