@@ -630,6 +630,7 @@ pago ultimo credito
 pago 1 debito
 eliminar ultimo
 deuda laptop 2500 vence 2026-06-30
+deuda viaje 800 USD vence 2026-08-15
 deudas
 alertas
 insights
@@ -637,6 +638,8 @@ reglas
 regla kfc entretenimiento
 regla presupuesto comida incluye supermercado
 ```
+
+Las deudas pueden registrarse en `PEN` o `USD`. El dashboard muestra el monto original y, para USD, una conversion referencial a soles usando la tasa USD/PEN que consulta y cachea el Worker.
 
 Luego envia una foto clara de un recibo.
 

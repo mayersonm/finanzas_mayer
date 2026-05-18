@@ -44,6 +44,7 @@ export const MOCK_DASHBOARD: DashboardData = {
   deudas: [
     { nombre: 'Laptop', total: 2500, pagado: 700, pendiente: 1800, vencimiento: '2026-06-30', estado: 'activa' },
     { nombre: 'Tarjeta BCP', total: 900, pagado: 300, pendiente: 600, vencimiento: '2026-05-20', estado: 'activa' },
+    { nombre: 'Préstamo Internacional', total: 1000, pagado: 200, pendiente: 800, vencimiento: '2026-08-15', estado: 'activa', currency: 'USD' },
   ],
   gastosReales: {
     totalFijos: 1620,

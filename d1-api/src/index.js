@@ -103,6 +103,11 @@ export default {
         return json(await systemHealth(env));
       }
 
+      if (url.pathname === '/api/exchange-rate' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await exchangeRate(env));
+      }
+
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json(await dashboard(env, url.searchParams));
@@ -1994,6 +1999,7 @@ function normalizeDebt(raw, chatId) {
   const name = normalizeKey(raw.nombre || raw.name || '');
   const totalAmount = parseAmount(raw.total || raw.total_amount || raw.totalAmount || raw.monto || raw.amount || 0);
   const paidAmount = parseAmount(raw.pagado || raw.paid_amount || raw.paidAmount || 0);
+  const currency = normalizeCurrency(raw.currency || raw.moneda || 'PEN');
   const dueDate = normalizeDateOnly(raw.vencimiento || raw.due_date || raw.dueDate || raw.fecha || '');
   const statusRaw = normalizeKey(raw.estado || raw.status || '');
   const status = statusRaw === 'pagada' || statusRaw === 'pagado' || paidAmount >= totalAmount
@@ -2009,6 +2015,7 @@ function normalizeDebt(raw, chatId) {
     name,
     total_amount: round(totalAmount),
     paid_amount: round(Math.min(Math.max(paidAmount, 0), totalAmount)),
+    currency,
     due_date: dueDate,
     status,
     notes,
@@ -2018,12 +2025,13 @@ function normalizeDebt(raw, chatId) {
 async function saveDebt(env, debt) {
   await env.DB.prepare(`
     INSERT INTO debts (
-      id, chat_id, name, total_amount, paid_amount, due_date, status, notes, updated_at
+      id, chat_id, name, total_amount, paid_amount, currency, due_date, status, notes, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(chat_id, name) DO UPDATE SET
       total_amount = excluded.total_amount,
       paid_amount = excluded.paid_amount,
+      currency = excluded.currency,
       due_date = excluded.due_date,
       status = excluded.status,
       notes = excluded.notes,
@@ -2034,6 +2042,7 @@ async function saveDebt(env, debt) {
     debt.name,
     debt.total_amount,
     debt.paid_amount,
+    debt.currency,
     debt.due_date || null,
     debt.status,
     debt.notes,
@@ -2153,7 +2162,7 @@ async function fixedExpensesList(env, chatId, monthKey) {
 
 async function debtsList(env, chatId) {
   const rows = await env.DB.prepare(`
-    SELECT id, name, total_amount, paid_amount, due_date, status, notes
+    SELECT id, name, total_amount, paid_amount, currency, due_date, status, notes
     FROM debts
     WHERE chat_id = ?
     ORDER BY
@@ -2177,10 +2186,72 @@ function debtShape(row) {
     total: total,
     pagado: paid,
     pendiente: pending,
+    currency: normalizeCurrency(row.currency || 'PEN'),
     vencimiento: row.due_date || '',
     estado: row.status || (pending > 0 ? 'activa' : 'pagada'),
     notas: row.notes || '',
   };
+}
+
+async function exchangeRate(env) {
+  const cacheKey = 'exchange_rate_usd_pen';
+  const cached = await getAppSetting(env, cacheKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (parsed.rate > 0 && Date.now() - Number(parsed.timestamp || 0) < 6 * 60 * 60 * 1000) {
+        return {
+          ok: true,
+          base: 'USD',
+          target: 'PEN',
+          rate: parsed.rate,
+          updatedAt: parsed.updatedAt || '',
+          source: parsed.source || 'cache',
+        };
+      }
+    } catch {
+      // Malformed cache should not break the dashboard.
+    }
+  }
+
+  let rate = 3.85;
+  let updatedAt = new Date().toISOString();
+  let source = 'fallback';
+
+  try {
+    const response = await fetch('https://open.er-api.com/v6/latest/USD', {
+      headers: { accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const nextRate = Number(data?.rates?.PEN);
+    if (nextRate > 0) {
+      rate = round(nextRate);
+      updatedAt = data?.time_last_update_utc || updatedAt;
+      source = 'open.er-api.com';
+    }
+  } catch (_error) {
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.rate > 0) {
+          return {
+            ok: true,
+            base: 'USD',
+            target: 'PEN',
+            rate: parsed.rate,
+            updatedAt: parsed.updatedAt || '',
+            source: `${parsed.source || 'cache'}:stale`,
+          };
+        }
+      } catch {
+        // Fall through to fallback value.
+      }
+    }
+  }
+
+  await setAppSetting(env, cacheKey, JSON.stringify({ rate, timestamp: Date.now(), updatedAt, source }));
+  return { ok: true, base: 'USD', target: 'PEN', rate, updatedAt, source };
 }
 
 function realExpenses(fixedExpenses, budgets) {
@@ -2325,17 +2396,18 @@ function smartAlerts({ now, ingresosMes, gastosMes, budgets, fixedExpenses, debt
     .filter((item) => item.estado === 'activa' && item.vencimiento)
     .forEach((item) => {
       const days = daysBetween(today, item.vencimiento);
+      const pending = formatCurrency(item.pendiente, item.currency);
       if (days < 0) {
         alerts.push({
           level: 'danger',
           title: `Deuda vencida: ${item.nombre}`,
-          message: `Pendiente S/ ${round(item.pendiente)} desde ${item.vencimiento}.`,
+          message: `Pendiente ${pending} desde ${item.vencimiento}.`,
         });
       } else if (days <= 7) {
         alerts.push({
           level: 'warning',
           title: `Deuda por vencer: ${item.nombre}`,
-          message: `Vence en ${days} dia${days === 1 ? '' : 's'} y queda S/ ${round(item.pendiente)}.`,
+          message: `Vence en ${days} dia${days === 1 ? '' : 's'} y queda ${pending}.`,
         });
       }
     });
@@ -2366,8 +2438,12 @@ function smartAlerts({ now, ingresosMes, gastosMes, budgets, fixedExpenses, debt
 
 function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets, debts, months }) {
   const insights = [];
-  const totalDebt = debts
-    .filter((item) => item.estado === 'activa')
+  const activeDebts = debts.filter((item) => item.estado === 'activa');
+  const totalDebtPen = activeDebts
+    .filter((item) => normalizeCurrency(item.currency || 'PEN') !== 'USD')
+    .reduce((total, item) => total + Number(item.pendiente || 0), 0);
+  const totalDebtUsd = activeDebts
+    .filter((item) => normalizeCurrency(item.currency || 'PEN') === 'USD')
     .reduce((total, item) => total + Number(item.pendiente || 0), 0);
   const topCategory = [...categories].sort((a, b) => Number(b.monto || 0) - Number(a.monto || 0))[0];
   const prev = months.length >= 2 ? months[months.length - 2] : null;
@@ -2400,10 +2476,14 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets
     });
   }
 
-  if (totalDebt > 0) {
+  if (totalDebtPen > 0 || totalDebtUsd > 0) {
+    const totals = [
+      totalDebtPen > 0 ? formatCurrency(totalDebtPen, 'PEN') : '',
+      totalDebtUsd > 0 ? formatCurrency(totalDebtUsd, 'USD') : '',
+    ].filter(Boolean).join(' + ');
     insights.push({
       title: 'Deuda pendiente',
-      message: `Tienes S/ ${round(totalDebt)} pendiente. Prioriza lo que vence primero.`,
+      message: `Tienes ${totals} pendiente. Prioriza lo que vence primero.`,
     });
   }
 
@@ -2723,6 +2803,12 @@ function normalizeCurrency(value) {
   if (currency === 'USD') return 'USD';
   if (currency === 'PEN') return 'PEN';
   throw httpError(400, 'Moneda invalida. Solo se acepta PEN o USD.');
+}
+
+function formatCurrency(value, currency = 'PEN') {
+  const normalized = normalizeCurrency(currency);
+  const symbol = normalized === 'USD' ? 'US$' : 'S/';
+  return `${symbol} ${round(value).toFixed(2)}`;
 }
 
 function localDateKey(date) {

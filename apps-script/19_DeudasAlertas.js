@@ -10,22 +10,24 @@ function cmdDeudas(chatId, text) {
     return pagarDeuda(chatId, clean.replace(/^pagar deuda\s+/i, ''));
   }
 
-  const match = clean.match(/^deuda\s+(.+?)\s+([\d]+(?:[.,]\d{1,2})?)(?:\s+vence\s+(\d{4}-\d{2}-\d{2}))?(?:\s+(.+))?$/i);
+  const match = clean.match(/^deuda\s+(.+?)\s+([\d]+(?:[.,]\d{1,2})?)(?:\s+(PEN|USD))?(?:\s+vence\s+(\d{4}-\d{2}-\d{2}))?(?:\s+(.+))?$/i);
   if (!match) {
     return sendMessage(chatId,
-      '❌ Formato:\n' +
+      'Formato:\n' +
       '`deuda laptop 2500 vence 2026-06-30`\n' +
+      '`deuda viaje 800 USD vence 2026-08-15`\n' +
       '`pagar deuda laptop 300`\n' +
       '`deudas`', true);
   }
 
   const nombre = match[1].trim().toLowerCase();
   const total = parseFloat(String(match[2]).replace(',', '.'));
-  const vencimiento = match[3] || '';
-  const notas = match[4] || '';
+  const currency = normalizarMoneda_(match[3]) || 'PEN';
+  const vencimiento = match[4] || '';
+  const notas = match[5] || '';
 
   if (!nombre || isNaN(total) || total <= 0) {
-    return sendMessage(chatId, '❌ Monto invalido. Ej: `deuda laptop 2500 vence 2026-06-30`', true);
+    return sendMessage(chatId, 'Monto invalido. Ej: `deuda laptop 2500 vence 2026-06-30`', true);
   }
 
   const sheet = hojaDeudas_();
@@ -35,31 +37,33 @@ function cmdDeudas(chatId, text) {
     nombre: nombre,
     total: total,
     pagado: row ? row.values.pagado : 0,
+    currency: currency,
     vencimiento: vencimiento,
     estado: row && row.values.pagado >= total ? 'pagada' : 'activa',
     notas: notas,
   };
 
   if (row) {
-    sheet.getRange(row.rowNumber, 3, 1, 5).setValues([[
+    sheet.getRange(row.rowNumber, 3, 1, 6).setValues([[
       deuda.total,
       deuda.pagado,
       deuda.vencimiento,
       deuda.estado,
       deuda.notas,
+      deuda.currency,
     ]]);
   } else {
-    sheet.appendRow([chatId, deuda.nombre, deuda.total, deuda.pagado, deuda.vencimiento, deuda.estado, deuda.notas]);
+    sheet.appendRow([chatId, deuda.nombre, deuda.total, deuda.pagado, deuda.vencimiento, deuda.estado, deuda.notas, deuda.currency]);
   }
 
   guardarDeudaD1(deuda);
 
   return sendMessage(chatId,
-    `✅ *Deuda registrada*\n\n` +
-    `📌 ${capitalizar(nombre)}\n` +
-    `💵 Total: S/ ${total.toFixed(2)}\n` +
-    (vencimiento ? `📅 Vence: ${vencimiento}\n` : '') +
-    `\n_Paga con:_ \`pagar deuda ${nombre} 100\``, true);
+    `*Deuda registrada*\n\n` +
+    `${capitalizar(nombre)}\n` +
+    `Total: ${formatoMoneda_(total, currency)}\n` +
+    (vencimiento ? `Vence: ${vencimiento}\n` : '') +
+    `\n_Paga con:_ \`pagar deuda ${nombre} 100${currency === 'USD' ? ' USD' : ''}\``, true);
 }
 
 function mostrarDeudas(chatId) {
@@ -68,40 +72,49 @@ function mostrarDeudas(chatId) {
 
   if (!activas.length) {
     return sendMessage(chatId,
-      '📭 No tienes deudas activas.\n\nAgrega una:\n`deuda laptop 2500 vence 2026-06-30`', true);
+      'No tienes deudas activas.\n\nAgrega una:\n`deuda laptop 2500 vence 2026-06-30`', true);
   }
 
-  const total = activas.reduce((acc, item) => acc + item.pendiente, 0);
+  const totalPen = activas.filter(item => item.currency !== 'USD').reduce((acc, item) => acc + item.pendiente, 0);
+  const totalUsd = activas.filter(item => item.currency === 'USD').reduce((acc, item) => acc + item.pendiente, 0);
   const lineas = activas.map(item => {
     const pct = Math.round((item.pagado / item.total) * 100);
-    return `• ${capitalizar(item.nombre)} — S/ ${item.pendiente.toFixed(2)} pendiente _(${pct}% pagado${item.vencimiento ? ', vence ' + item.vencimiento : ''})_`;
+    return `- ${capitalizar(item.nombre)} - ${formatoMoneda_(item.pendiente, item.currency)} pendiente _(${pct}% pagado${item.vencimiento ? ', vence ' + item.vencimiento : ''})_`;
   }).join('\n');
+  const resumen = [
+    totalPen > 0 ? `S/ ${totalPen.toFixed(2)}` : '',
+    totalUsd > 0 ? `US$ ${totalUsd.toFixed(2)}` : '',
+  ].filter(Boolean).join(' + ') || 'S/ 0.00';
 
   return sendMessage(chatId,
-    `💳 *Deudas activas*\n\n${lineas}\n\n` +
-    `─────────────────\n` +
-    `📌 Total pendiente: *S/ ${total.toFixed(2)}*\n\n` +
+    `*Deudas activas*\n\n${lineas}\n\n` +
+    `-----------------\n` +
+    `Total pendiente: *${resumen}*\n\n` +
     `_Registra pago con:_ \`pagar deuda nombre monto\``, true);
 }
 
 function pagarDeuda(chatId, payload) {
-  const match = String(payload || '').trim().match(/^(.+?)\s+([\d]+(?:[.,]\d{1,2})?)$/);
+  const match = String(payload || '').trim().match(/^(.+?)\s+([\d]+(?:[.,]\d{1,2})?)(?:\s+(PEN|USD))?$/i);
   if (!match) {
-    return sendMessage(chatId, '❌ Formato: `pagar deuda laptop 300`', true);
+    return sendMessage(chatId, 'Formato: `pagar deuda laptop 300` o `pagar deuda viaje 100 USD`', true);
   }
 
   const nombre = match[1].trim().toLowerCase();
   const monto = parseFloat(String(match[2]).replace(',', '.'));
+  const paymentCurrency = normalizarMoneda_(match[3]) || '';
   if (!nombre || isNaN(monto) || monto <= 0) {
-    return sendMessage(chatId, '❌ Monto invalido. Ej: `pagar deuda laptop 300`', true);
+    return sendMessage(chatId, 'Monto invalido. Ej: `pagar deuda laptop 300`', true);
   }
 
   const row = buscarFilaDeuda_(chatId, nombre);
   if (!row) {
-    return sendMessage(chatId, `❌ No encontre la deuda *${nombre}*. Usa \`deudas\` para verlas.`, true);
+    return sendMessage(chatId, `No encontre la deuda *${nombre}*. Usa \`deudas\` para verlas.`, true);
   }
 
   const deuda = row.values;
+  if (paymentCurrency && paymentCurrency !== deuda.currency) {
+    return sendMessage(chatId, `Esa deuda esta en *${deuda.currency}*. Registra el pago en la misma moneda.`, true);
+  }
   deuda.pagado = Math.min(deuda.total, deuda.pagado + monto);
   deuda.estado = deuda.pagado >= deuda.total ? 'pagada' : 'activa';
 
@@ -112,33 +125,33 @@ function pagarDeuda(chatId, payload) {
 
   const pendiente = Math.max(deuda.total - deuda.pagado, 0);
   return sendMessage(chatId,
-    `✅ *Pago registrado*\n\n` +
-    `📌 ${capitalizar(deuda.nombre)}\n` +
-    `💵 Pagado ahora: S/ ${monto.toFixed(2)}\n` +
-    `📉 Pendiente: *S/ ${pendiente.toFixed(2)}*\n` +
-    (deuda.estado === 'pagada' ? '\n🎉 Deuda completada.' : ''), true);
+    `*Pago registrado*\n\n` +
+    `${capitalizar(deuda.nombre)}\n` +
+    `Pagado ahora: ${formatoMoneda_(monto, deuda.currency)}\n` +
+    `Pendiente: *${formatoMoneda_(pendiente, deuda.currency)}*\n` +
+    (deuda.estado === 'pagada' ? '\nDeuda completada.' : ''), true);
 }
 
 function cmdAlertasInteligentes(chatId) {
   const alertas = calcularAlertasInteligentes_(chatId);
   if (!alertas.length) {
-    return sendMessage(chatId, '✅ Sin alertas fuertes por ahora. Todo se ve bajo control.', true);
+    return sendMessage(chatId, 'Sin alertas fuertes por ahora. Todo se ve bajo control.', true);
   }
 
   const lineas = alertas.map(a => `${a.icon} *${a.titulo}*\n${a.mensaje}`).join('\n\n');
-  return sendMessage(chatId, `🔔 *Alertas inteligentes*\n\n${lineas}`, true);
+  return sendMessage(chatId, `*Alertas inteligentes*\n\n${lineas}`, true);
 }
 
 function cmdInsightsIA(chatId) {
   const contexto = contextoInsightsIA_(chatId);
   sendMessage(
     chatId,
-    `🧠 *Preparando insights IA...*\n\n` +
+    `*Preparando insights IA...*\n\n` +
     `Estoy leyendo:\n` +
-    `• ${contexto.movimientosMes} movimientos de este mes\n` +
-    `• ${contexto.categoriasCount} categorias con gasto\n` +
-    `• ${contexto.deudasActivas} deudas activas\n` +
-    `• ${contexto.alertasCount} alertas inteligentes\n\n` +
+    `- ${contexto.movimientosMes} movimientos de este mes\n` +
+    `- ${contexto.categoriasCount} categorias con gasto\n` +
+    `- ${contexto.deudasActivas} deudas activas\n` +
+    `- ${contexto.alertasCount} alertas inteligentes\n\n` +
     `_Dame unos segundos._`,
     true
   );
@@ -151,7 +164,7 @@ function cmdInsightsIA(chatId) {
     resumen,
     '',
     'Formato:',
-    '🧠 *Insights inteligentes*',
+    '*Insights inteligentes*',
     '',
     '1. [insight con numero real]',
     '2. [insight con numero real]',
@@ -163,7 +176,7 @@ function cmdInsightsIA(chatId) {
   try {
     const props = PropertiesService.getScriptProperties();
     const apiKey = props.getProperty('claude_api_key');
-    if (!apiKey) return sendMessage(chatId, '❌ Falta configurar `claude_api_key` para insights IA.', true);
+    if (!apiKey) return sendMessage(chatId, 'Falta configurar `claude_api_key` para insights IA.', true);
 
     const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
     const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
@@ -206,7 +219,7 @@ function cmdInsightsIA(chatId) {
     return sendMessage(chatId, chatCompletionsFallback ? text : text.text, true);
   } catch (err) {
     Logger.log('Error cmdInsightsIA: ' + err);
-    return sendMessage(chatId, '❌ Error generando insights IA.', true);
+    return sendMessage(chatId, 'Error generando insights IA.', true);
   }
 }
 
@@ -245,22 +258,22 @@ function calcularAlertasInteligentes_(chatId) {
   presupuestos.forEach(p => {
     const gastado = gastosCat[p.cat] || 0;
     const pct = p.limite > 0 ? Math.round((gastado / p.limite) * 100) : 0;
-    if (pct >= 100) alertas.push({ icon: '🚨', titulo: `Presupuesto superado: ${capitalizar(p.cat)}`, mensaje: `S/ ${gastado.toFixed(2)} de S/ ${p.limite.toFixed(2)} (${pct}%).` });
-    else if (pct >= 80) alertas.push({ icon: '⚠️', titulo: `Presupuesto cerca del limite: ${capitalizar(p.cat)}`, mensaje: `Ya usaste ${pct}% del limite.` });
+    if (pct >= 100) alertas.push({ icon: '[!]', titulo: `Presupuesto superado: ${capitalizar(p.cat)}`, mensaje: `S/ ${gastado.toFixed(2)} de S/ ${p.limite.toFixed(2)} (${pct}%).` });
+    else if (pct >= 80) alertas.push({ icon: '[!]', titulo: `Presupuesto cerca del limite: ${capitalizar(p.cat)}`, mensaje: `Ya usaste ${pct}% del limite.` });
   });
 
   fijos.filter(f => !fijoYaRegistradoEnMes_(chatId, f, mes) && !fijoEstaSaltado_(chatId, f, mes)).slice(0, 3)
-    .forEach(f => alertas.push({ icon: '📌', titulo: `Fijo pendiente: ${capitalizar(f.nombre)}`, mensaje: `Falta registrar o saltar S/ ${f.monto.toFixed(2)}.` }));
+    .forEach(f => alertas.push({ icon: '[F]', titulo: `Fijo pendiente: ${capitalizar(f.nombre)}`, mensaje: `Falta registrar o saltar S/ ${f.monto.toFixed(2)}.` }));
 
   deudas.forEach(d => {
     if (!d.vencimiento) return;
     const dias = diasEntreFechas_(hoy, d.vencimiento);
-    if (dias < 0) alertas.push({ icon: '🚨', titulo: `Deuda vencida: ${capitalizar(d.nombre)}`, mensaje: `Pendiente S/ ${d.pendiente.toFixed(2)} desde ${d.vencimiento}.` });
-    else if (dias <= 7) alertas.push({ icon: '⚠️', titulo: `Deuda por vencer: ${capitalizar(d.nombre)}`, mensaje: `Vence en ${dias} dia${dias === 1 ? '' : 's'} y queda S/ ${d.pendiente.toFixed(2)}.` });
+    if (dias < 0) alertas.push({ icon: '[!]', titulo: `Deuda vencida: ${capitalizar(d.nombre)}`, mensaje: `Pendiente ${formatoMoneda_(d.pendiente, d.currency)} desde ${d.vencimiento}.` });
+    else if (dias <= 7) alertas.push({ icon: '[!]', titulo: `Deuda por vencer: ${capitalizar(d.nombre)}`, mensaje: `Vence en ${dias} dia${dias === 1 ? '' : 's'} y queda ${formatoMoneda_(d.pendiente, d.currency)}.` });
   });
 
   if (ingresosMes > 0 && gastosMes > ingresosMes) {
-    alertas.push({ icon: '🚨', titulo: 'Gastos sobre ingresos', mensaje: `Este mes gastaste S/ ${gastosMes.toFixed(2)} vs S/ ${ingresosMes.toFixed(2)} de ingresos.` });
+    alertas.push({ icon: '[!]', titulo: 'Gastos sobre ingresos', mensaje: `Este mes gastaste S/ ${gastosMes.toFixed(2)} vs S/ ${ingresosMes.toFixed(2)} de ingresos.` });
   }
 
   return alertas.slice(0, 8);
@@ -275,7 +288,8 @@ function resumenFinancieroParaIA_(chatId) {
   const gastos = txs.filter(r => r[2] === 'gasto').reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
   const gastosCat = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {};
   const deudas = leerDeudas_(chatId).filter(d => d.estado !== 'pagada' && d.pendiente > 0);
-  const deudaTotal = deudas.reduce((a, d) => a + d.pendiente, 0);
+  const deudaPen = deudas.filter(d => d.currency !== 'USD').reduce((a, d) => a + d.pendiente, 0);
+  const deudaUsd = deudas.filter(d => d.currency === 'USD').reduce((a, d) => a + d.pendiente, 0);
   const topCats = Object.entries(gastosCat)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
@@ -287,7 +301,8 @@ function resumenFinancieroParaIA_(chatId) {
     `Ingresos: S/ ${ingresos.toFixed(2)}`,
     `Gastos: S/ ${gastos.toFixed(2)}`,
     `Balance: S/ ${(ingresos - gastos).toFixed(2)}`,
-    `Deuda pendiente: S/ ${deudaTotal.toFixed(2)}`,
+    `Deuda pendiente PEN: S/ ${deudaPen.toFixed(2)}`,
+    `Deuda pendiente USD: US$ ${deudaUsd.toFixed(2)}`,
     'Top categorias:',
     topCats || '- sin gastos',
     'Alertas:',
@@ -296,7 +311,13 @@ function resumenFinancieroParaIA_(chatId) {
 }
 
 function hojaDeudas_() {
-  return getOrCreateSheet('Deudas', ['ChatID', 'Nombre', 'Total', 'Pagado', 'Vencimiento', 'Estado', 'Notas']);
+  const sheet = getOrCreateSheet('Deudas', ['ChatID', 'Nombre', 'Total', 'Pagado', 'Vencimiento', 'Estado', 'Notas', 'Currency']);
+  const lastColumn = Math.max(sheet.getLastColumn(), 1);
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
+  if (headers.indexOf('Currency') < 0) {
+    sheet.getRange(1, headers.length + 1).setValue('Currency');
+  }
+  return sheet;
 }
 
 function leerDeudas_(chatId) {
@@ -315,6 +336,7 @@ function leerDeudas_(chatId) {
         vencimiento: formatearFechaDeuda_(r[4]),
         estado: String(r[5] || 'activa').toLowerCase(),
         notas: String(r[6] || ''),
+        currency: normalizarMoneda_(r[7]) || 'PEN',
       };
     })
     .filter(d => d.nombre && d.total > 0);
@@ -338,6 +360,7 @@ function buscarFilaDeuda_(chatId, nombre) {
           vencimiento: formatearFechaDeuda_(data[i][4]),
           estado: String(data[i][5] || 'activa').toLowerCase(),
           notas: String(data[i][6] || ''),
+          currency: normalizarMoneda_(data[i][7]) || 'PEN',
         },
       };
     }
