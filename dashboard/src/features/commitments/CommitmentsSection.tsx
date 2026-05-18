@@ -4,21 +4,27 @@ import { DebtRow } from '../../components/dashboard/DebtRow';
 import { EmailPanel } from '../../components/dashboard/EmailPanel';
 import { FixedExpenseRow } from '../../components/dashboard/FixedExpenseRow';
 import { EmptyState } from '../../components/common/EmptyState';
-import { formatMoney } from '../../lib/formatters';
+import { formatMoney, convertCurrency } from '../../lib/formatters';
 import type { DashboardData, RealExpenses } from '../../types/dashboard';
 
 export function CommitmentsSection({
   data,
   realExpenses,
+  exchangeRate = 3.85,
 }: {
   data: DashboardData;
   realExpenses: RealExpenses;
+  exchangeRate?: number;
 }) {
   const fixedExpenses = data.fijos || [];
   const debts = data.deudas || [];
   const activeDebtTotal = debts
     .filter((item) => item.estado !== 'pagada')
-    .reduce((total, item) => total + item.pendiente, 0);
+    .reduce((total, item) => {
+      const currency = item.currency || 'PEN';
+      const pendienteEnPEN = currency === 'USD' ? convertCurrency(item.pendiente, 'USD', 'PEN', exchangeRate) : item.pendiente;
+      return total + pendienteEnPEN;
+    }, 0);
 
   return (
     <section className="grid gap-3 sm:gap-4 lg:grid-cols-2">
@@ -49,7 +55,7 @@ export function CommitmentsSection({
         </div>
         <div className="mt-4 sm:mt-5">
           {debts.length ? (
-            debts.map((item) => <DebtRow key={item.id || item.nombre} item={item} />)
+            debts.map((item) => <DebtRow key={item.id || item.nombre} item={item} exchangeRate={exchangeRate} />)
           ) : (
             <EmptyState>Sin deudas registradas.</EmptyState>
           )}

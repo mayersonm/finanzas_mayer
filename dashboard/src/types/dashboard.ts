@@ -116,6 +116,7 @@ export interface Debt {
   vencimiento?: string;
   estado?: 'activa' | 'pagada' | string;
   notas?: string;
+  currency?: Currency | 'PEN' | 'USD';
 }
 
 export interface SmartAlert {
