@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'inversiones' | 'analisis' | 'metas' | 'configuracion';
+export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'patrimonio' | 'inversiones' | 'analisis' | 'metas' | 'configuracion';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {
@@ -141,6 +141,57 @@ export interface Investment {
   gainPct?: number;
   notes?: string;
   updatedAt?: string;
+}
+
+export interface NetWorthCompositionItem {
+  label: string;
+  value: number;
+  type: 'asset' | 'liability' | string;
+}
+
+export interface NetWorthInsight {
+  level: 'success' | 'info' | 'warning' | 'danger' | string;
+  title: string;
+  message: string;
+}
+
+export interface NetWorthSnapshot {
+  id: string;
+  date: string;
+  assetsTotal: number;
+  liabilitiesTotal: number;
+  netWorth: number;
+  exchangeRate: number;
+  updatedAt?: string;
+}
+
+export interface NetWorthData {
+  ok?: boolean;
+  currency: Currency | 'PEN';
+  exchangeRate: number;
+  exchangeRateSource?: string;
+  assets: {
+    cash: number;
+    investments: number;
+    goals: number;
+    total: number;
+  };
+  liabilities: {
+    debts: number;
+    total: number;
+  };
+  netWorth: number;
+  investmentGain: number;
+  ratios: {
+    debtToAssetsPct: number;
+    investmentSharePct: number;
+    liquiditySharePct: number;
+  };
+  composition: NetWorthCompositionItem[];
+  insights: NetWorthInsight[];
+  snapshots: NetWorthSnapshot[];
+  updatedAt?: string;
+  error?: string;
 }
 
 export interface SmartAlert {

@@ -643,6 +643,10 @@ Las deudas pueden registrarse en `PEN` o `USD`. El dashboard muestra el monto or
 
 En el dashboard, abre `Compromisos` para administrar deudas desde la interfaz: crear, editar, registrar pagos y eliminar. Los pagos quedan en `debt_payments` dentro de D1 y se muestran como historial debajo de cada deuda.
 
+Tambien puedes abrir `Inversiones` para registrar posiciones con monto invertido, valor actual, moneda `PEN` o `USD`, tipo y notas. Esta informacion vive en D1, en la tabla `investments`.
+
+La pestaña `Patrimonio` usa movimientos, deudas, inversiones y metas para calcular activos, pasivos y patrimonio neto. Si pulsas `Guardar corte`, el snapshot queda en D1 en `net_worth_snapshots` para comparar la evolucion con el tiempo.
+
 Luego envia una foto clara de un recibo.
 
 El flujo correcto es:

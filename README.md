@@ -128,3 +128,9 @@ insights
 Las deudas aceptan `PEN` y `USD`. En el dashboard, las deudas en USD muestran su monto original y una referencia convertida a soles con la tasa USD/PEN cacheada por el Worker.
 
 Desde el dashboard, en `Compromisos`, tambien puedes crear, editar, pagar y eliminar deudas. Cada pago queda guardado en el historial de la deuda para revisar fecha, monto, moneda y nota.
+
+## Inversiones y patrimonio
+
+El dashboard incluye `Inversiones` para registrar posiciones con tipo, monto invertido, valor actual, moneda `PEN` o `USD` y notas.
+
+La pestaña `Patrimonio` calcula activos, pasivos y patrimonio neto usando balance, inversiones, metas y deudas. Tambien permite guardar cortes historicos en D1 para comparar la evolucion.
