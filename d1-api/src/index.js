@@ -2960,7 +2960,7 @@ function corsResponse(body, status = 200, headers = {}) {
     status,
     headers: {
       'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'GET,POST,DELETE,OPTIONS',
+      'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
       'access-control-allow-headers': 'content-type,authorization,x-admin-key',
       ...headers,
     },
