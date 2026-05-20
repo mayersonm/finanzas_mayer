@@ -116,6 +116,16 @@ export default {
         return json(await dashboard(env, url.searchParams));
       }
 
+      if (url.pathname === '/api/net-worth' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await netWorth(env, url.searchParams));
+      }
+
+      if (url.pathname === '/api/net-worth/snapshot' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        return json(await saveNetWorthSnapshot(env, url.searchParams), 201);
+      }
+
       if (url.pathname === '/api/rules' && request.method === 'GET') {
         await requireDashboardOrAdminAccess(request, env);
         return json(await rulesList(env, url.searchParams));
@@ -2549,6 +2559,178 @@ function investmentShape(row) {
     notes: row.notes || '',
     updatedAt: row.updated_at || row.updatedAt || '',
   };
+}
+
+async function netWorth(env, params) {
+  const chatId = getChatId(env, params);
+  const rateInfo = await exchangeRate(env);
+  const rate = Number(rateInfo.rate || 3.85);
+
+  const cashRows = await env.DB.prepare(`
+    SELECT type, amount, currency
+    FROM transactions
+    WHERE chat_id = ?
+  `).bind(chatId).all();
+  let incomePen = 0;
+  let expensesPen = 0;
+  for (const row of cashRows.results || []) {
+    const amount = currencyToPen(Number(row.amount || 0), row.currency || 'PEN', rate);
+    if (row.type === 'ingreso') incomePen += amount;
+    if (row.type === 'gasto') expensesPen += amount;
+  }
+
+  const cash = round(incomePen - expensesPen);
+  const investments = (await investmentsList(env, params)).investments || [];
+  const debts = await debtsList(env, chatId);
+  const goals = await goalsList(env, chatId);
+
+  const investmentValue = round(investments.reduce((total, item) => (
+    total + currencyToPen(Number(item.currentValue || 0), item.currency || 'PEN', rate)
+  ), 0));
+  const investmentCost = round(investments.reduce((total, item) => (
+    total + currencyToPen(Number(item.amount || 0), item.currency || 'PEN', rate)
+  ), 0));
+  const goalsSaved = round(goals.reduce((total, item) => total + Number(item.ahorrado || 0), 0));
+  const debtPending = round(debts
+    .filter((item) => item.estado !== 'pagada')
+    .reduce((total, item) => total + currencyToPen(Number(item.pendiente || 0), item.currency || 'PEN', rate), 0));
+
+  const assets = {
+    cash,
+    investments: investmentValue,
+    goals: goalsSaved,
+    total: round(cash + investmentValue + goalsSaved),
+  };
+  const liabilities = {
+    debts: debtPending,
+    total: debtPending,
+  };
+  const net = round(assets.total - liabilities.total);
+  const debtToAssetsPct = assets.total > 0 ? round((liabilities.total / assets.total) * 100) : 0;
+  const investmentSharePct = assets.total > 0 ? round((assets.investments / assets.total) * 100) : 0;
+  const liquiditySharePct = assets.total > 0 ? round((assets.cash / assets.total) * 100) : 0;
+
+  const snapshots = await netWorthSnapshots(env, chatId);
+
+  return {
+    ok: true,
+    currency: 'PEN',
+    exchangeRate: rate,
+    exchangeRateSource: rateInfo.source || '',
+    assets,
+    liabilities,
+    netWorth: net,
+    investmentGain: round(investmentValue - investmentCost),
+    ratios: {
+      debtToAssetsPct,
+      investmentSharePct,
+      liquiditySharePct,
+    },
+    composition: [
+      { label: 'Efectivo', value: assets.cash, type: 'asset' },
+      { label: 'Inversiones', value: assets.investments, type: 'asset' },
+      { label: 'Metas', value: assets.goals, type: 'asset' },
+      { label: 'Deudas', value: liabilities.debts, type: 'liability' },
+    ],
+    insights: netWorthInsights({ assets, liabilities, net, debtToAssetsPct, investmentSharePct, liquiditySharePct }),
+    snapshots,
+    updatedAt: localIso(new Date()),
+  };
+}
+
+async function saveNetWorthSnapshot(env, params) {
+  const chatId = getChatId(env, params);
+  const data = await netWorth(env, params);
+  const snapshotDate = localDateKey(new Date());
+  const id = `networth:${chatId}:${snapshotDate}`;
+  const details = JSON.stringify({
+    assets: data.assets,
+    liabilities: data.liabilities,
+    ratios: data.ratios,
+    composition: data.composition,
+  });
+
+  await env.DB.prepare(`
+    INSERT INTO net_worth_snapshots (
+      id, chat_id, snapshot_date, assets_total, liabilities_total, net_worth, exchange_rate, details, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(chat_id, snapshot_date) DO UPDATE SET
+      assets_total = excluded.assets_total,
+      liabilities_total = excluded.liabilities_total,
+      net_worth = excluded.net_worth,
+      exchange_rate = excluded.exchange_rate,
+      details = excluded.details,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(
+    id,
+    chatId,
+    snapshotDate,
+    data.assets.total,
+    data.liabilities.total,
+    data.netWorth,
+    data.exchangeRate,
+    details,
+  ).run();
+
+  return {
+    ok: true,
+    snapshot: {
+      id,
+      date: snapshotDate,
+      assetsTotal: data.assets.total,
+      liabilitiesTotal: data.liabilities.total,
+      netWorth: data.netWorth,
+      exchangeRate: data.exchangeRate,
+    },
+  };
+}
+
+async function netWorthSnapshots(env, chatId) {
+  const rows = await env.DB.prepare(`
+    SELECT id, snapshot_date, assets_total, liabilities_total, net_worth, exchange_rate, updated_at
+    FROM net_worth_snapshots
+    WHERE chat_id = ?
+    ORDER BY snapshot_date DESC
+    LIMIT 12
+  `).bind(chatId).all();
+
+  return (rows.results || []).map((row) => ({
+    id: row.id,
+    date: row.snapshot_date,
+    assetsTotal: round(row.assets_total || 0),
+    liabilitiesTotal: round(row.liabilities_total || 0),
+    netWorth: round(row.net_worth || 0),
+    exchangeRate: round(row.exchange_rate || 3.85),
+    updatedAt: row.updated_at || '',
+  }));
+}
+
+function currencyToPen(value, currency, rate) {
+  const normalized = normalizeCurrency(currency || 'PEN');
+  return normalized === 'USD' ? Number(value || 0) * Number(rate || 3.85) : Number(value || 0);
+}
+
+function netWorthInsights({ assets, liabilities, net, debtToAssetsPct, investmentSharePct, liquiditySharePct }) {
+  const insights = [];
+  if (net < 0) {
+    insights.push({ level: 'danger', title: 'Patrimonio negativo', message: 'Tus pasivos superan tus activos. Prioriza reducir deuda o aumentar liquidez.' });
+  } else {
+    insights.push({ level: 'success', title: 'Patrimonio positivo', message: `Tu patrimonio neto es ${formatCurrency(net, 'PEN')}.` });
+  }
+  if (debtToAssetsPct >= 50) {
+    insights.push({ level: 'warning', title: 'Deuda alta frente a activos', message: `Tus deudas equivalen al ${debtToAssetsPct.toFixed(1)}% de tus activos.` });
+  }
+  if (investmentSharePct < 10 && assets.total > 0) {
+    insights.push({ level: 'info', title: 'Poca exposicion a inversiones', message: `Las inversiones representan ${investmentSharePct.toFixed(1)}% de tus activos.` });
+  }
+  if (liquiditySharePct > 70 && assets.total > 0 && assets.cash > liabilities.total) {
+    insights.push({ level: 'info', title: 'Alta liquidez', message: 'Tienes bastante efectivo frente al resto de activos. Puede ser intencional o una oportunidad para metas.' });
+  }
+  if (liabilities.total === 0 && assets.total > 0) {
+    insights.push({ level: 'success', title: 'Sin deuda registrada', message: 'No tienes pasivos activos en el sistema.' });
+  }
+  return insights.slice(0, 4);
 }
 
 async function exchangeRate(env) {
