@@ -362,7 +362,7 @@ function dashReadFixedExpenses_(params, monthTxs, monthKey) {
       const nombre = String(row[1] || '').trim();
       const monto = parseFloat(row[2]) || 0;
       const cat = String(row[3] || 'servicios').toLowerCase();
-      const currency = normalizarMoneda_(row[4]) || 'PEN';
+      const currency = normalizarMoneda_(row[4]);
       if (!nombre || monto <= 0) return null;
 
       const paid = monthTxs.some(function (tx) {
@@ -371,16 +371,18 @@ function dashReadFixedExpenses_(params, monthTxs, monthKey) {
       });
       const skipped = Boolean(chatId && cache.get('skip_fijo_' + chatId + '_' + nombre.toLowerCase() + '_' + monthKey));
 
-      return {
+      const item = {
         nombre: dashTitle_(nombre),
         monto: dashRound_(monto),
-        currency: currency,
         cat: dashTitle_(cat),
         color: DASH_COLORS[cat] || DASH_COLORS.otro,
         pagadoMes: paid,
         saltadoMes: skipped,
         estado: paid ? 'pagado' : skipped ? 'saltado' : 'pendiente',
       };
+
+      if (currency) item.currency = currency;
+      return item;
     })
     .filter(Boolean)
     .sort(function (a, b) {

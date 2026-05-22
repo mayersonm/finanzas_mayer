@@ -2053,7 +2053,9 @@ async function normalizeFixedExpense(env, chatId, raw) {
   const name = normalizeKey(raw.nombre || raw.name || '');
   const amount = parseAmount(raw.monto || raw.amount || 0);
   const category = (await classifyCategory(env, chatId, raw.cat || raw.category || 'servicios', name)).category;
-  const currency = normalizeCurrency(raw.currency || raw.moneda || 'PEN');
+  const rawCurrency = raw.currency ?? raw.moneda;
+  const hasCurrency = rawCurrency !== undefined && rawCurrency !== null && String(rawCurrency).trim() !== '';
+  const currency = hasCurrency ? normalizeCurrency(rawCurrency) : 'PEN';
   const active = raw.active === undefined ? 1 : (raw.active === false || raw.active === 0 ? 0 : 1);
   if (!name || amount <= 0) return null;
 
@@ -2064,6 +2066,7 @@ async function normalizeFixedExpense(env, chatId, raw) {
     amount: round(amount),
     category,
     currency,
+    has_currency: hasCurrency,
     active,
   };
 }
@@ -2075,7 +2078,7 @@ async function saveFixedExpense(env, fixed) {
     ON CONFLICT(chat_id, name) DO UPDATE SET
       amount = excluded.amount,
       category = excluded.category,
-      currency = excluded.currency,
+      currency = CASE WHEN ? = 1 THEN excluded.currency ELSE fixed_expenses.currency END,
       active = excluded.active,
       updated_at = CURRENT_TIMESTAMP
   `).bind(
@@ -2086,6 +2089,7 @@ async function saveFixedExpense(env, fixed) {
     fixed.category,
     fixed.currency,
     fixed.active,
+    fixed.has_currency ? 1 : 0,
   ).run();
 
   const byId = await env.DB.prepare('SELECT * FROM fixed_expenses WHERE id = ? AND chat_id = ?')
