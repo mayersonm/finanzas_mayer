@@ -107,6 +107,96 @@ function guardarReciboD1(receipt) {
   }
 }
 
+function guardarFijoD1(fixed) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiUrl = props.getProperty('d1_api_url');
+    const adminKey = props.getProperty('d1_admin_key');
+
+    if (!apiUrl || !adminKey) {
+      Logger.log('Fijo D1 omitido: faltan d1_api_url o d1_admin_key');
+      return false;
+    }
+
+    if (!fixed || !fixed.nombre || !fixed.monto) {
+      Logger.log('Fijo D1 omitido: faltan nombre o monto');
+      return false;
+    }
+
+    const payload = {
+      id: fixed.id || '',
+      chat_id: String(fixed.chatId),
+      nombre: fixed.nombre,
+      monto: Number(fixed.monto || 0),
+      cat: fixed.cat || fixed.category || 'servicios',
+      currency: normalizarMoneda_(fixed.currency || fixed.moneda) || 'PEN',
+      active: fixed.active === false ? false : true,
+    };
+
+    const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/fixed-expenses', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-admin-key': adminKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+
+    const code = resp.getResponseCode();
+    if (code < 200 || code >= 300) {
+      Logger.log('Error fijo D1 HTTP ' + code + ': ' + resp.getContentText());
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    Logger.log('Error guardarFijoD1: ' + err);
+    return false;
+  }
+}
+
+function eliminarFijoD1(chatId, nombre) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiUrl = props.getProperty('d1_api_url');
+    const adminKey = props.getProperty('d1_admin_key');
+
+    if (!apiUrl || !adminKey) {
+      Logger.log('Eliminar fijo D1 omitido: faltan d1_api_url o d1_admin_key');
+      return false;
+    }
+
+    const fixedId = ['fixed', String(chatId), normalizarClaveFijoD1_(nombre)].join(':').slice(0, 180);
+    const resp = UrlFetchApp.fetch(
+      apiUrl.replace(/\/$/, '') + '/api/fixed-expenses/' + encodeURIComponent(fixedId) + '?chat_id=' + encodeURIComponent(String(chatId)),
+      {
+        method: 'delete',
+        headers: { 'x-admin-key': adminKey },
+        muteHttpExceptions: true,
+      }
+    );
+
+    const code = resp.getResponseCode();
+    if (code < 200 || code >= 300) {
+      Logger.log('Error eliminar fijo D1 HTTP ' + code + ': ' + resp.getContentText());
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    Logger.log('Error eliminarFijoD1: ' + err);
+    return false;
+  }
+}
+
+function normalizarClaveFijoD1_(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function guardarDeudaD1(debt) {
   try {
     const props = PropertiesService.getScriptProperties();

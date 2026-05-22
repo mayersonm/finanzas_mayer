@@ -362,6 +362,7 @@ function dashReadFixedExpenses_(params, monthTxs, monthKey) {
       const nombre = String(row[1] || '').trim();
       const monto = parseFloat(row[2]) || 0;
       const cat = String(row[3] || 'servicios').toLowerCase();
+      const currency = normalizarMoneda_(row[4]) || 'PEN';
       if (!nombre || monto <= 0) return null;
 
       const paid = monthTxs.some(function (tx) {
@@ -373,6 +374,7 @@ function dashReadFixedExpenses_(params, monthTxs, monthKey) {
       return {
         nombre: dashTitle_(nombre),
         monto: dashRound_(monto),
+        currency: currency,
         cat: dashTitle_(cat),
         color: DASH_COLORS[cat] || DASH_COLORS.otro,
         pagadoMes: paid,

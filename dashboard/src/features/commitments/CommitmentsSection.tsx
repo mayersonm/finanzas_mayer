@@ -8,7 +8,15 @@ import { EmailPanel } from '../../components/dashboard/EmailPanel';
 import { FixedExpenseRow } from '../../components/dashboard/FixedExpenseRow';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatMoney, convertCurrency } from '../../lib/formatters';
-import type { Currency, DashboardData, Debt, RealExpenses } from '../../types/dashboard';
+import type { Currency, DashboardData, Debt, FixedExpense, RealExpenses } from '../../types/dashboard';
+
+interface FixedDraft {
+  id?: string;
+  nombre: string;
+  monto: string;
+  currency: Currency;
+  cat: string;
+}
 
 interface DebtDraft {
   id?: string;
@@ -36,6 +44,13 @@ const emptyDebtDraft: DebtDraft = {
   notas: '',
 };
 
+const emptyFixedDraft: FixedDraft = {
+  nombre: '',
+  monto: '',
+  currency: 'PEN',
+  cat: 'servicios',
+};
+
 export function CommitmentsSection({
   data,
   realExpenses,
@@ -53,6 +68,9 @@ export function CommitmentsSection({
 }) {
   const fixedExpenses = data.fijos || [];
   const debts = data.deudas || [];
+  const [fixedDraft, setFixedDraft] = useState<FixedDraft>(emptyFixedDraft);
+  const [fixedMessage, setFixedMessage] = useState('');
+  const [fixedError, setFixedError] = useState('');
   const [draft, setDraft] = useState<DebtDraft>(emptyDebtDraft);
   const [payment, setPayment] = useState<PaymentDraft>({ amount: '', paymentDate: todayKey(), notes: '' });
   const [saving, setSaving] = useState(false);
@@ -66,6 +84,86 @@ export function CommitmentsSection({
       const pendienteEnPEN = currency === 'USD' ? convertCurrency(item.pendiente, 'USD', 'PEN', exchangeRate) : item.pendiente;
       return total + pendienteEnPEN;
     }, 0), [debts, exchangeRate]);
+
+  const startEditFixed = (item: FixedExpense) => {
+    setFixedMessage('');
+    setFixedError('');
+    setFixedDraft({
+      id: item.id,
+      nombre: item.nombre,
+      monto: String(item.monto || ''),
+      currency: item.currency === 'USD' ? 'USD' : 'PEN',
+      cat: item.cat || 'servicios',
+    });
+  };
+
+  const resetFixedForm = () => {
+    setFixedDraft(emptyFixedDraft);
+    setFixedMessage('');
+    setFixedError('');
+  };
+
+  const saveFixedExpense = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!authToken) return;
+    setSaving(true);
+    setFixedMessage('');
+    setFixedError('');
+
+    try {
+      const payload = {
+        chat_id: chatId,
+        nombre: fixedDraft.nombre,
+        monto: Number(fixedDraft.monto),
+        currency: fixedDraft.currency,
+        cat: fixedDraft.cat,
+      };
+      const url = fixedDraft.id ? `${apiEndpoint(`fixed-expenses/${encodeURIComponent(fixedDraft.id)}`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}` : apiEndpoint('fixed-expenses');
+      const response = await fetch(url, {
+        method: fixedDraft.id ? 'PATCH' : 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo guardar el gasto fijo');
+      setFixedMessage(fixedDraft.id ? 'Gasto fijo actualizado.' : 'Gasto fijo creado.');
+      setFixedDraft(emptyFixedDraft);
+      onChanged?.();
+    } catch (err) {
+      setFixedError(err instanceof Error ? err.message : 'No se pudo guardar el gasto fijo');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteFixedExpense = async (item: FixedExpense) => {
+    if (!authToken || !item.id) return;
+    const ok = window.confirm(`Eliminar el gasto fijo "${item.nombre}"?`);
+    if (!ok) return;
+
+    setSaving(true);
+    setFixedMessage('');
+    setFixedError('');
+    try {
+      const url = `${apiEndpoint(`fixed-expenses/${encodeURIComponent(item.id)}`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const result = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo eliminar el gasto fijo');
+      setFixedMessage('Gasto fijo eliminado.');
+      if (fixedDraft.id === item.id) setFixedDraft(emptyFixedDraft);
+      onChanged?.();
+    } catch (err) {
+      setFixedError(err instanceof Error ? err.message : 'No se pudo eliminar el gasto fijo');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const startEdit = (item: Debt) => {
     setMessage('');
@@ -206,9 +304,46 @@ export function CommitmentsSection({
           </div>
           <Badge color="amber">{formatMoney(realExpenses.totalFijos)}</Badge>
         </div>
+
+        <form className="mt-4 grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3" onSubmit={saveFixedExpense}>
+          <div className="flex items-center justify-between gap-3">
+            <Text className="font-semibold text-slate-100">{fixedDraft.id ? 'Editar gasto fijo' : 'Nuevo gasto fijo'}</Text>
+            {fixedDraft.id ? (
+              <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-tremor-default border border-slate-700 text-slate-300" onClick={resetFixedForm} title="Cancelar">
+                <RiCloseLine className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Nombre"><input className="form-input" value={fixedDraft.nombre} onChange={(event) => setFixedDraft((current) => ({ ...current, nombre: event.target.value }))} required /></Field>
+            <Field label="Monto"><input className="form-input" type="number" min="0.01" step="0.01" value={fixedDraft.monto} onChange={(event) => setFixedDraft((current) => ({ ...current, monto: event.target.value }))} required /></Field>
+            <Field label="Moneda">
+              <select className="form-input" value={fixedDraft.currency} onChange={(event) => setFixedDraft((current) => ({ ...current, currency: event.target.value as Currency }))}>
+                <option value="PEN">PEN</option>
+                <option value="USD">USD</option>
+              </select>
+            </Field>
+            <Field label="Categoría"><input className="form-input" value={fixedDraft.cat} onChange={(event) => setFixedDraft((current) => ({ ...current, cat: event.target.value }))} required /></Field>
+          </div>
+          <button className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-amber-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:opacity-60" disabled={saving || !authToken}>
+            {fixedDraft.id ? <RiSave3Line className="h-4 w-4" /> : <RiAddLine className="h-4 w-4" />}
+            {fixedDraft.id ? 'Guardar fijo' : 'Crear fijo'}
+          </button>
+        </form>
+        {fixedMessage ? <div className="mt-3 rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">{fixedMessage}</div> : null}
+        {fixedError ? <div className="mt-3 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">{fixedError}</div> : null}
+
         <div className="mt-4 sm:mt-5">
           {fixedExpenses.length ? (
-            fixedExpenses.map((item) => <FixedExpenseRow key={item.nombre} item={item} />)
+            fixedExpenses.map((item) => (
+              <FixedExpenseRow
+                key={item.id || item.nombre}
+                item={item}
+                exchangeRate={exchangeRate}
+                onEdit={startEditFixed}
+                onDelete={deleteFixedExpense}
+              />
+            ))
           ) : (
             <EmptyState>Sin gastos fijos registrados.</EmptyState>
           )}

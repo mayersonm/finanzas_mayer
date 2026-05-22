@@ -6,9 +6,11 @@ function cmdGastosReales(chatId) {
   const presupuestos = leerPresupuestosReales_(chatId);
   const gastosCat = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {};
 
-  const totalFijos = fijos.reduce((acc, item) => acc + item.monto, 0);
+  const totalFijosPen = fijos.filter(item => item.currency !== 'USD').reduce((acc, item) => acc + item.monto, 0);
+  const totalFijosUsd = fijos.filter(item => item.currency === 'USD').reduce((acc, item) => acc + item.monto, 0);
+  const totalFijos = resumenTotalFijos_(fijos);
   const lineasFijos = fijos.length
-    ? fijos.map(item => `• ${capitalizar(item.nombre)}: S/ ${item.monto.toFixed(2)}`).join('\n')
+    ? fijos.map(item => `• ${capitalizar(item.nombre)}: ${formatoMoneda_(item.monto, item.currency)}`).join('\n')
     : '• Sin gastos fijos cargados';
 
   let totalPresupuesto = 0;
@@ -25,14 +27,17 @@ function cmdGastosReales(chatId) {
       }).join('\n')
     : '• Sin presupuestos cargados';
 
-  const total = totalFijos + totalPresupuesto;
+  const totalPen = totalFijosPen + totalPresupuesto;
+  const totalTexto = totalFijosUsd > 0
+    ? `${formatoMoneda_(totalPen, 'PEN')} + ${formatoMoneda_(totalFijosUsd, 'USD')}`
+    : formatoMoneda_(totalPen, 'PEN');
 
   sendMessage(chatId,
     `🧮 *Gastos reales/comprometidos - ${mes}*\n\n` +
-    `🔁 Fijos: *S/ ${totalFijos.toFixed(2)}*\n` +
+    `🔁 Fijos: *${totalFijos}*\n` +
     `🎯 Presupuesto considerado: *S/ ${totalPresupuesto.toFixed(2)}*\n` +
     `─────────────────\n` +
-    `📌 Total estimado: *S/ ${total.toFixed(2)}*\n\n` +
+    `📌 Total estimado: *${totalTexto}*\n\n` +
     `*Fijos*\n${lineasFijos}\n\n` +
     `*Presupuestos*\n${lineasPresupuesto}\n\n` +
     `_Regla: si una categoria no tiene gasto aun, cuenta el limite completo; si ya tiene gasto, cuenta lo gastado._`,
@@ -41,7 +46,8 @@ function cmdGastosReales(chatId) {
 }
 
 function leerFijosReales_(chatId) {
-  const sheet = getOrCreateSheet('Fijos', ['ChatID','Nombre','Monto','Categoría']);
+  const sheet = getOrCreateSheet('Fijos', ['ChatID','Nombre','Monto','Categoría','Moneda']);
+  asegurarColumnasFijos_(sheet);
 
   return sheet.getDataRange().getValues().slice(1)
     .filter(r => String(r[0]) === String(chatId))
@@ -49,6 +55,7 @@ function leerFijosReales_(chatId) {
       nombre: String(r[1] || ''),
       monto: parseFloat(r[2]) || 0,
       cat: normalizarCat(r[3] || 'servicios', r[1], chatId),
+      currency: normalizarMoneda_(r[4]) || 'PEN',
     }))
     .filter(item => item.nombre && item.monto > 0);
 }

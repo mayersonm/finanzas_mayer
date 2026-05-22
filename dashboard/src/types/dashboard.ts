@@ -98,10 +98,14 @@ export interface Goal {
 }
 
 export interface FixedExpense {
+  id?: string;
   nombre: string;
   monto: number;
+  montoPen?: number;
+  currency?: Currency | 'PEN' | 'USD';
   cat: string;
   color?: string;
+  active?: boolean;
   pagadoMes?: boolean;
   saltadoMes?: boolean;
   estado?: 'pagado' | 'pendiente' | 'saltado' | string;

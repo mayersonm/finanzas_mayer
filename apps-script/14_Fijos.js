@@ -29,18 +29,36 @@ function cmdFijos(chatId, text) {
   return sendMessage(chatId, '❌ No entendí el comando de gasto fijo. Escribe *ayuda* para ver ejemplos.', true);
 }
 
+function asegurarColumnasFijos_(sheet) {
+  if (!sheet) return;
+
+  const headers = ['ChatID', 'Nombre', 'Monto', 'Categoría', 'Moneda'];
+  for (let i = 0; i < headers.length; i++) {
+    const col = i + 1;
+    const value = String(sheet.getRange(1, col).getValue() || '').trim();
+    if (!value) sheet.getRange(1, col).setValue(headers[i]);
+  }
+
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+}
+
 function guardarFijo_(chatId, parts) {
   const nombre = parts[1];
-  const monto = parseFloat(parts[2]);
-  const cat = normalizarCat(parts[3] || 'servicios', nombre, chatId);
+  const monto = parseFloat(String(parts[2] || '').replace(',', '.'));
+  const monedaInfo = extraerMonedaDeTexto_(parts.slice(3).join(' '));
+  const moneda = monedaInfo.moneda || 'PEN';
+  const catTexto = String(monedaInfo.texto || 'servicios').trim().split(/\s+/)[0] || 'servicios';
+  const cat = normalizarCat(catTexto, nombre, chatId);
 
   if (!nombre || isNaN(monto) || monto <= 0) {
     return sendMessage(chatId,
-      '❌ Formato: *fijo [nombre] [monto] [categoría]*\n' +
-      'Ej: `fijo alquiler 1500 servicios`', true);
+      '❌ Formato: *fijo [nombre] [monto] [moneda opcional] [categoría]*\n' +
+      'Ej: `fijo alquiler 1500 servicios`\n' +
+      'Ej: `fijo netflix 15 USD entretenimiento`', true);
   }
 
-  const sheet = getOrCreateSheet('Fijos', ['ChatID', 'Nombre', 'Monto', 'Categoría']);
+  const sheet = getOrCreateSheet('Fijos', ['ChatID', 'Nombre', 'Monto', 'Categoría', 'Moneda']);
+  asegurarColumnasFijos_(sheet);
   const data = sheet.getDataRange().getValues().slice(1);
   const idx = data.findIndex(r =>
     String(r[0]) === String(chatId) &&
@@ -48,19 +66,21 @@ function guardarFijo_(chatId, parts) {
   );
 
   if (idx >= 0) {
-    sheet.getRange(idx + 2, 3, 1, 2).setValues([[monto, cat.toLowerCase()]]);
+    sheet.getRange(idx + 2, 3, 1, 3).setValues([[monto, cat.toLowerCase(), moneda]]);
+    guardarFijoD1({ chatId: chatId, nombre: nombre, monto: monto, cat: cat, currency: moneda, active: true });
     return sendMessage(chatId,
       `✅ *Gasto fijo actualizado*\n\n` +
       `📌 ${capitalizar(nombre)}\n` +
-      `💵 S/ ${monto.toFixed(2)}\n` +
+      `💵 ${formatoMoneda_(monto, moneda)}\n` +
       `🏷️ ${capitalizar(cat)}`, true);
   }
 
-  sheet.appendRow([chatId, nombre.toLowerCase(), monto, cat.toLowerCase()]);
+  sheet.appendRow([chatId, nombre.toLowerCase(), monto, cat.toLowerCase(), moneda]);
+  guardarFijoD1({ chatId: chatId, nombre: nombre, monto: monto, cat: cat, currency: moneda, active: true });
   return sendMessage(chatId,
     `✅ *Gasto fijo registrado*\n\n` +
     `📌 ${capitalizar(nombre)}\n` +
-    `💵 S/ ${monto.toFixed(2)}\n` +
+    `💵 ${formatoMoneda_(monto, moneda)}\n` +
     `🏷️ ${capitalizar(cat)}\n\n` +
     `_Se registrará automáticamente el 1ro de cada mes._\n` +
     `_Para marcarlo pagado: \`pagar fijo ${nombre}\`_\n` +
@@ -69,6 +89,7 @@ function guardarFijo_(chatId, parts) {
 
 function mostrarFijos(chatId) {
   const fijos = leerFijos_(chatId);
+  sincronizarFijosD1_(fijos);
 
   if (!fijos.length) {
     return sendMessage(chatId,
@@ -76,16 +97,16 @@ function mostrarFijos(chatId) {
   }
 
   const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
-  const total = fijos.reduce((acc, item) => acc + item.monto, 0);
+  const total = resumenTotalFijos_(fijos);
   const lineas = fijos.map(item => {
     const estado = fijoYaRegistradoEnMes_(chatId, item, mes) ? '✅ pagado' : '⏳ pendiente';
-    return `• ${capitalizar(item.nombre)} — S/ ${item.monto.toFixed(2)} _(${capitalizar(item.cat)}, ${estado})_`;
+    return `• ${capitalizar(item.nombre)} — ${formatoMoneda_(item.monto, item.currency)} _(${capitalizar(item.cat)}, ${estado})_`;
   }).join('\n');
 
   return sendMessage(chatId,
     `🔁 *Gastos fijos mensuales*\n\n${lineas}\n\n` +
     `─────────────────\n` +
-    `💸 Total: S/ ${total.toFixed(2)}/mes\n\n` +
+    `💸 Total: ${total}/mes\n\n` +
     `_Usa \`pagar fijo nombre\` cuando ya lo pagaste._`, true);
 }
 
@@ -108,7 +129,7 @@ function pagarFijo(chatId, nombre) {
   return sendMessage(chatId,
     `✅ *Gasto fijo pagado*\n\n` +
     `📌 ${capitalizar(fijo.nombre)}\n` +
-    `💵 S/ ${fijo.monto.toFixed(2)}\n` +
+    `💵 ${formatoMoneda_(fijo.monto, fijo.currency)}\n` +
     `🏷️ ${capitalizar(fijo.cat)}\n\n` +
     `_Quedó registrado como gasto de ${mes}._`, true);
 }
@@ -127,7 +148,7 @@ function saltarFijo(chatId, nombre) {
 
   return sendMessage(chatId,
     `⏭️ *Gasto fijo saltado este mes*\n\n` +
-    `📌 ${capitalizar(fijo.nombre)} — S/ ${fijo.monto.toFixed(2)}\n\n` +
+    `📌 ${capitalizar(fijo.nombre)} — ${formatoMoneda_(fijo.monto, fijo.currency)}\n\n` +
     `_No se registrará en ${mes}. El próximo mes vuelve a la normalidad._`, true);
 }
 
@@ -141,7 +162,7 @@ function confirmarEliminarFijo(chatId, nombre) {
 
   return sendMessage(chatId,
     `⚠️ *¿Eliminar gasto fijo permanentemente?*\n\n` +
-    `📌 ${capitalizar(fijo.nombre)} — S/ ${fijo.monto.toFixed(2)}/mes\n\n` +
+    `📌 ${capitalizar(fijo.nombre)} — ${formatoMoneda_(fijo.monto, fijo.currency)}/mes\n\n` +
     `Si confirmas, no se registrará más en meses futuros.\n\n` +
     `✅ Confirmar: \`confirmar eliminar fijo ${fijo.nombre}\`\n` +
     `❌ Cancelar: ignora este mensaje`, true);
@@ -155,6 +176,7 @@ function eliminarFijo(chatId, nombre) {
     if (String(data[i][0]) === String(chatId) &&
         String(data[i][1]).toLowerCase() === nombre.toLowerCase()) {
       sheet.deleteRow(i + 1);
+      eliminarFijoD1(chatId, nombre);
       return sendMessage(chatId,
         `🗑️ *Gasto fijo eliminado*\n\n` +
         `📌 ${capitalizar(nombre)} ya no se registrará automáticamente.`, true);
@@ -181,16 +203,34 @@ function registrarGastosFijos() {
   });
 
   Object.entries(porChat).forEach(([chatId, fijos]) => {
-    const total = fijos.reduce((acc, fijo) => acc + fijo.monto, 0);
+    const total = resumenTotalFijos_(fijos);
     const lineas = fijos
-      .map(fijo => `• ${capitalizar(fijo.nombre)}: S/ ${fijo.monto.toFixed(2)}`)
+      .map(fijo => `• ${capitalizar(fijo.nombre)}: ${formatoMoneda_(fijo.monto, fijo.currency)}`)
       .join('\n');
 
     sendMessage(chatId,
       `🔁 *Gastos fijos del mes registrados*\n\n${lineas}\n\n` +
       `─────────────────\n` +
-      `💸 Total descontado: S/ ${total.toFixed(2)}`, true);
+      `💸 Total descontado: ${total}`, true);
   });
+}
+
+function resumenTotalFijos_(fijos) {
+  const totalPen = fijos
+    .filter(fijo => fijo.currency !== 'USD')
+    .reduce((acc, fijo) => acc + fijo.monto, 0);
+  const totalUsd = fijos
+    .filter(fijo => fijo.currency === 'USD')
+    .reduce((acc, fijo) => acc + fijo.monto, 0);
+
+  const partes = [];
+  if (totalPen > 0) partes.push(formatoMoneda_(totalPen, 'PEN'));
+  if (totalUsd > 0) partes.push(formatoMoneda_(totalUsd, 'USD'));
+  return partes.length ? partes.join(' + ') : formatoMoneda_(0, 'PEN');
+}
+
+function sincronizarFijosD1_(fijos) {
+  (fijos || []).forEach(fijo => guardarFijoD1(fijo));
 }
 
 function leerFijos_(chatId) {
@@ -199,7 +239,8 @@ function leerFijos_(chatId) {
 }
 
 function leerTodosLosFijos_() {
-  const sheet = getOrCreateSheet('Fijos', ['ChatID', 'Nombre', 'Monto', 'Categoría']);
+  const sheet = getOrCreateSheet('Fijos', ['ChatID', 'Nombre', 'Monto', 'Categoría', 'Moneda']);
+  asegurarColumnasFijos_(sheet);
 
   return sheet.getDataRange().getValues().slice(1)
     .map(r => ({
@@ -207,6 +248,7 @@ function leerTodosLosFijos_() {
       nombre: String(r[1] || '').trim(),
       monto: parseFloat(r[2]) || 0,
       cat: normalizarCat(r[3] || 'servicios', r[1], r[0]),
+      currency: normalizarMoneda_(r[4]) || 'PEN',
     }))
     .filter(fijo => fijo.chatId && fijo.nombre && fijo.monto > 0);
 }
@@ -234,12 +276,14 @@ function fijoEstaSaltado_(chatId, fijo, mes) {
 function registrarFijoComoTransaccion_(chatId, fijo, source) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   const txSheet = ss.getSheetByName('Transacciones') || crearHojaTransacciones();
+  asegurarColumnasPagoTransacciones_(txSheet);
   const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
   const hora = Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm');
   const desc = capitalizar(fijo.nombre);
   const cat = normalizarCat(fijo.cat, fijo.nombre, chatId);
+  const currency = normalizarMoneda_(fijo.currency || fijo.moneda) || 'PEN';
 
-  txSheet.appendRow([fecha, hora, 'gasto', desc, cat, fijo.monto, chatId]);
+  txSheet.appendRow([fecha, hora, 'gasto', desc, cat, fijo.monto, chatId, 'debito', '', '', currency]);
   guardarTransaccionD1({
     chatId: chatId,
     fecha: fecha,
@@ -248,6 +292,8 @@ function registrarFijoComoTransaccion_(chatId, fijo, source) {
     desc: desc,
     cat: cat,
     monto: fijo.monto,
+    currency: currency,
+    paymentMethod: 'debito',
     source: source,
   });
 }
