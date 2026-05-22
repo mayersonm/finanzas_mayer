@@ -625,6 +625,9 @@ credito configurar corte 25 pago 10
 gasto 10 supermercado prueba debito
 gasto 12 USD comida cafe
 gasto 120 supermercado metro credito
+fijo alquiler 1500 servicios
+fijo netflix 15 USD entretenimiento
+fijos
 ultimos
 pago ultimo credito
 pago 1 debito
@@ -640,6 +643,8 @@ regla presupuesto comida incluye supermercado
 ```
 
 Las deudas pueden registrarse en `PEN` o `USD`. El dashboard muestra el monto original y, para USD, una conversion referencial a soles usando la tasa USD/PEN que consulta y cachea el Worker.
+
+Los gastos fijos tambien pueden registrarse en `PEN` o `USD`. Se guardan en Sheets como respaldo y se envian directo a D1 para que aparezcan en `Compromisos`. Desde el dashboard puedes crearlos, editarlos y eliminarlos.
 
 En el dashboard, abre `Compromisos` para administrar deudas desde la interfaz: crear, editar, registrar pagos y eliminar. Los pagos quedan en `debt_payments` dentro de D1 y se muestran como historial debajo de cada deuda.
 

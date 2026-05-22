@@ -35,6 +35,7 @@ export default {
     const url = new URL(request.url);
     const receiptFileMatch = url.pathname.match(/^\/api\/receipts\/([^/]+)\/file$/);
     const transactionMatch = url.pathname.match(/^\/api\/transactions\/([^/]+)$/);
+    const fixedExpenseMatch = url.pathname.match(/^\/api\/fixed-expenses\/([^/]+)$/);
     const debtMatch = url.pathname.match(/^\/api\/debts\/([^/]+)$/);
     const debtPaymentMatch = url.pathname.match(/^\/api\/debts\/([^/]+)\/payments$/);
     const investmentMatch = url.pathname.match(/^\/api\/investments\/([^/]+)$/);
@@ -229,6 +230,23 @@ export default {
         requireAdminKey(request, env);
         const payload = await request.json();
         return json(await updateTransactionPayment(env, payload));
+      }
+
+      if (url.pathname === '/api/fixed-expenses' && request.method === 'POST') {
+        await requireDashboardOrAdminAccess(request, env);
+        const payload = await request.json();
+        return json(await upsertFixedExpenseFromPayload(env, payload, url.searchParams), 201);
+      }
+
+      if (fixedExpenseMatch && request.method === 'PATCH') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await updateFixedExpenseFromDashboard(env, decodeURIComponent(fixedExpenseMatch[1]), payload, url.searchParams));
+      }
+
+      if (fixedExpenseMatch && request.method === 'DELETE') {
+        await requireDashboardOrAdminAccess(request, env);
+        return json(await deleteFixedExpense(env, decodeURIComponent(fixedExpenseMatch[1]), url.searchParams));
       }
 
       if (url.pathname === '/api/debts' && request.method === 'POST') {
@@ -699,23 +717,24 @@ async function dashboard(env, params) {
   const now = new Date();
   const monthKey = formatMonth(now);
   const monthName = monthLongName(now);
+  const usdRate = Number((await exchangeRate(env)).rate || 3.85);
 
   const totals = await env.DB.prepare(`
     SELECT
-      COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE 0 END), 0) AS ingresos,
-      COALESCE(SUM(CASE WHEN type = 'gasto' THEN amount ELSE 0 END), 0) AS gastos,
+      COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
+      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos,
       COUNT(*) AS movimientos
     FROM transactions
     WHERE chat_id = ?
-  `).bind(chatId).first();
+  `).bind(usdRate, usdRate, chatId).first();
 
   const monthTotals = await env.DB.prepare(`
     SELECT
-      COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE 0 END), 0) AS ingresosMes,
-      COALESCE(SUM(CASE WHEN type = 'gasto' THEN amount ELSE 0 END), 0) AS gastosMes
+      COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresosMes,
+      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastosMes
     FROM transactions
     WHERE chat_id = ? AND substr(tx_date, 1, 7) = ?
-  `).bind(chatId, monthKey).first();
+  `).bind(usdRate, usdRate, chatId, monthKey).first();
 
   const latest = await env.DB.prepare(`
     SELECT
@@ -742,12 +761,12 @@ async function dashboard(env, params) {
     LIMIT 20
   `).bind(chatId).all();
 
-  const categories = await categoriesWithSpending(env, chatId, monthKey);
+  const categories = await categoriesWithSpending(env, chatId, monthKey, usdRate);
 
-  const months = await lastMonths(env, chatId, now);
-  const budgets = await budgetsWithSpending(env, chatId, monthKey);
+  const months = await lastMonths(env, chatId, now, usdRate);
+  const budgets = await budgetsWithSpending(env, chatId, monthKey, usdRate);
   const budgetRules = await loadBudgetRules(env, chatId);
-  const fixedExpenses = await fixedExpensesList(env, chatId, monthKey);
+  const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, usdRate);
   const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
   const emailConfig = await emailConfigFromGas(env);
@@ -795,7 +814,7 @@ async function dashboard(env, params) {
     presupuestos: budgets,
     fijos: fixedExpenses,
     deudas: debts,
-    gastosReales: realExpenses(fixedExpenses, budgets),
+    gastosReales: realExpenses(fixedExpenses, budgets, usdRate),
     metas: goals,
     alertas: alerts,
     insights: insights,
@@ -2010,20 +2029,148 @@ async function upsertGoal(env, chatId, raw) {
 }
 
 async function upsertFixedExpense(env, chatId, raw) {
-  const name = normalizeKey(raw.nombre || raw.name || '');
-  const amount = Number(raw.monto || raw.amount || 0);
-  const category = (await classifyCategory(env, chatId, raw.cat || raw.category || 'servicios', name)).category;
-  if (!name || amount <= 0) return;
+  const fixed = await normalizeFixedExpense(env, chatId, raw);
+  if (!fixed) return false;
+  await saveFixedExpense(env, fixed);
+  return true;
+}
 
+async function upsertFixedExpenseFromPayload(env, payload, params) {
+  const chatId = String(payload.chat_id || payload.chatId || params.get('chat_id') || env.DEFAULT_CHAT_ID || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+
+  const fixed = await normalizeFixedExpense(env, chatId, payload);
+  if (!fixed) throw httpError(400, 'Gasto fijo invalido');
+  const saved = await saveFixedExpense(env, fixed);
+
+  return {
+    ok: true,
+    fixedExpense: fixedExpenseShape(saved),
+  };
+}
+
+async function normalizeFixedExpense(env, chatId, raw) {
+  const name = normalizeKey(raw.nombre || raw.name || '');
+  const amount = parseAmount(raw.monto || raw.amount || 0);
+  const category = (await classifyCategory(env, chatId, raw.cat || raw.category || 'servicios', name)).category;
+  const currency = normalizeCurrency(raw.currency || raw.moneda || 'PEN');
+  const active = raw.active === undefined ? 1 : (raw.active === false || raw.active === 0 ? 0 : 1);
+  if (!name || amount <= 0) return null;
+
+  return {
+    id: String(raw.id || `fixed:${chatId}:${name}`).slice(0, 180),
+    chat_id: chatId,
+    name,
+    amount: round(amount),
+    category,
+    currency,
+    active,
+  };
+}
+
+async function saveFixedExpense(env, fixed) {
   await env.DB.prepare(`
-    INSERT INTO fixed_expenses (id, chat_id, name, amount, category, active, updated_at)
-    VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+    INSERT INTO fixed_expenses (id, chat_id, name, amount, category, currency, active, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(chat_id, name) DO UPDATE SET
       amount = excluded.amount,
       category = excluded.category,
-      active = 1,
+      currency = excluded.currency,
+      active = excluded.active,
       updated_at = CURRENT_TIMESTAMP
-  `).bind(`fixed:${chatId}:${name}`, chatId, name, amount, category).run();
+  `).bind(
+    fixed.id,
+    fixed.chat_id,
+    fixed.name,
+    fixed.amount,
+    fixed.category,
+    fixed.currency,
+    fixed.active,
+  ).run();
+
+  const byId = await env.DB.prepare('SELECT * FROM fixed_expenses WHERE id = ? AND chat_id = ?')
+    .bind(fixed.id, fixed.chat_id)
+    .first();
+  if (byId) return byId;
+
+  return env.DB.prepare('SELECT * FROM fixed_expenses WHERE chat_id = ? AND lower(name) = lower(?)')
+    .bind(fixed.chat_id, fixed.name)
+    .first();
+}
+
+async function updateFixedExpenseFromDashboard(env, id, payload, params) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const cleanId = String(id || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  if (!cleanId) throw httpError(400, 'id requerido');
+
+  const existing = await env.DB.prepare('SELECT * FROM fixed_expenses WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .first();
+  if (!existing) throw httpError(404, 'Gasto fijo no encontrado');
+
+  const name = normalizeKey(payload.nombre ?? payload.name ?? existing.name);
+  const amount = parseAmount(payload.monto ?? payload.amount ?? existing.amount);
+  const category = (await classifyCategory(env, chatId, payload.cat ?? payload.category ?? existing.category, name)).category;
+  const currency = normalizeCurrency(payload.currency ?? payload.moneda ?? existing.currency ?? 'PEN');
+  const active = payload.active === undefined ? Number(existing.active ?? 1) : (payload.active === false || payload.active === 0 ? 0 : 1);
+
+  if (!name) throw httpError(400, 'nombre requerido');
+  if (amount <= 0) throw httpError(400, 'monto invalido');
+
+  const conflict = await env.DB.prepare('SELECT id FROM fixed_expenses WHERE chat_id = ? AND lower(name) = lower(?) AND id <> ?')
+    .bind(chatId, name, cleanId)
+    .first();
+  if (conflict) throw httpError(409, 'Ya existe otro gasto fijo con ese nombre');
+
+  await env.DB.prepare(`
+    UPDATE fixed_expenses
+    SET name = ?,
+        amount = ?,
+        category = ?,
+        currency = ?,
+        active = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND chat_id = ?
+  `).bind(name, round(amount), category, currency, active, cleanId, chatId).run();
+
+  const saved = await env.DB.prepare('SELECT * FROM fixed_expenses WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .first();
+  return { ok: true, fixedExpense: fixedExpenseShape(saved) };
+}
+
+async function deleteFixedExpense(env, id, params) {
+  const chatId = String(params.get('chat_id') || env.DEFAULT_CHAT_ID || '').trim();
+  const cleanId = String(id || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  if (!cleanId) throw httpError(400, 'id requerido');
+
+  const existing = await env.DB.prepare('SELECT id FROM fixed_expenses WHERE id = ? AND chat_id = ?')
+    .bind(cleanId, chatId)
+    .first();
+  if (!existing) throw httpError(404, 'Gasto fijo no encontrado');
+
+  await env.DB.prepare(`
+    UPDATE fixed_expenses
+    SET active = 0,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND chat_id = ?
+  `).bind(cleanId, chatId).run();
+
+  return { ok: true, deleted: true, id: cleanId };
+}
+
+function fixedExpenseShape(row) {
+  const currency = normalizeCurrency(row.currency || 'PEN');
+  return {
+    id: row.id,
+    nombre: title(row.name || row.nombre || ''),
+    monto: round(row.amount ?? row.monto ?? 0),
+    currency,
+    cat: title(row.category || row.cat || 'servicios'),
+    active: Number(row.active ?? 1) === 1,
+  };
 }
 
 async function upsertDebtFromPayload(env, payload) {
@@ -2235,7 +2382,7 @@ async function addDebtPayment(env, id, payload, params) {
   return { ok: true, debt: debtShape(debt), payment: debtPaymentShape(payment) };
 }
 
-async function lastMonths(env, chatId, now) {
+async function lastMonths(env, chatId, now, usdRate = 3.85) {
   const result = [];
   const shortNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -2244,11 +2391,11 @@ async function lastMonths(env, chatId, now) {
     const key = formatMonth(date);
     const row = await env.DB.prepare(`
       SELECT
-        COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount ELSE 0 END), 0) AS ingresos,
-        COALESCE(SUM(CASE WHEN type = 'gasto' THEN amount ELSE 0 END), 0) AS gastos
+        COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
+        COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos
       FROM transactions
       WHERE chat_id = ? AND substr(tx_date, 1, 7) = ?
-    `).bind(chatId, key).first();
+    `).bind(usdRate, usdRate, chatId, key).first();
 
     result.push({
       mes: shortNames[date.getUTCMonth()],
@@ -2261,9 +2408,9 @@ async function lastMonths(env, chatId, now) {
   return result;
 }
 
-async function categoriesWithSpending(env, chatId, monthKey) {
+async function categoriesWithSpending(env, chatId, monthKey, usdRate = 3.85) {
   const rows = await env.DB.prepare(`
-    SELECT category AS cat, description AS desc, amount
+    SELECT category AS cat, description AS desc, amount, currency
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
@@ -2274,7 +2421,7 @@ async function categoriesWithSpending(env, chatId, monthKey) {
   const spending = {};
   for (const row of rows.results || []) {
     const cat = classifyCategoryFromLoadedRules(rules, row.cat, row.desc);
-    spending[cat] = (spending[cat] || 0) + Number(row.amount || 0);
+    spending[cat] = (spending[cat] || 0) + currencyToPen(Number(row.amount || 0), row.currency || 'PEN', usdRate);
   }
 
   return Object.keys(spending)
@@ -2286,7 +2433,7 @@ async function categoriesWithSpending(env, chatId, monthKey) {
     .sort((a, b) => b.monto - a.monto || a.cat.localeCompare(b.cat));
 }
 
-async function budgetsWithSpending(env, chatId, monthKey) {
+async function budgetsWithSpending(env, chatId, monthKey, usdRate = 3.85) {
   const rows = await env.DB.prepare(`
     SELECT category AS cat, limit_amount AS limite
     FROM budgets
@@ -2294,7 +2441,7 @@ async function budgetsWithSpending(env, chatId, monthKey) {
   `).bind(chatId).all();
 
   const spendingRows = await env.DB.prepare(`
-    SELECT category AS cat, description AS desc, amount
+    SELECT category AS cat, description AS desc, amount, currency
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
@@ -2306,7 +2453,7 @@ async function budgetsWithSpending(env, chatId, monthKey) {
   const spending = {};
   for (const row of spendingRows.results || []) {
     const cat = classifyCategoryFromLoadedRules(categoryRules, row.cat, row.desc);
-    spending[cat] = (spending[cat] || 0) + Number(row.amount || 0);
+    spending[cat] = (spending[cat] || 0) + currencyToPen(Number(row.amount || 0), row.currency || 'PEN', usdRate);
   }
 
   return (rows.results || []).map((row) => ({
@@ -2316,12 +2463,14 @@ async function budgetsWithSpending(env, chatId, monthKey) {
   })).sort((a, b) => b.gasto - a.gasto || a.cat.localeCompare(b.cat));
 }
 
-async function fixedExpensesList(env, chatId, monthKey) {
+async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85) {
   const rows = await env.DB.prepare(`
     SELECT
+      f.id AS id,
       f.name AS nombre,
       f.amount AS monto,
       f.category AS cat,
+      f.currency AS currency,
       EXISTS (
         SELECT 1
         FROM transactions t
@@ -2332,18 +2481,27 @@ async function fixedExpensesList(env, chatId, monthKey) {
       ) AS pagadoMes
     FROM fixed_expenses f
     WHERE f.chat_id = ? AND f.active = 1
-    ORDER BY f.amount DESC, f.name ASC
+    ORDER BY f.name ASC
   `).bind(monthKey, chatId).all();
 
-  return (rows.results || []).map((row) => ({
-    nombre: title(row.nombre),
-    monto: round(row.monto),
-    cat: title(row.cat),
-    color: COLORS[row.cat] || COLORS.otro,
-    pagadoMes: Boolean(row.pagadoMes),
-    saltadoMes: false,
-    estado: row.pagadoMes ? 'pagado' : 'pendiente',
-  }));
+  return (rows.results || [])
+    .map((row) => {
+      const currency = normalizeCurrency(row.currency || 'PEN');
+      const monto = round(row.monto);
+      return {
+        id: row.id,
+        nombre: title(row.nombre),
+        monto,
+        montoPen: round(currencyToPen(monto, currency, usdRate)),
+        currency,
+        cat: title(row.cat),
+        color: COLORS[row.cat] || COLORS.otro,
+        pagadoMes: Boolean(row.pagadoMes),
+        saltadoMes: false,
+        estado: row.pagadoMes ? 'pagado' : 'pendiente',
+      };
+    })
+    .sort((a, b) => b.montoPen - a.montoPen || a.nombre.localeCompare(b.nombre));
 }
 
 async function debtsList(env, chatId) {
@@ -2794,8 +2952,11 @@ async function exchangeRate(env) {
   return { ok: true, base: 'USD', target: 'PEN', rate, updatedAt, source };
 }
 
-function realExpenses(fixedExpenses, budgets) {
-  const totalFijos = fixedExpenses.reduce((total, item) => total + Number(item.monto || 0), 0);
+function realExpenses(fixedExpenses, budgets, usdRate = 3.85) {
+  const totalFijos = fixedExpenses.reduce((total, item) => {
+    const value = item.montoPen ?? currencyToPen(Number(item.monto || 0), item.currency || 'PEN', usdRate);
+    return total + Number(value || 0);
+  }, 0);
   const totalPresupuesto = budgets.reduce((total, item) => {
     const spent = Number(item.gasto || 0);
     const limit = Number(item.limite || 0);
@@ -2928,7 +3089,7 @@ function smartAlerts({ now, ingresosMes, gastosMes, budgets, fixedExpenses, debt
       alerts.push({
         level: 'info',
         title: `Gasto fijo pendiente: ${item.nombre}`,
-        message: `Falta marcar S/ ${round(item.monto)} como pagado o saltado este mes.`,
+        message: `Falta marcar ${formatCurrency(item.monto, item.currency)} como pagado o saltado este mes.`,
       });
     });
 

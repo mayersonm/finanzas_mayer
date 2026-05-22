@@ -113,6 +113,19 @@ pago ultimo credito
 pago 1 debito
 ```
 
+## Gastos fijos
+
+```text
+fijo alquiler 1500 servicios
+fijo netflix 15 USD entretenimiento
+fijos
+pagar fijo alquiler
+saltar fijo alquiler
+eliminar fijo alquiler
+```
+
+Los gastos fijos aceptan `PEN` y `USD`. Desde Telegram se guardan en Sheets y tambien se envian directo a D1 para que aparezcan en el dashboard. En `Compromisos` tambien puedes crear, editar y eliminar gastos fijos desde la interfaz.
+
 ## Deudas, alertas e insights
 
 ```text
