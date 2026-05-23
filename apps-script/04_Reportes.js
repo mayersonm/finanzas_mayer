@@ -1,5 +1,28 @@
 ﻿// ---- BALANCE TOTAL
 function sendBalance(chatId) {
+  const d1 = leerDashboardD1_(chatId);
+  if (d1 && d1.ok) {
+    const ingresos = Number(d1.ingresos || 0);
+    const gastos = Number(d1.gastos || 0);
+    const balance = Number(d1.balance || ingresos - gastos);
+    const deudaPendiente = Number(d1.deudaPendiente || 0);
+    const balanceNeto = Number(d1.balanceGeneralNeto || d1.balanceNeto || (balance - deudaPendiente));
+    const emoji = balance >= 0 ? '🟢' : '🔴';
+    const emojiNeto = balanceNeto >= 0 ? '🟢' : '🔴';
+
+    return sendMessage(chatId,
+      `💰 *Tu Balance*\n\n` +
+      `📥 Ingresos:  S/ ${ingresos.toFixed(2)}\n` +
+      `📤 Gastos:    S/ ${gastos.toFixed(2)}\n` +
+      `💳 Deudas pendientes: S/ ${deudaPendiente.toFixed(2)}\n` +
+      `─────────────────\n` +
+      `${emoji} Balance caja: S/ ${balance.toFixed(2)}\n` +
+      `${emojiNeto} Balance neto: S/ ${balanceNeto.toFixed(2)}\n\n` +
+      `_Fuente: D1 · ${d1.movimientos || 0} movimiento${d1.movimientos !== 1 ? 's' : ''}_`,
+      true
+    );
+  }
+
   const data = obtenerTransacciones(chatId);
 
   let ingresos = 0, gastos = 0;

@@ -115,7 +115,7 @@ export default {
       }
 
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         return json(await dashboard(env, url.searchParams));
       }
 
