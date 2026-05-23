@@ -585,6 +585,39 @@ function d1ApiRequest_(path, payload) {
   return body;
 }
 
+function d1ApiGet_(path) {
+  const props = PropertiesService.getScriptProperties();
+  const apiUrl = props.getProperty('d1_api_url');
+  const adminKey = props.getProperty('d1_admin_key');
+
+  if (!apiUrl || !adminKey) {
+    throw new Error('Faltan d1_api_url o d1_admin_key');
+  }
+
+  const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + path, {
+    method: 'get',
+    headers: { 'x-admin-key': adminKey },
+    muteHttpExceptions: true,
+  });
+
+  const code = resp.getResponseCode();
+  const body = JSON.parse(resp.getContentText() || '{}');
+  if (code < 200 || code >= 300 || body.ok === false) {
+    throw new Error(body.error || ('HTTP ' + code));
+  }
+
+  return body;
+}
+
+function leerDashboardD1_(chatId) {
+  try {
+    return d1ApiGet_('/api/dashboard?chat_id=' + encodeURIComponent(String(chatId)));
+  } catch (err) {
+    Logger.log('Dashboard D1 omitido: ' + err);
+    return null;
+  }
+}
+
 function cmdD1Estado(chatId) {
   if (!esAdminD1_(chatId)) {
     return sendMessage(chatId, 'No autorizado.');
