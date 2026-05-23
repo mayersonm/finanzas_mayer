@@ -49,6 +49,24 @@ function sendBalance(chatId) {
 
 // ---- RESUMEN DEL MES
 function sendResumen(chatId) {
+  const d1 = leerDashboardD1_(chatId);
+  if (d1 && d1.ok) {
+    const categorias = d1.categorias || [];
+    const lineasD1 = categorias
+      .map(item => `  • ${capitalizar(item.cat)}: S/ ${Number(item.monto || 0).toFixed(2)}`)
+      .join('\n');
+
+    return sendMessage(chatId,
+      `📊 *Resumen de ${d1.mes || 'este mes'}*\n\n` +
+      `📥 Ingresos: S/ ${Number(d1.ingresosMes || 0).toFixed(2)}\n` +
+      `📤 Gastos:   S/ ${Number(d1.gastosMes || 0).toFixed(2)}\n` +
+      `💰 Balance:  S/ ${Number(d1.balanceMes || 0).toFixed(2)}\n\n` +
+      `*Gastos por categoría:*\n${lineasD1 || '  (sin gastos)'}\n\n` +
+      `_Fuente: D1_`,
+      true
+    );
+  }
+
   const hoy       = new Date();
   const mesActual = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM');
 
@@ -101,10 +119,10 @@ function sendUltimos(chatId) {
     const tipo  = row[2];
     const desc  = row[3];
     const cat   = row[4];
-    const monto = parseFloat(row[5]).toFixed(2);
+    const monto = formatoMoneda_(parseFloat(row[5]), row[10] || 'PEN');
     const fecha = row[0];
     const emoji = tipo === 'gasto' ? '🔴' : '🟢';
-    return `#${index + 1} ${emoji} ${desc} — S/ ${monto} · ${capitalizar(cat)} _(${Utilities.formatDate(new Date(fecha), Session.getScriptTimeZone(), 'dd/MM/yyyy')})_`;
+    return `#${index + 1} ${emoji} ${desc} — ${monto} · ${capitalizar(cat)} _(${Utilities.formatDate(new Date(fecha), Session.getScriptTimeZone(), 'dd/MM/yyyy')})_`;
   }).join('\n');
 
   sendMessage(

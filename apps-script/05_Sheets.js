@@ -1,5 +1,28 @@
 // ---- HELPERS -----------------------------------------------
 function obtenerTransacciones(chatId) {
+  const txsD1 = leerTransaccionesD1_(chatId, 500);
+  if (txsD1 !== null) {
+    return txsD1.slice().reverse().map(function (tx) {
+      return [
+        tx.fecha,
+        tx.hora || '00:00',
+        tx.tipo || 'gasto',
+        tx.desc || '',
+        tx.cat || 'otro',
+        Number(tx.monto || 0),
+        String(chatId),
+        tx.paymentMethod || tx.payment_method || 'debito',
+        tx.paymentDueDate || tx.payment_due_date || '',
+        tx.cardName || tx.card_name || '',
+        normalizarMoneda_(tx.currency || tx.moneda) || 'PEN',
+      ];
+    });
+  }
+
+  return obtenerTransaccionesSheets_(chatId);
+}
+
+function obtenerTransaccionesSheets_(chatId) {
   try {
     const sheet = SpreadsheetApp
       .openById(SHEET_ID)
@@ -55,14 +78,11 @@ function getOrCreateSheet(name, headers) {
 }
 
 function obtenerGastosPorMesCat(chatId, mes = null) {
-  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
-  if (!sheet) return {};
-
-  const data = sheet.getDataRange().getValues().slice(1);
+  const data = obtenerTransacciones(chatId);
   const resultado = {};
 
   data.forEach(r => {
-    if (String(r[6]) !== chatId) return;
+    if (String(r[6]).trim() !== String(chatId).trim()) return;
     if (r[2] !== 'gasto') return;
 
     const fechaMes = Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM');

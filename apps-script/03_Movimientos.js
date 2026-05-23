@@ -257,18 +257,20 @@ function cmdPresupuesto(chatId, text) {
             '❌ Formato: *presupuesto [categoría] [monto]* Ej: presupuesto comida 500', true);
     }
 
+    const guardadoD1 = guardarPresupuestoD1_(chatId, cat, limit);
     const sheet = getOrCreateSheet('Presupuestos', ['ChatID', 'Categoría', 'Límite']);
     const data = sheet.getDataRange().getValues();
+    const notaD1 = guardadoD1 ? '' : '\n\n⚠️ No pude guardar en D1; quedó solo como respaldo en Sheets.';
 
     // Actualiza si ya existe, si no agrega fila nueva
     for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]) === chatId && normalizarCat(data[i][1], '', chatId) === cat) {
+        if (String(data[i][0]) === String(chatId) && normalizarCat(data[i][1], '', chatId) === cat) {
             sheet.getRange(i + 1, 3).setValue(limit);
             return sendMessage(chatId,
                 `✅ Presupuesto actualizado
 
 🏷️ ${capitalizar(cat)}
-💰 S/ ${limit.toFixed(2)} / mes`, true);
+💰 S/ ${limit.toFixed(2)} / mes${notaD1}`, true);
         }
     }
     sheet.appendRow([chatId, cat, limit]);
@@ -278,13 +280,44 @@ function cmdPresupuesto(chatId, text) {
 🏷️ ${capitalizar(cat)}
 💰 S/ ${limit.toFixed(2)} / mes
 
-_Escribe *presupuesto* para ver todos._`, true);
+_Escribe *presupuesto* para ver todos._${notaD1}`, true);
 }
 
 function mostrarPresupuestos(chatId) {
+    const d1 = leerDashboardD1_(chatId);
+    if (d1 && d1.ok) {
+        const presupuestosD1 = d1.presupuestos || [];
+        if (!presupuestosD1.length) {
+            return sendMessage(chatId,
+                '📭 No tienes presupuestos en D1. Crea uno: `presupuesto comida 500`', true);
+        }
+
+        const mesD1 = d1.mesKey || Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
+        let msgD1 = `📊 *Presupuestos — ${mesD1}*
+
+`;
+
+        presupuestosD1.forEach(item => {
+            const cat = item.cat || 'otro';
+            const limite = Number(item.limite || 0);
+            const gasto = Number(item.gasto || 0);
+            const pct = limite > 0 ? Math.min(Math.round((gasto / limite) * 100), 100) : 0;
+            const estado = pct >= 100 ? '🔴' : pct >= 80 ? '🟡' : '🟢';
+            msgD1 += `${estado} *${capitalizar(cat)}*
+`;
+            msgD1 += `${buildBar(pct)} ${pct}%
+`;
+            msgD1 += `S/ ${gasto.toFixed(2)} de S/ ${limite.toFixed(2)}
+
+`;
+        });
+
+        return sendMessage(chatId, msgD1 + '_Fuente: D1_', true);
+    }
+
     const sheet = getOrCreateSheet('Presupuestos', ['ChatID', 'Categoría', 'Límite']);
     const data = sheet.getDataRange().getValues().slice(1)
-        .filter(r => String(r[0]) === chatId);
+        .filter(r => String(r[0]) === String(chatId));
 
     if (!data.length) {
         return sendMessage(chatId,
@@ -317,10 +350,30 @@ function mostrarPresupuestos(chatId) {
 
 
 function verificarPresupuesto(chatId, cat) {
+  const d1 = leerDashboardD1_(chatId);
+  const presupuestoD1 = presupuestoD1ParaCategoria_(d1, cat);
+  if (presupuestoD1) {
+    const presupuestoCat = normalizarCatBasica_(presupuestoD1.cat || cat);
+    const limite = Number(presupuestoD1.limite || 0);
+    const gasto = Number(presupuestoD1.gasto || 0);
+    const pct = limite > 0 ? Math.round((gasto / limite) * 100) : 0;
+
+    if (pct >= 100) {
+      sendMessage(chatId,
+        `🔴 *¡Presupuesto superado!*\n` +
+        `${capitalizar(presupuestoCat)}: S/ ${gasto.toFixed(2)} / S/ ${limite.toFixed(2)}`, true);
+    } else if (pct >= 80) {
+      sendMessage(chatId,
+        `🟡 *Alerta:* llevas el ${pct}% de ${capitalizar(presupuestoCat)}\n` +
+        `S/ ${gasto.toFixed(2)} de S/ ${limite.toFixed(2)}`, true);
+    }
+    return;
+  }
+
   const sheet = getOrCreateSheet('Presupuestos', ['ChatID','Categoría','Límite']);
   const catNormalizada = normalizarCat(cat, '', chatId);
   const fila  = sheet.getDataRange().getValues().slice(1)
-    .find(r => String(r[0]) === chatId && categoriasParaPresupuesto_(r[1], chatId).indexOf(catNormalizada) >= 0);
+    .find(r => String(r[0]) === String(chatId) && categoriasParaPresupuesto_(r[1], chatId).indexOf(catNormalizada) >= 0);
 
   if (!fila) return;
 
@@ -340,6 +393,21 @@ function verificarPresupuesto(chatId, cat) {
       `🟡 *Alerta:* llevas el ${pct}% de ${capitalizar(presupuestoCat)}\n` +
       `S/ ${gasto.toFixed(2)} de S/ ${limite.toFixed(2)}`, true);
   }
+}
+
+function presupuestoD1ParaCategoria_(d1, cat) {
+  if (!d1 || !d1.ok || !d1.presupuestos || !d1.presupuestos.length) return null;
+
+  const catNormalizada = normalizarCatBasica_(cat || 'otro');
+  const reglas = d1.budgetRules || [];
+  const regla = reglas.find(item =>
+    normalizarCatBasica_(item.includedCategory || '') === catNormalizada
+  );
+  const presupuestoKey = regla ? normalizarCatBasica_(regla.budgetCategory || '') : catNormalizada;
+
+  return d1.presupuestos.find(item =>
+    normalizarCatBasica_(item.cat || '') === presupuestoKey
+  ) || null;
 }
 
 

@@ -234,6 +234,17 @@ function sincronizarFijosD1_(fijos) {
 }
 
 function leerFijos_(chatId) {
+  const d1 = leerDashboardD1_(chatId);
+  if (d1 && d1.ok) {
+    return (d1.fijos || []).map(item => ({
+      chatId: String(chatId),
+      nombre: String(item.nombre || '').trim(),
+      monto: Number(item.monto || 0),
+      cat: normalizarCatBasica_(item.cat || 'servicios'),
+      currency: normalizarMoneda_(item.currency) || 'PEN',
+    })).filter(fijo => fijo.nombre && fijo.monto > 0);
+  }
+
   return leerTodosLosFijos_()
     .filter(fijo => String(fijo.chatId) === String(chatId));
 }

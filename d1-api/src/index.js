@@ -176,7 +176,7 @@ export default {
       }
 
       if (url.pathname === '/api/transactions' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
+        await requireDashboardOrAdminAccess(request, env);
         return json(await transactions(env, url.searchParams));
       }
 
@@ -195,6 +195,12 @@ export default {
         requireAdminKey(request, env);
         const payload = await request.json();
         return json(await insertTransaction(env, payload), 201);
+      }
+
+      if (url.pathname === '/api/budgets' && request.method === 'POST') {
+        await requireDashboardOrAdminAccess(request, env);
+        const payload = await request.json();
+        return json(await upsertBudgetFromPayload(env, payload, url.searchParams), 201);
       }
 
       if (transactionMatch && request.method === 'DELETE') {
@@ -1314,6 +1320,19 @@ async function insertTransaction(env, payload) {
   return { ok: true, transaction: tx };
 }
 
+async function upsertBudgetFromPayload(env, payload, params) {
+  const chatId = String(payload.chat_id || payload.chatId || getChatId(env, params) || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+
+  const budget = await upsertBudget(env, chatId, payload);
+  if (!budget) throw httpError(400, 'Presupuesto invalido');
+
+  return {
+    ok: true,
+    budget,
+  };
+}
+
 async function deleteTransaction(env, { id, chatId, deleteFromGas = false }) {
   const cleanId = String(id || '').trim();
   const cleanChatId = String(chatId || '').trim();
@@ -2005,9 +2024,9 @@ async function mergeDuplicateTransaction(env, tx) {
 }
 
 async function upsertBudget(env, chatId, raw) {
-  const category = normalizeKey(raw.cat || raw.category || 'otro');
+  const category = normalizeBaseCategory(raw.cat || raw.category || raw.categoria || 'otro');
   const limit = Number(raw.limite || raw.limit_amount || raw.limit || 0);
-  if (!category || limit <= 0) return;
+  if (!category || limit <= 0) return null;
 
   await env.DB.prepare(`
     INSERT INTO budgets (id, chat_id, category, limit_amount, updated_at)
@@ -2016,6 +2035,13 @@ async function upsertBudget(env, chatId, raw) {
       limit_amount = excluded.limit_amount,
       updated_at = CURRENT_TIMESTAMP
   `).bind(`budget:${chatId}:${category}`, chatId, category, limit).run();
+
+  return {
+    id: `budget:${chatId}:${category}`,
+    chat_id: chatId,
+    cat: category,
+    limite: round(limit),
+  };
 }
 
 async function upsertGoal(env, chatId, raw) {
