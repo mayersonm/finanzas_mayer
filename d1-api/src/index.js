@@ -770,6 +770,9 @@ async function dashboard(env, params) {
   const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
   const emailConfig = await emailConfigFromGas(env);
+  const deudaPendiente = round(debts
+    .filter((item) => item.estado !== 'pagada')
+    .reduce((total, item) => total + currencyToPen(Number(item.pendiente || 0), item.currency || 'PEN', usdRate), 0));
 
   const ingresos = Number(totals?.ingresos || 0);
   const gastos = Number(totals?.gastos || 0);
@@ -799,6 +802,8 @@ async function dashboard(env, params) {
   return {
     ok: true,
     balance: round(ingresos - gastos),
+    balanceGeneralNeto: round(ingresos - gastos - deudaPendiente),
+    balanceNeto: round(ingresos - gastos - deudaPendiente),
     ingresos: round(ingresos),
     gastos: round(gastos),
     ingresosMes: round(ingresosMes),
@@ -814,6 +819,7 @@ async function dashboard(env, params) {
     presupuestos: budgets,
     fijos: fixedExpenses,
     deudas: debts,
+    deudaPendiente,
     gastosReales: realExpenses(fixedExpenses, budgets, usdRate),
     metas: goals,
     alertas: alerts,

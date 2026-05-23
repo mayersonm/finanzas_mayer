@@ -17,13 +17,21 @@ export function OverviewSection({
   const topCategory = data.categorias[0];
   const monthIncome = data.ingresosMes ?? data.ingresos;
   const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
+  const debtPending = data.deudaPendiente ?? 0;
+  const generalNetBalance = data.balanceGeneralNeto ?? data.balanceNeto ?? data.balance - debtPending;
   const availableAfterCommitted = monthIncome - realExpenses.total;
   const spendingRate = monthIncome > 0 ? percent(data.gastosMes, monthIncome) : data.gastosMes > 0 ? 100 : 0;
   const commitmentRate = monthIncome > 0 ? percent(realExpenses.total, monthIncome) : realExpenses.total > 0 ? 100 : 0;
 
   return (
     <>
-      <section className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <KpiCard
+          label="Balance general neto"
+          value={formatMoney(generalNetBalance)}
+          detail={`Deudas pendientes: ${formatMoney(debtPending)}`}
+          color={generalNetBalance >= 0 ? 'emerald' : 'rose'}
+        />
         <KpiCard
           label={`Balance ${data.mes}`}
           value={formatMoney(monthBalance)}

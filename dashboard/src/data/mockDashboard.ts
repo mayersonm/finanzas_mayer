@@ -2,6 +2,8 @@ import type { DashboardData } from '../types/dashboard';
 
 export const MOCK_DASHBOARD: DashboardData = {
   balance: 5350,
+  balanceGeneralNeto: 2950,
+  balanceNeto: 2950,
   ingresos: 6500,
   gastos: 1150,
   ingresosMes: 6500,
@@ -46,6 +48,7 @@ export const MOCK_DASHBOARD: DashboardData = {
     { nombre: 'Tarjeta BCP', total: 900, pagado: 300, pendiente: 600, vencimiento: '2026-05-20', estado: 'activa' },
     { nombre: 'Préstamo Internacional', total: 1000, pagado: 200, pendiente: 800, vencimiento: '2026-08-15', estado: 'activa', currency: 'USD' },
   ],
+  deudaPendiente: 2400,
   gastosReales: {
     totalFijos: 1620,
     totalPresupuesto: 950,

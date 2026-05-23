@@ -279,6 +279,8 @@ export interface SystemHealthData {
 export interface DashboardData {
   ok?: boolean;
   balance: number;
+  balanceGeneralNeto?: number;
+  balanceNeto?: number;
   ingresos: number;
   gastos: number;
   ingresosMes?: number;
@@ -294,6 +296,7 @@ export interface DashboardData {
   presupuestos: Budget[];
   fijos?: FixedExpense[];
   deudas?: Debt[];
+  deudaPendiente?: number;
   gastosReales?: RealExpenses;
   metas: Goal[];
   alertas?: SmartAlert[];
