@@ -246,7 +246,7 @@ function guardarDeudaD1(debt) {
   }
 }
 
-function guardarPagoDeudaD1(debt, amount, paymentDate, notes) {
+function guardarPagoDeudaD1(debt, amount, paymentDate, notes, recordTransaction) {
   try {
     const props = PropertiesService.getScriptProperties();
     const apiUrl = props.getProperty('d1_api_url');
@@ -269,6 +269,7 @@ function guardarPagoDeudaD1(debt, amount, paymentDate, notes) {
       currency: normalizarMoneda_(debt.currency || debt.moneda) || 'PEN',
       paymentDate: paymentDate || Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd'),
       notes: notes || 'Telegram',
+      record_transaction: recordTransaction !== false,
     };
 
     const resp = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/debts/' + encodeURIComponent(debtId) + '/payments', {

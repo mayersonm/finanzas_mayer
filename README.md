@@ -141,6 +141,7 @@ insights
 Las deudas aceptan `PEN` y `USD`. En el dashboard, las deudas en USD muestran su monto original y una referencia convertida a soles con la tasa USD/PEN cacheada por el Worker.
 
 Desde el dashboard, en `Compromisos`, tambien puedes crear, editar, pagar y eliminar deudas. Cada pago queda guardado en el historial de la deuda para revisar fecha, monto, moneda y nota.
+Cuando pagas una deuda, tambien se registra un movimiento de gasto para que el balance de caja baje correctamente.
 
 ## Inversiones y patrimonio
 

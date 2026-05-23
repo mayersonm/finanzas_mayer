@@ -115,13 +115,23 @@ function pagarDeuda(chatId, payload) {
   if (paymentCurrency && paymentCurrency !== deuda.currency) {
     return sendMessage(chatId, `Esa deuda esta en *${deuda.currency}*. Registra el pago en la misma moneda.`, true);
   }
-  deuda.pagado = Math.min(deuda.total, deuda.pagado + monto);
+
+  const pendienteAntes = Math.max(deuda.total - deuda.pagado, 0);
+  const montoAplicado = Math.min(monto, pendienteAntes);
+  if (montoAplicado <= 0) {
+    return sendMessage(chatId, `La deuda *${deuda.nombre}* ya figura como pagada.`, true);
+  }
+
+  deuda.pagado = Math.min(deuda.total, deuda.pagado + montoAplicado);
   deuda.estado = deuda.pagado >= deuda.total ? 'pagada' : 'activa';
 
   const sheet = hojaDeudas_();
   sheet.getRange(row.rowNumber, 4, 1, 2).setValues([[deuda.pagado, deuda.vencimiento]]);
   sheet.getRange(row.rowNumber, 6).setValue(deuda.estado);
-  if (!guardarPagoDeudaD1(deuda, monto, Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd'), 'Telegram')) {
+
+  const paymentDate = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
+  registrarPagoDeudaComoTransaccion_(chatId, deuda, montoAplicado, paymentDate);
+  if (!guardarPagoDeudaD1(deuda, montoAplicado, paymentDate, 'Telegram', false)) {
     guardarDeudaD1(deuda);
   }
 
@@ -129,9 +139,34 @@ function pagarDeuda(chatId, payload) {
   return sendMessage(chatId,
     `*Pago registrado*\n\n` +
     `${capitalizar(deuda.nombre)}\n` +
-    `Pagado ahora: ${formatoMoneda_(monto, deuda.currency)}\n` +
+    `Pagado ahora: ${formatoMoneda_(montoAplicado, deuda.currency)}\n` +
     `Pendiente: *${formatoMoneda_(pendiente, deuda.currency)}*\n` +
     (deuda.estado === 'pagada' ? '\nDeuda completada.' : ''), true);
+}
+
+function registrarPagoDeudaComoTransaccion_(chatId, deuda, monto, fecha) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const txSheet = ss.getSheetByName('Transacciones') || crearHojaTransacciones();
+  asegurarColumnasPagoTransacciones_(txSheet);
+
+  const hora = Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm');
+  const desc = 'Pago deuda ' + capitalizar(deuda.nombre);
+  const cat = normalizarCat('deudas', desc, chatId);
+  const currency = normalizarMoneda_(deuda.currency || deuda.moneda) || 'PEN';
+
+  txSheet.appendRow([fecha, hora, 'gasto', desc, cat, monto, chatId, 'debito', '', '', currency]);
+  guardarTransaccionD1({
+    chatId: chatId,
+    fecha: fecha,
+    hora: hora,
+    tipo: 'gasto',
+    desc: desc,
+    cat: cat,
+    monto: monto,
+    currency: currency,
+    paymentMethod: 'debito',
+    source: 'telegram_debt_payment',
+  });
 }
 
 function cmdAlertasInteligentes(chatId) {
