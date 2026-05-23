@@ -2793,6 +2793,7 @@ async function netWorth(env, params) {
   const chatId = getChatId(env, params);
   const rateInfo = await exchangeRate(env);
   const rate = Number(rateInfo.rate || 3.85);
+  const monthKey = localDateKey(new Date()).slice(0, 7);
 
   const cashRows = await env.DB.prepare(`
     SELECT type, amount, currency
@@ -2811,6 +2812,7 @@ async function netWorth(env, params) {
   const investments = (await investmentsList(env, params)).investments || [];
   const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
+  const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, rate);
 
   const investmentValue = round(investments.reduce((total, item) => (
     total + currencyToPen(Number(item.currentValue || 0), item.currency || 'PEN', rate)
@@ -2822,6 +2824,9 @@ async function netWorth(env, params) {
   const debtPending = round(debts
     .filter((item) => item.estado !== 'pagada')
     .reduce((total, item) => total + currencyToPen(Number(item.pendiente || 0), item.currency || 'PEN', rate), 0));
+  const fixedPending = round(fixedExpenses
+    .filter((item) => item.estado === 'pendiente')
+    .reduce((total, item) => total + Number(item.montoPen ?? currencyToPen(Number(item.monto || 0), item.currency || 'PEN', rate)), 0));
 
   const assets = {
     cash,
@@ -2831,7 +2836,8 @@ async function netWorth(env, params) {
   };
   const liabilities = {
     debts: debtPending,
-    total: debtPending,
+    fixedExpenses: fixedPending,
+    total: round(debtPending + fixedPending),
   };
   const net = round(assets.total - liabilities.total);
   const debtToAssetsPct = assets.total > 0 ? round((liabilities.total / assets.total) * 100) : 0;
@@ -2859,6 +2865,7 @@ async function netWorth(env, params) {
       { label: 'Inversiones', value: assets.investments, type: 'asset' },
       { label: 'Metas', value: assets.goals, type: 'asset' },
       { label: 'Deudas', value: liabilities.debts, type: 'liability' },
+      { label: 'Fijos pendientes', value: liabilities.fixedExpenses, type: 'liability' },
     ],
     insights: netWorthInsights({ assets, liabilities, net, debtToAssetsPct, investmentSharePct, liquiditySharePct }),
     snapshots,
@@ -2942,12 +2949,16 @@ function currencyToPen(value, currency, rate) {
 function netWorthInsights({ assets, liabilities, net, debtToAssetsPct, investmentSharePct, liquiditySharePct }) {
   const insights = [];
   if (net < 0) {
-    insights.push({ level: 'danger', title: 'Patrimonio negativo', message: 'Tus pasivos superan tus activos. Prioriza reducir deuda o aumentar liquidez.' });
+    insights.push({ level: 'danger', title: 'Patrimonio negativo', message: 'Tus deudas y fijos pendientes superan tus activos. Prioriza reducir compromisos o aumentar liquidez.' });
   } else {
-    insights.push({ level: 'success', title: 'Patrimonio positivo', message: `Tu patrimonio neto es ${formatCurrency(net, 'PEN')}.` });
+    insights.push({ level: 'success', title: 'Patrimonio positivo', message: `Tu patrimonio neto, considerando fijos pendientes, es ${formatCurrency(net, 'PEN')}.` });
   }
   if (debtToAssetsPct >= 50) {
-    insights.push({ level: 'warning', title: 'Deuda alta frente a activos', message: `Tus deudas equivalen al ${debtToAssetsPct.toFixed(1)}% de tus activos.` });
+    insights.push({ level: 'warning', title: 'Pasivos altos frente a activos', message: `Tus deudas y fijos pendientes equivalen al ${debtToAssetsPct.toFixed(1)}% de tus activos.` });
+  }
+  if (liabilities.fixedExpenses > 0 && assets.cash > 0) {
+    const fixedCashPct = round((liabilities.fixedExpenses / assets.cash) * 100);
+    insights.push({ level: fixedCashPct >= 50 ? 'warning' : 'info', title: 'Fijos pendientes del mes', message: `Tienes ${formatCurrency(liabilities.fixedExpenses, 'PEN')} por cubrir, equivalente al ${fixedCashPct.toFixed(1)}% de tu efectivo.` });
   }
   if (investmentSharePct < 10 && assets.total > 0) {
     insights.push({ level: 'info', title: 'Poca exposicion a inversiones', message: `Las inversiones representan ${investmentSharePct.toFixed(1)}% de tus activos.` });

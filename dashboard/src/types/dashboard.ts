@@ -182,6 +182,7 @@ export interface NetWorthData {
   };
   liabilities: {
     debts: number;
+    fixedExpenses: number;
     total: number;
   };
   netWorth: number;
