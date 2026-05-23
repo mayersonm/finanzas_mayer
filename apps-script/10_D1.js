@@ -188,6 +188,27 @@ function eliminarFijoD1(chatId, nombre) {
   }
 }
 
+function marcarEstadoFijoD1_(chatId, fijo, estado, mes) {
+  try {
+    const fixedId = fijo.id || ['fixed', String(chatId), normalizarClaveFijoD1_(fijo.nombre)].join(':').slice(0, 180);
+    const monthKey = mes || Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
+    const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
+
+    const result = d1ApiRequest_('/api/fixed-expenses/' + encodeURIComponent(fixedId) + '/status', {
+      chat_id: String(chatId),
+      status: estado,
+      month_key: monthKey,
+      paid_date: fecha,
+      notes: 'Telegram',
+    });
+
+    return Boolean(result && result.ok);
+  } catch (err) {
+    Logger.log('Error marcarEstadoFijoD1: ' + err);
+    return false;
+  }
+}
+
 function guardarPresupuestoD1_(chatId, cat, limite) {
   try {
     const payload = {

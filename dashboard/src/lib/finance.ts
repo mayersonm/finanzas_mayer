@@ -8,7 +8,9 @@ export function percent(value: number, total: number): number {
 export function getRealExpenses(data: DashboardData): RealExpenses {
   if (data.gastosReales) return data.gastosReales;
 
-  const totalFijos = (data.fijos || []).reduce((total, item) => total + (item.montoPen ?? item.monto), 0);
+  const totalFijos = (data.fijos || [])
+    .filter((item) => fixedStatus(item) !== 'saltado')
+    .reduce((total, item) => total + (item.montoPen ?? item.monto), 0);
   const totalPresupuesto = data.presupuestos.reduce((total, item) => {
     return total + (item.gasto > 0 ? item.gasto : item.limite);
   }, 0);

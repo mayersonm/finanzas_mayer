@@ -99,7 +99,7 @@ function mostrarFijos(chatId) {
   const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
   const total = resumenTotalFijos_(fijos);
   const lineas = fijos.map(item => {
-    const estado = fijoYaRegistradoEnMes_(chatId, item, mes) ? '✅ pagado' : '⏳ pendiente';
+    const estado = fijoEstadoTexto_(chatId, item, mes);
     return `• ${capitalizar(item.nombre)} — ${formatoMoneda_(item.monto, item.currency)} _(${capitalizar(item.cat)}, ${estado})_`;
   }).join('\n');
 
@@ -124,14 +124,18 @@ function pagarFijo(chatId, nombre) {
       `✅ *${capitalizar(fijo.nombre)}* ya figura como pagado en ${mes}.\nNo dupliqué el gasto.`, true);
   }
 
-  registrarFijoComoTransaccion_(chatId, fijo, 'telegram_fixed_paid');
+  const marcadoD1 = marcarEstadoFijoD1_(chatId, fijo, 'pagado', mes);
+  if (!marcadoD1) {
+    CacheService.getScriptCache()
+      .put(`paid_fijo_${chatId}_${fijo.nombre.toLowerCase()}_${mes}`, '1', 60 * 60 * 24 * 30);
+  }
 
   return sendMessage(chatId,
     `✅ *Gasto fijo pagado*\n\n` +
     `📌 ${capitalizar(fijo.nombre)}\n` +
     `💵 ${formatoMoneda_(fijo.monto, fijo.currency)}\n` +
     `🏷️ ${capitalizar(fijo.cat)}\n\n` +
-    `_Quedó registrado como gasto de ${mes}._`, true);
+    `_Quedó marcado como pagado en ${mes}. No se creó una transacción para evitar duplicar el gasto._`, true);
 }
 
 function saltarFijo(chatId, nombre) {
@@ -143,8 +147,11 @@ function saltarFijo(chatId, nombre) {
   }
 
   const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
-  CacheService.getScriptCache()
-    .put(`skip_fijo_${chatId}_${fijo.nombre.toLowerCase()}_${mes}`, '1', 60 * 60 * 24 * 30);
+  const marcadoD1 = marcarEstadoFijoD1_(chatId, fijo, 'saltado', mes);
+  if (!marcadoD1) {
+    CacheService.getScriptCache()
+      .put(`skip_fijo_${chatId}_${fijo.nombre.toLowerCase()}_${mes}`, '1', 60 * 60 * 24 * 30);
+  }
 
   return sendMessage(chatId,
     `⏭️ *Gasto fijo saltado este mes*\n\n` +
@@ -197,7 +204,6 @@ function registrarGastosFijos() {
     if (fijoEstaSaltado_(fijo.chatId, fijo, mes)) return;
     if (fijoYaRegistradoEnMes_(fijo.chatId, fijo, mes)) return;
 
-    registrarFijoComoTransaccion_(fijo.chatId, fijo, 'telegram_fixed');
     if (!porChat[fijo.chatId]) porChat[fijo.chatId] = [];
     porChat[fijo.chatId].push(fijo);
   });
@@ -209,9 +215,10 @@ function registrarGastosFijos() {
       .join('\n');
 
     sendMessage(chatId,
-      `🔁 *Gastos fijos del mes registrados*\n\n${lineas}\n\n` +
+      `🔁 *Gastos fijos pendientes del mes*\n\n${lineas}\n\n` +
       `─────────────────\n` +
-      `💸 Total descontado: ${total}`, true);
+      `💸 Total pendiente: ${total}\n\n` +
+      `_Ahora los fijos no se registran automáticamente como transacciones. Usa \`pagar fijo nombre\` para marcarlos pagados._`, true);
   });
 }
 
@@ -237,11 +244,15 @@ function leerFijos_(chatId) {
   const d1 = leerDashboardD1_(chatId);
   if (d1 && d1.ok) {
     return (d1.fijos || []).map(item => ({
+      id: item.id || '',
       chatId: String(chatId),
       nombre: String(item.nombre || '').trim(),
       monto: Number(item.monto || 0),
       cat: normalizarCatBasica_(item.cat || 'servicios'),
       currency: normalizarMoneda_(item.currency) || 'PEN',
+      pagadoMes: item.pagadoMes === true,
+      saltadoMes: item.saltadoMes === true,
+      estado: String(item.estado || 'pendiente').toLowerCase(),
     })).filter(fijo => fijo.nombre && fijo.monto > 0);
   }
 
@@ -271,6 +282,10 @@ function buscarFijo_(chatId, nombre) {
 }
 
 function fijoYaRegistradoEnMes_(chatId, fijo, mes) {
+  if (fijo && (fijo.pagadoMes === true || String(fijo.estado || '').toLowerCase() === 'pagado')) return true;
+  const paidKey = `paid_fijo_${chatId}_${fijo.nombre.toLowerCase()}_${mes}`;
+  if (CacheService.getScriptCache().get(paidKey) === '1') return true;
+
   return obtenerTransacciones(chatId).some(r => {
     const fechaMes = Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM');
     return fechaMes === mes &&
@@ -280,8 +295,15 @@ function fijoYaRegistradoEnMes_(chatId, fijo, mes) {
 }
 
 function fijoEstaSaltado_(chatId, fijo, mes) {
+  if (fijo && (fijo.saltadoMes === true || String(fijo.estado || '').toLowerCase() === 'saltado')) return true;
   const key = `skip_fijo_${chatId}_${fijo.nombre.toLowerCase()}_${mes}`;
   return CacheService.getScriptCache().get(key) === '1';
+}
+
+function fijoEstadoTexto_(chatId, fijo, mes) {
+  if (fijoEstaSaltado_(chatId, fijo, mes)) return '⏭️ saltado';
+  if (fijoYaRegistradoEnMes_(chatId, fijo, mes)) return '✅ pagado';
+  return '⏳ pendiente';
 }
 
 function registrarFijoComoTransaccion_(chatId, fijo, source) {

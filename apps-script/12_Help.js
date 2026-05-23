@@ -96,7 +96,7 @@ function sendHelp(chatId) {
     '',
     '• ➕ `fijo alquiler 1500 servicios` - crear/actualizar en soles',
     '• ➕ `fijo netflix 15 USD entretenimiento` - crear/actualizar en dolares',
-    '• ✅ `pagar fijo alquiler`          - marcar pagado',
+    '• ✅ `pagar fijo alquiler`          - marcar pagado sin crear transaccion',
     '• ⏭️ `saltar fijo alquiler`         - omitir este mes',
     '• 📌 `fijos`                        - ver todos',
     '',
