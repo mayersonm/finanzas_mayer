@@ -1,5 +1,5 @@
 import { Badge, Text } from '@tremor/react';
-import { RiDeleteBinLine, RiEditLine } from '@remixicon/react';
+import { RiCheckboxCircleLine, RiDeleteBinLine, RiEditLine } from '@remixicon/react';
 import type { ReactNode } from 'react';
 import { fixedStatus } from '../../lib/finance';
 import { convertCurrency, formatMoney } from '../../lib/formatters';
@@ -11,11 +11,13 @@ export function FixedExpenseRow({
   exchangeRate = 3.85,
   onEdit,
   onDelete,
+  onMarkPaid,
 }: {
   item: FixedExpense;
   exchangeRate?: number;
   onEdit?: (item: FixedExpense) => void;
   onDelete?: (item: FixedExpense) => void;
+  onMarkPaid?: (item: FixedExpense) => void;
 }) {
   const status = fixedStatus(item);
   const currency = item.currency || 'PEN';
@@ -34,6 +36,11 @@ export function FixedExpenseRow({
         </div>
         <Badge color={fixedStatusColor(status)}>{status}</Badge>
         <div className="flex gap-1">
+          {status !== 'pagado' ? (
+            <ActionButton label="Marcar pagado" onClick={() => onMarkPaid?.(item)} tone="success">
+              <RiCheckboxCircleLine className="h-4 w-4" />
+            </ActionButton>
+          ) : null}
           <ActionButton label="Editar" onClick={() => onEdit?.(item)}>
             <RiEditLine className="h-4 w-4" />
           </ActionButton>
@@ -55,19 +62,21 @@ function ActionButton({
   label: string;
   children: ReactNode;
   onClick?: () => void;
-  tone?: 'neutral' | 'danger';
+  tone?: 'neutral' | 'danger' | 'success';
 }) {
+  const toneClass = tone === 'danger'
+    ? 'border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
+    : tone === 'success'
+      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+      : 'border-slate-700 bg-slate-900/70 text-slate-200 hover:bg-slate-800';
+
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
       onClick={onClick}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-tremor-default border transition ${
-        tone === 'danger'
-          ? 'border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
-          : 'border-slate-700 bg-slate-900/70 text-slate-200 hover:bg-slate-800'
-      }`}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-tremor-default border transition ${toneClass}`}
     >
       {children}
     </button>

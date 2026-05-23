@@ -109,6 +109,7 @@ export interface FixedExpense {
   pagadoMes?: boolean;
   saltadoMes?: boolean;
   estado?: 'pagado' | 'pendiente' | 'saltado' | string;
+  paidDate?: string;
 }
 
 export interface Debt {

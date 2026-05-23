@@ -38,6 +38,7 @@ export default {
     const receiptFileMatch = url.pathname.match(/^\/api\/receipts\/([^/]+)\/file$/);
     const transactionMatch = url.pathname.match(/^\/api\/transactions\/([^/]+)$/);
     const fixedExpenseMatch = url.pathname.match(/^\/api\/fixed-expenses\/([^/]+)$/);
+    const fixedExpenseStatusMatch = url.pathname.match(/^\/api\/fixed-expenses\/([^/]+)\/status$/);
     const debtMatch = url.pathname.match(/^\/api\/debts\/([^/]+)$/);
     const debtPaymentMatch = url.pathname.match(/^\/api\/debts\/([^/]+)\/payments$/);
     const investmentMatch = url.pathname.match(/^\/api\/investments\/([^/]+)$/);
@@ -255,6 +256,12 @@ export default {
       if (fixedExpenseMatch && request.method === 'DELETE') {
         await requireDashboardOrAdminAccess(request, env);
         return json(await deleteFixedExpense(env, decodeURIComponent(fixedExpenseMatch[1]), url.searchParams));
+      }
+
+      if (fixedExpenseStatusMatch && request.method === 'POST') {
+        await requireDashboardOrAdminAccess(request, env);
+        const payload = await request.json();
+        return json(await setFixedExpenseMonthStatus(env, decodeURIComponent(fixedExpenseStatusMatch[1]), payload, url.searchParams));
       }
 
       if (url.pathname === '/api/debts' && request.method === 'POST') {
@@ -2199,6 +2206,50 @@ async function deleteFixedExpense(env, id, params) {
   return { ok: true, deleted: true, id: cleanId };
 }
 
+async function setFixedExpenseMonthStatus(env, id, payload, params) {
+  const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  const cleanId = String(id || '').trim();
+  const monthKey = String(payload.month_key || payload.monthKey || localDateKey(new Date()).slice(0, 7)).trim();
+  const status = normalizeKey(payload.status || payload.estado || 'pagado');
+  const paidDate = normalizeDateOnly(payload.paid_date || payload.paidDate || payload.fecha || localDateKey(new Date())) || localDateKey(new Date());
+  const notes = String(payload.notes || payload.notas || '').trim().slice(0, 240);
+
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+  if (!cleanId) throw httpError(400, 'id requerido');
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) throw httpError(400, 'month_key invalido');
+  if (!['pagado', 'saltado', 'pendiente'].includes(status)) throw httpError(400, 'estado invalido');
+
+  const fixed = await env.DB.prepare('SELECT * FROM fixed_expenses WHERE id = ? AND chat_id = ? AND active = 1')
+    .bind(cleanId, chatId)
+    .first();
+  if (!fixed) throw httpError(404, 'Gasto fijo no encontrado');
+
+  if (status === 'pendiente') {
+    await env.DB.prepare('DELETE FROM fixed_expense_month_status WHERE fixed_id = ? AND chat_id = ? AND month_key = ?')
+      .bind(cleanId, chatId, monthKey)
+      .run();
+  } else {
+    const statusId = `fixed-status:${chatId}:${cleanId}:${monthKey}`.slice(0, 220);
+    await env.DB.prepare(`
+      INSERT INTO fixed_expense_month_status (id, fixed_id, chat_id, month_key, status, paid_date, notes, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(fixed_id, chat_id, month_key) DO UPDATE SET
+        status = excluded.status,
+        paid_date = excluded.paid_date,
+        notes = excluded.notes,
+        updated_at = CURRENT_TIMESTAMP
+    `).bind(statusId, cleanId, chatId, monthKey, status, paidDate, notes).run();
+  }
+
+  return {
+    ok: true,
+    id: cleanId,
+    monthKey,
+    status,
+    fixedExpense: fixedExpenseShape(fixed),
+  };
+}
+
 function fixedExpenseShape(row) {
   const currency = normalizeCurrency(row.currency || 'PEN');
   return {
@@ -2541,6 +2592,8 @@ async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85) {
       f.amount AS monto,
       f.category AS cat,
       f.currency AS currency,
+      s.status AS month_status,
+      s.paid_date AS paid_date,
       EXISTS (
         SELECT 1
         FROM transactions t
@@ -2550,14 +2603,21 @@ async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85) {
           AND lower(t.description) = lower(f.name)
       ) AS pagadoMes
     FROM fixed_expenses f
+    LEFT JOIN fixed_expense_month_status s
+      ON s.fixed_id = f.id
+      AND s.chat_id = f.chat_id
+      AND s.month_key = ?
     WHERE f.chat_id = ? AND f.active = 1
     ORDER BY f.name ASC
-  `).bind(monthKey, chatId).all();
+  `).bind(monthKey, monthKey, chatId).all();
 
   return (rows.results || [])
     .map((row) => {
       const currency = normalizeCurrency(row.currency || 'PEN');
       const monto = round(row.monto);
+      const monthStatus = normalizeKey(row.month_status || '');
+      const paid = Boolean(row.pagadoMes) || monthStatus === 'pagado';
+      const skipped = !paid && monthStatus === 'saltado';
       return {
         id: row.id,
         nombre: title(row.nombre),
@@ -2566,9 +2626,10 @@ async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85) {
         currency,
         cat: title(row.cat),
         color: COLORS[row.cat] || COLORS.otro,
-        pagadoMes: Boolean(row.pagadoMes),
-        saltadoMes: false,
-        estado: row.pagadoMes ? 'pagado' : 'pendiente',
+        pagadoMes: paid,
+        saltadoMes: skipped,
+        estado: paid ? 'pagado' : skipped ? 'saltado' : 'pendiente',
+        paidDate: row.paid_date || '',
       };
     })
     .sort((a, b) => b.montoPen - a.montoPen || a.nombre.localeCompare(b.nombre));
@@ -3034,10 +3095,12 @@ async function exchangeRate(env) {
 }
 
 function realExpenses(fixedExpenses, budgets, usdRate = 3.85) {
-  const totalFijos = fixedExpenses.reduce((total, item) => {
-    const value = item.montoPen ?? currencyToPen(Number(item.monto || 0), item.currency || 'PEN', usdRate);
-    return total + Number(value || 0);
-  }, 0);
+  const totalFijos = fixedExpenses
+    .filter((item) => item.estado !== 'saltado')
+    .reduce((total, item) => {
+      const value = item.montoPen ?? currencyToPen(Number(item.monto || 0), item.currency || 'PEN', usdRate);
+      return total + Number(value || 0);
+    }, 0);
   const totalPresupuesto = budgets.reduce((total, item) => {
     const spent = Number(item.gasto || 0);
     const limit = Number(item.limite || 0);

@@ -165,6 +165,33 @@ export function CommitmentsSection({
     }
   };
 
+  const markFixedPaid = async (item: FixedExpense) => {
+    if (!authToken || !item.id) return;
+    setSaving(true);
+    setFixedMessage('');
+    setFixedError('');
+
+    try {
+      const url = `${apiEndpoint(`fixed-expenses/${encodeURIComponent(item.id)}/status`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ chat_id: chatId, status: 'pagado' }),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo marcar el fijo como pagado');
+      setFixedMessage('Gasto fijo marcado como pagado. No se creó una transacción.');
+      onChanged?.();
+    } catch (err) {
+      setFixedError(err instanceof Error ? err.message : 'No se pudo marcar el fijo como pagado');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const startEdit = (item: Debt) => {
     setMessage('');
     setError('');
@@ -342,6 +369,7 @@ export function CommitmentsSection({
                 exchangeRate={exchangeRate}
                 onEdit={startEditFixed}
                 onDelete={deleteFixedExpense}
+                onMarkPaid={markFixedPaid}
               />
             ))
           ) : (
