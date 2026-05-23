@@ -188,6 +188,22 @@ function eliminarFijoD1(chatId, nombre) {
   }
 }
 
+function guardarPresupuestoD1_(chatId, cat, limite) {
+  try {
+    const payload = {
+      chat_id: String(chatId),
+      cat: cat,
+      limite: Number(limite || 0),
+    };
+
+    const result = d1ApiRequest_('/api/budgets', payload);
+    return Boolean(result && result.ok);
+  } catch (err) {
+    Logger.log('Error guardarPresupuestoD1: ' + err);
+    return false;
+  }
+}
+
 function normalizarClaveFijoD1_(value) {
   return String(value || '')
     .toLowerCase()
@@ -487,7 +503,7 @@ function categoriasPresupuestoD1_(cat, chatId) {
     const cleanCat = String(cat || 'otro');
     const scopeChatId = String(chatId || PropertiesService.getScriptProperties().getProperty('dashboard_chat_id') || '');
     const cache = CacheService.getScriptCache();
-    const cacheKey = 'budget_rule_' + Utilities.base64EncodeWebSafe([scopeChatId, cleanCat].join('|')).slice(0, 150);
+    const cacheKey = 'budget_rule_v2_' + Utilities.base64EncodeWebSafe([scopeChatId, cleanCat].join('|')).slice(0, 150);
     const cached = cache.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
@@ -614,6 +630,20 @@ function leerDashboardD1_(chatId) {
     return d1ApiGet_('/api/dashboard?chat_id=' + encodeURIComponent(String(chatId)));
   } catch (err) {
     Logger.log('Dashboard D1 omitido: ' + err);
+    return null;
+  }
+}
+
+function leerTransaccionesD1_(chatId, limit) {
+  try {
+    const cleanLimit = Math.max(1, Math.min(Number(limit || 500), 500));
+    const result = d1ApiGet_(
+      '/api/transactions?chat_id=' + encodeURIComponent(String(chatId)) +
+      '&limit=' + encodeURIComponent(String(cleanLimit))
+    );
+    return result && result.ok && result.transacciones ? result.transacciones : [];
+  } catch (err) {
+    Logger.log('Transacciones D1 omitidas: ' + err);
     return null;
   }
 }

@@ -48,7 +48,6 @@ function categoriasParaPresupuesto_(cat, chatId) {
   const key = normalizarCatBasica_(cat || 'otro');
   const remote = categoriasPresupuestoD1_(key, chatId);
   if (remote && remote.length) return remote;
-  if (key === 'comida') return ['comida', 'supermercado'];
   return [key || 'otro'];
 }
 

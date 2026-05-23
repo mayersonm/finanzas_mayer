@@ -261,6 +261,20 @@ function cmdInsightsIA(chatId) {
 }
 
 function contextoInsightsIA_(chatId) {
+  const d1 = leerDashboardD1_(chatId);
+  if (d1 && d1.ok) {
+    const deudas = (d1.deudas || []).filter(d => d.estado !== 'pagada' && Number(d.pendiente || 0) > 0);
+    const alertas = d1.alertas || [];
+
+    return {
+      movimientosMes: d1.movimientos || 0,
+      categoriasCount: (d1.categorias || []).length,
+      deudasActivas: deudas.length,
+      alertasCount: alertas.length,
+      resumen: resumenFinancieroParaIA_(chatId),
+    };
+  }
+
   const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
   const txs = obtenerTransacciones(chatId).filter(r =>
     Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes
@@ -279,6 +293,15 @@ function contextoInsightsIA_(chatId) {
 }
 
 function calcularAlertasInteligentes_(chatId) {
+  const d1 = leerDashboardD1_(chatId);
+  if (d1 && d1.ok) {
+    return (d1.alertas || []).map(a => ({
+      icon: a.level === 'danger' ? '[!]' : a.level === 'warning' ? '[!]' : '[i]',
+      titulo: a.title || 'Alerta',
+      mensaje: a.message || '',
+    }));
+  }
+
   const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
   const hoy = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
   const presupuestos = leerPresupuestosReales_(chatId);
@@ -317,6 +340,31 @@ function calcularAlertasInteligentes_(chatId) {
 }
 
 function resumenFinancieroParaIA_(chatId) {
+  const d1 = leerDashboardD1_(chatId);
+  if (d1 && d1.ok) {
+    const deudas = (d1.deudas || []).filter(d => d.estado !== 'pagada' && Number(d.pendiente || 0) > 0);
+    const deudaPen = deudas.filter(d => d.currency !== 'USD').reduce((a, d) => a + Number(d.pendiente || 0), 0);
+    const deudaUsd = deudas.filter(d => d.currency === 'USD').reduce((a, d) => a + Number(d.pendiente || 0), 0);
+    const topCats = (d1.categorias || [])
+      .slice(0, 5)
+      .map(item => `- ${item.cat}: S/ ${Number(item.monto || 0).toFixed(2)}`)
+      .join('\n');
+
+    return [
+      `Mes: ${d1.mesKey || ''}`,
+      `Ingresos: S/ ${Number(d1.ingresosMes || 0).toFixed(2)}`,
+      `Gastos: S/ ${Number(d1.gastosMes || 0).toFixed(2)}`,
+      `Balance: S/ ${Number(d1.balanceMes || 0).toFixed(2)}`,
+      `Deuda pendiente PEN: S/ ${deudaPen.toFixed(2)}`,
+      `Deuda pendiente USD: US$ ${deudaUsd.toFixed(2)}`,
+      'Top categorias:',
+      topCats || '- sin gastos',
+      'Alertas:',
+      (d1.alertas || []).map(a => `- ${a.title}: ${a.message}`).join('\n') || '- sin alertas',
+      'Fuente: D1',
+    ].join('\n');
+  }
+
   const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
   const txs = obtenerTransacciones(chatId).filter(r =>
     Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes
@@ -358,6 +406,21 @@ function hojaDeudas_() {
 }
 
 function leerDeudas_(chatId) {
+  const d1 = leerDashboardD1_(chatId);
+  if (d1 && d1.ok) {
+    return (d1.deudas || []).map(d => ({
+      chatId: String(chatId),
+      nombre: String(d.nombre || '').trim(),
+      total: Number(d.total || 0),
+      pagado: Number(d.pagado || 0),
+      pendiente: Number(d.pendiente || Math.max(Number(d.total || 0) - Number(d.pagado || 0), 0)),
+      vencimiento: d.vencimiento || '',
+      estado: String(d.estado || 'activa').toLowerCase(),
+      notas: String(d.notas || ''),
+      currency: normalizarMoneda_(d.currency) || 'PEN',
+    })).filter(d => d.nombre && d.total > 0);
+  }
+
   const sheet = hojaDeudas_();
   return sheet.getDataRange().getValues().slice(1)
     .filter(r => String(r[0]) === String(chatId))
