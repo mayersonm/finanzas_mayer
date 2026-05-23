@@ -643,6 +643,7 @@ regla presupuesto comida incluye supermercado
 ```
 
 Las deudas pueden registrarse en `PEN` o `USD`. El dashboard muestra el monto original y, para USD, una conversion referencial a soles usando la tasa USD/PEN que consulta y cachea el Worker.
+Cada pago de deuda tambien se registra como movimiento de gasto para que el balance de caja refleje el dinero que salio.
 
 Los gastos fijos tambien pueden registrarse en `PEN` o `USD`. Se guardan en Sheets como respaldo y se envian directo a D1 para que aparezcan en `Compromisos`. Desde el dashboard puedes crearlos, editarlos y eliminarlos.
 

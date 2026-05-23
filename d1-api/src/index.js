@@ -11,6 +11,7 @@ const COLORS = {
   educacion: '#f97316',
   salario: '#06b6d4',
   freelance: '#a855f7',
+  deudas: '#f43f5e',
   otro: '#6b7280',
 };
 
@@ -25,6 +26,7 @@ const VALID_CATEGORIES = [
   'educacion',
   'salario',
   'freelance',
+  'deudas',
   'inversion',
   'venta',
   'otro',
@@ -2382,6 +2384,18 @@ async function addDebtPayment(env, id, payload, params) {
     WHERE id = ? AND chat_id = ?
   `).bind(nextPaid, nextStatus, cleanId, chatId).run();
 
+  let transaction = null;
+  if (payload.record_transaction !== false && payload.recordTransaction !== false) {
+    transaction = await insertDebtPaymentTransaction(env, {
+      chatId,
+      paymentId,
+      debtName: existing.name,
+      amount: appliedAmount,
+      currency,
+      paymentDate,
+    });
+  }
+
   const debt = await env.DB.prepare('SELECT * FROM debts WHERE id = ? AND chat_id = ?')
     .bind(cleanId, chatId)
     .first();
@@ -2389,7 +2403,27 @@ async function addDebtPayment(env, id, payload, params) {
     .bind(paymentId)
     .first();
 
-  return { ok: true, debt: debtShape(debt), payment: debtPaymentShape(payment) };
+  return { ok: true, debt: debtShape(debt), payment: debtPaymentShape(payment), transaction: transaction ? txShape(transaction) : null };
+}
+
+async function insertDebtPaymentTransaction(env, { chatId, paymentId, debtName, amount, currency, paymentDate }) {
+  const now = new Date();
+  const tx = await normalizeTransaction(env, {
+    id: `tx:${paymentId}`,
+    chat_id: chatId,
+    fecha: paymentDate || localDateKey(now),
+    hora: localIso(now).slice(11, 16),
+    tipo: 'gasto',
+    desc: `Pago deuda ${title(debtName)}`,
+    cat: 'deudas',
+    monto: amount,
+    currency,
+    payment_method: 'debito',
+    source: 'debt_payment',
+  }, chatId);
+
+  await upsertTransaction(env, tx);
+  return tx;
 }
 
 async function lastMonths(env, chatId, now, usdRate = 3.85) {
@@ -3656,6 +3690,10 @@ function normalizeBaseCategory(value) {
     salario: 'salario',
     sueldo: 'salario',
     freelance: 'freelance',
+    deuda: 'deudas',
+    deudas: 'deudas',
+    prestamo: 'deudas',
+    prestamos: 'deudas',
     inversion: 'inversion',
     venta: 'venta',
     otro: 'otro',
