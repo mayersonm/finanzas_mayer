@@ -1,17 +1,17 @@
 
 function normalizarCat(cat, desc, chatId) {
   const remote = clasificarCategoriaD1_(cat, desc, chatId);
-  return remote || normalizarCatBasica_(cat);
+  return normalizarCatBasica_(remote || cat);
 }
 
 function normalizarCatBasica_(cat) {
   const rawCat = normalizarTextoClave_(cat);
 
   const direct = {
-    alimentacion: 'comida',
-    alimento: 'comida',
-    alimentos: 'comida',
-    comida: 'comida',
+    alimentacion: 'supermercado',
+    alimento: 'supermercado',
+    alimentos: 'supermercado',
+    comida: 'supermercado',
     mercado: 'supermercado',
     supermercado: 'supermercado',
     fruta: 'supermercado',

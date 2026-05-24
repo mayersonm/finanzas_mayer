@@ -124,7 +124,7 @@ export function OverviewSection({
           <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(monthIncome)}</Metric>
         </Card>
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <Text>Fijos</Text>
+          <Text>Fijos pendientes</Text>
           <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(realExpenses.totalFijos)}</Metric>
         </Card>
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">

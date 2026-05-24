@@ -107,6 +107,8 @@ export interface FixedExpense {
   color?: string;
   active?: boolean;
   pagadoMes?: boolean;
+  pagadoManual?: boolean;
+  pagadoPorTransaccion?: boolean;
   saltadoMes?: boolean;
   estado?: 'pagado' | 'pendiente' | 'saltado' | string;
   paidDate?: string;
@@ -213,6 +215,9 @@ export interface SmartInsight {
 
 export interface RealExpenses {
   totalFijos: number;
+  totalFijosPendientes?: number;
+  totalFijosPagados?: number;
+  totalFijosSaltados?: number;
   totalPresupuesto: number;
   total: number;
   regla?: string;

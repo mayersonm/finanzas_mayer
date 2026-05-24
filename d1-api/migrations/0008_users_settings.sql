@@ -62,8 +62,7 @@ CREATE TABLE IF NOT EXISTS category_definitions (
 );
 
 INSERT OR IGNORE INTO category_definitions (id, user_id, category, type, color, sort_order) VALUES
-  ('catdef:*:gasto:comida', '*', 'comida', 'gasto', '#22c55e', 10),
-  ('catdef:*:gasto:supermercado', '*', 'supermercado', 'gasto', '#84cc16', 20),
+  ('catdef:*:gasto:supermercado', '*', 'supermercado', 'gasto', '#84cc16', 10),
   ('catdef:*:gasto:transporte', '*', 'transporte', 'gasto', '#3b82f6', 30),
   ('catdef:*:gasto:servicios', '*', 'servicios', 'gasto', '#f59e0b', 40),
   ('catdef:*:gasto:entretenimiento', '*', 'entretenimiento', 'gasto', '#ec4899', 50),

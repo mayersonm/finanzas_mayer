@@ -90,16 +90,16 @@ INSERT OR IGNORE INTO category_rules (id, chat_id, keyword, category, priority, 
   ('cat:*:telefono', '*', 'telefono', 'servicios', 100, 'Servicio'),
   ('cat:*:celular', '*', 'celular', 'servicios', 100, 'Servicio'),
 
-  ('cat:*:alimentacion', '*', 'alimentacion', 'comida', 100, 'Comida'),
-  ('cat:*:almuerzo', '*', 'almuerzo', 'comida', 100, 'Comida'),
-  ('cat:*:cena', '*', 'cena', 'comida', 100, 'Comida'),
-  ('cat:*:desayuno', '*', 'desayuno', 'comida', 100, 'Comida'),
-  ('cat:*:cafe', '*', 'cafe', 'comida', 100, 'Comida'),
-  ('cat:*:restaurante', '*', 'restaurante', 'comida', 100, 'Comida'),
-  ('cat:*:restaurant', '*', 'restaurant', 'comida', 100, 'Comida'),
-  ('cat:*:pollo', '*', 'pollo', 'comida', 80, 'Comida'),
-  ('cat:*:leche', '*', 'leche', 'comida', 80, 'Comida'),
-  ('cat:*:yogurt', '*', 'yogurt', 'comida', 80, 'Comida'),
+  ('cat:*:alimentacion', '*', 'alimentacion', 'supermercado', 100, 'Supermercado'),
+  ('cat:*:almuerzo', '*', 'almuerzo', 'supermercado', 100, 'Supermercado'),
+  ('cat:*:cena', '*', 'cena', 'supermercado', 100, 'Supermercado'),
+  ('cat:*:desayuno', '*', 'desayuno', 'supermercado', 100, 'Supermercado'),
+  ('cat:*:cafe', '*', 'cafe', 'supermercado', 100, 'Supermercado'),
+  ('cat:*:restaurante', '*', 'restaurante', 'supermercado', 100, 'Supermercado'),
+  ('cat:*:restaurant', '*', 'restaurant', 'supermercado', 100, 'Supermercado'),
+  ('cat:*:pollo', '*', 'pollo', 'supermercado', 80, 'Supermercado'),
+  ('cat:*:leche', '*', 'leche', 'supermercado', 80, 'Supermercado'),
+  ('cat:*:yogurt', '*', 'yogurt', 'supermercado', 80, 'Supermercado'),
 
   ('cat:*:farmacia', '*', 'farmacia', 'salud', 100, 'Salud'),
   ('cat:*:medicina', '*', 'medicina', 'salud', 100, 'Salud'),
@@ -117,6 +117,3 @@ INSERT OR IGNORE INTO category_rules (id, chat_id, keyword, category, priority, 
   ('cat:*:libro', '*', 'libro', 'educacion', 100, 'Educacion'),
   ('cat:*:universidad', '*', 'universidad', 'educacion', 100, 'Educacion'),
   ('cat:*:clase', '*', 'clase', 'educacion', 100, 'Educacion');
-
-INSERT OR IGNORE INTO budget_category_rules (id, chat_id, budget_category, included_category, notes) VALUES
-  ('budget:*:comida:supermercado', '*', 'comida', 'supermercado', 'Todo supermercado cuenta dentro del presupuesto de comida');

@@ -9,7 +9,10 @@ export function getRealExpenses(data: DashboardData): RealExpenses {
   if (data.gastosReales) return data.gastosReales;
 
   const totalFijos = (data.fijos || [])
-    .filter((item) => fixedStatus(item) !== 'saltado')
+    .filter((item) => fixedStatus(item) === 'pendiente')
+    .reduce((total, item) => total + (item.montoPen ?? item.monto), 0);
+  const totalFijosPagados = (data.fijos || [])
+    .filter((item) => fixedStatus(item) === 'pagado')
     .reduce((total, item) => total + (item.montoPen ?? item.monto), 0);
   const totalPresupuesto = data.presupuestos.reduce((total, item) => {
     return total + (item.gasto > 0 ? item.gasto : item.limite);
@@ -17,6 +20,8 @@ export function getRealExpenses(data: DashboardData): RealExpenses {
 
   return {
     totalFijos,
+    totalFijosPendientes: totalFijos,
+    totalFijosPagados,
     totalPresupuesto,
     total: totalFijos + totalPresupuesto,
   };

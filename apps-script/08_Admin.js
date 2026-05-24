@@ -69,7 +69,7 @@ function probarWorkerReal() {
     update_id: Date.now(),
     message: {
       chat: { id: 'TU_CHAT_ID_REAL' },
-      text: 'gasto 1 comida prueba worker'
+      text: 'gasto 1 supermercado prueba worker'
     }
   };
 

@@ -32,13 +32,14 @@ function cmdGastosReales(chatId) {
 
     return sendMessage(chatId,
       `🧮 *Gastos reales/comprometidos - ${d1.mesKey || mes}*\n\n` +
-      `🔁 Fijos: *S/ ${Number(realesD1.totalFijos || 0).toFixed(2)}*\n` +
+      `🔁 Fijos pendientes: *S/ ${Number(realesD1.totalFijos || 0).toFixed(2)}*\n` +
+      `✅ Fijos pagados: *S/ ${Number(realesD1.totalFijosPagados || 0).toFixed(2)}*\n` +
       `🎯 Presupuesto considerado: *S/ ${Number(realesD1.totalPresupuesto || 0).toFixed(2)}*\n` +
       `─────────────────\n` +
       `📌 Total estimado: *S/ ${Number(realesD1.total || 0).toFixed(2)}*\n\n` +
       `*Fijos*\n${lineasFijosD1}\n\n` +
       `*Presupuestos*\n${lineasPresupuestoD1}\n\n` +
-      `_Fuente: D1. Regla: si una categoria no tiene gasto aun, cuenta el limite completo; si ya tiene gasto, cuenta lo gastado._`,
+      `_Fuente: D1. Regla: los fijos pagados se restan de caja sin crear movimiento; los pendientes quedan como comprometidos._`,
       true
     );
   }

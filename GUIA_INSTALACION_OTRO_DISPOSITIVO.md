@@ -634,7 +634,7 @@ Envia estos comandos al bot:
 ayuda
 credito configurar corte 25 pago 10
 gasto 10 supermercado prueba debito
-gasto 12 USD comida cafe
+gasto 12 USD supermercado cafe
 gasto 120 supermercado metro credito
 fijo alquiler 1500 servicios
 fijo netflix 15 USD entretenimiento
@@ -650,7 +650,7 @@ alertas
 insights
 reglas
 regla kfc entretenimiento
-regla presupuesto comida incluye supermercado
+regla presupuesto entretenimiento incluye otro
 ```
 
 Las deudas pueden registrarse en `PEN` o `USD`. El dashboard muestra el monto original y, para USD, una conversion referencial a soles usando la tasa USD/PEN que consulta y cachea el Worker.
@@ -875,7 +875,7 @@ Luego prueba:
 ```text
 reglas
 regla kfc entretenimiento
-regla presupuesto comida incluye supermercado
+regla presupuesto entretenimiento incluye otro
 ```
 
 ## 19. Orden recomendado cada vez que hagas cambios
