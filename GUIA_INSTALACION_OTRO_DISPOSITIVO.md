@@ -695,6 +695,8 @@ Recibos adjuntos
 
 Pulsa `Actualizar` para volver a leer D1. Pulsa `Sync manual` solo cuando hayas corregido o agregado algo manualmente en Google Sheets y quieras importarlo a D1.
 
+En movimientos, Google Sheets manda. Si Sheets tiene 24 movimientos, D1 debe quedar con 24 movimientos para ese `chat_id`. El sync manual tambien elimina de D1 cualquier movimiento extra que no exista en Sheets.
+
 El Worker no debe traer Sheets automaticamente cada 15 minutos. Ese cron queda desactivado para que la sincronizacion la controles desde el dashboard.
 
 Si estas en local, el dashboard tambien usa la data real siempre que `.env.local` apunte a:

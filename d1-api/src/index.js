@@ -1839,11 +1839,26 @@ async function syncFromGas(env, params) {
   if (!txData.ok) throw httpError(502, txData.error || 'Error leyendo txs desde GAS');
   if (!dashData.ok) throw httpError(502, dashData.error || 'Error leyendo dashboard desde GAS');
 
+  const gasTransactions = txData.transacciones;
+  if (!Array.isArray(gasTransactions)) {
+    throw httpError(502, 'GAS no devolvio una lista valida de transacciones');
+  }
+
+  const gasTotal = Number(txData.total || gasTransactions.length);
+  const mirrorTransactions = Number.isFinite(gasTotal) && gasTotal <= gasTransactions.length;
+  const sheetTransactionIds = new Set();
+
   let txCount = 0;
-  for (const raw of txData.transacciones || []) {
-    await upsertTransaction(env, await normalizeTransaction(env, raw, chatId));
+  for (const raw of gasTransactions) {
+    const tx = await normalizeTransaction(env, raw, chatId);
+    await upsertTransaction(env, tx);
+    sheetTransactionIds.add(tx.id);
     txCount++;
   }
+
+  const removedTransactions = mirrorTransactions
+    ? await pruneTransactionsNotInSheets(env, chatId, sheetTransactionIds)
+    : 0;
 
   let budgetCount = 0;
   for (const raw of dashData.presupuestos || []) {
@@ -1871,13 +1886,26 @@ async function syncFromGas(env, params) {
   await env.DB.prepare(`
     INSERT INTO sync_runs (id, source, status, details)
     VALUES (?, 'gas', 'ok', ?)
-  `).bind(runId, JSON.stringify({ chatId, txCount, budgetCount, goalCount, fixedCount, debtCount, limit })).run();
+  `).bind(runId, JSON.stringify({
+    chatId,
+    txCount,
+    removedTransactions,
+    mirrorTransactions,
+    gasTotal,
+    budgetCount,
+    goalCount,
+    fixedCount,
+    debtCount,
+    limit,
+  })).run();
 
   return {
     ok: true,
     source: 'gas',
     chatId,
     transactions: txCount,
+    removedTransactions,
+    mirrorTransactions,
     budgets: budgetCount,
     goals: goalCount,
     fixedExpenses: fixedCount,
@@ -2053,6 +2081,30 @@ async function upsertBudget(env, chatId, raw) {
     cat: category,
     limite: round(limit),
   };
+}
+
+async function pruneTransactionsNotInSheets(env, chatId, sheetTransactionIds) {
+  const keepIds = [...sheetTransactionIds].filter(Boolean);
+  const keepPlaceholders = keepIds.map(() => '?').join(', ');
+  const rows = keepIds.length
+    ? await env.DB.prepare(`
+      SELECT id
+      FROM transactions
+      WHERE chat_id = ?
+        AND id NOT IN (${keepPlaceholders})
+    `).bind(chatId, ...keepIds).all()
+    : await env.DB.prepare(`
+      SELECT id
+      FROM transactions
+      WHERE chat_id = ?
+    `).bind(chatId).all();
+
+  const idsToRemove = (rows.results || []).map((row) => row.id).filter(Boolean);
+  for (const id of idsToRemove) {
+    await deleteTransaction(env, { id, chatId, deleteFromGas: false });
+  }
+
+  return idsToRemove.length;
 }
 
 async function upsertGoal(env, chatId, raw) {
