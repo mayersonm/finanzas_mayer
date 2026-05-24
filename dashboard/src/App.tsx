@@ -120,6 +120,7 @@ export default function App() {
         ok?: boolean;
         error?: string;
         transactions?: number;
+        skippedTransactions?: number;
         budgets?: number;
         fixedExpenses?: number;
         debts?: number;
@@ -130,7 +131,8 @@ export default function App() {
         throw new Error(result.error || 'No se pudo sincronizar Sheets con D1');
       }
 
-      setSyncMessage(`Sheets a D1: ${result.transactions || 0} movimientos, ${result.budgets || 0} presupuestos, ${result.fixedExpenses || 0} fijos, ${result.debts || 0} deudas y ${result.goals || 0} metas revisadas.`);
+      const skippedText = result.skippedTransactions ? ` (${result.skippedTransactions} ignorados por monto cero/negativo o eliminados)` : '';
+      setSyncMessage(`Sheets a D1: ${result.transactions || 0} movimientos${skippedText}, ${result.budgets || 0} presupuestos, ${result.fixedExpenses || 0} fijos, ${result.debts || 0} deudas y ${result.goals || 0} metas revisadas.`);
       await fetchData(token);
     } catch (error) {
       console.error('Sync error:', error);

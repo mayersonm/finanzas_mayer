@@ -271,6 +271,8 @@ function dashReadTransactions_(params) {
       if (!fecha) return null;
 
       const desc = String(row[3] || 'Sin descripcion');
+      const monto = parseFloat(row[5]) || 0;
+      if (monto <= 0) return null;
 
       return {
         id: String(index + 2),
@@ -279,7 +281,7 @@ function dashReadTransactions_(params) {
         tipo: String(row[2] || '').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto',
         desc: desc,
         cat: normalizarCat(row[4] || 'otro', desc, chatId),
-        monto: dashRound_(Math.abs(parseFloat(row[5]) || 0)),
+        monto: dashRound_(monto),
         currency: normalizarMoneda_(row[10]) || 'PEN',
         paymentMethod: dashPaymentMethod_(row[7]),
         paymentDueDate: dashPlainDate_(row[8]),
