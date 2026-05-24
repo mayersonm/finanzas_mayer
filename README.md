@@ -58,7 +58,7 @@ La pestana `Config` guarda las preferencias en D1 y concentra:
 - estado operativo de Worker, D1, R2 y Apps Script;
 - administrador de categorias, reglas IA y reglas de presupuesto.
 
-El boton `Actualizar` solo vuelve a leer D1. El boton `Sync manual` importa el respaldo de Google Sheets hacia D1 y muestra cuantos movimientos, presupuestos, fijos, deudas y metas se revisaron. No existe sincronizacion D1 -> Sheets: si algo esta solo en D1, es normal porque D1 es la fuente principal y Sheets queda como respaldo.
+El boton `Actualizar` solo vuelve a leer D1. El boton `Sync manual` importa todo el respaldo de Google Sheets hacia D1 y muestra cuantos movimientos, presupuestos, fijos, deudas y metas se revisaron. No existe sincronizacion D1 -> Sheets: si algo esta solo en D1, es normal porque D1 es la fuente principal y Sheets queda como respaldo.
 
 La sincronizacion automatica por cron del Worker esta desactivada para evitar que el respaldo de Sheets reimporte filas antiguas sin control. Si algun dia se necesita reactivarla, configura el secret `ENABLE_AUTO_GAS_SYNC=true` y vuelve a declarar el cron en `d1-api/wrangler.toml`.
 
