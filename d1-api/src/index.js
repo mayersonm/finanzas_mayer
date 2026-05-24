@@ -1377,8 +1377,6 @@ async function deleteTransaction(env, { id, chatId, deleteFromGas = false }) {
     .bind(cleanId)
     .run();
 
-  await rememberIgnoredTransaction(env, tx);
-
   await env.DB.prepare('DELETE FROM transactions WHERE id = ? AND chat_id = ?')
     .bind(cleanId, cleanChatId)
     .run();
@@ -1842,19 +1840,8 @@ async function syncFromGas(env, params) {
   if (!dashData.ok) throw httpError(502, dashData.error || 'Error leyendo dashboard desde GAS');
 
   let txCount = 0;
-  let skippedTransactions = 0;
-  const ignoredTransactions = await loadIgnoredTransactionFingerprints(env);
   for (const raw of txData.transacciones || []) {
-    if (parseAmount(raw.monto ?? raw.amount ?? 0) <= 0) {
-      skippedTransactions++;
-      continue;
-    }
-    const tx = await normalizeTransaction(env, raw, chatId);
-    if (ignoredTransactions.has(transactionFingerprint(tx))) {
-      skippedTransactions++;
-      continue;
-    }
-    await upsertTransaction(env, tx);
+    await upsertTransaction(env, await normalizeTransaction(env, raw, chatId));
     txCount++;
   }
 
@@ -1884,14 +1871,13 @@ async function syncFromGas(env, params) {
   await env.DB.prepare(`
     INSERT INTO sync_runs (id, source, status, details)
     VALUES (?, 'gas', 'ok', ?)
-  `).bind(runId, JSON.stringify({ chatId, txCount, skippedTransactions, budgetCount, goalCount, fixedCount, debtCount, limit })).run();
+  `).bind(runId, JSON.stringify({ chatId, txCount, budgetCount, goalCount, fixedCount, debtCount, limit })).run();
 
   return {
     ok: true,
     source: 'gas',
     chatId,
     transactions: txCount,
-    skippedTransactions,
     budgets: budgetCount,
     goals: goalCount,
     fixedExpenses: fixedCount,
@@ -2006,43 +1992,6 @@ async function upsertTransaction(env, tx) {
   ).run();
 }
 
-async function loadIgnoredTransactionFingerprints(env) {
-  const raw = await getAppSetting(env, 'sync_ignored_transaction_fingerprints');
-  if (!raw) return new Set();
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.map((item) => String(item || '').trim()).filter(Boolean));
-  } catch {
-    const fallback = String(raw || '').trim().replace(/^\[/, '').replace(/\]$/, '');
-    return new Set(fallback.split(',').map((item) => item.trim()).filter(Boolean));
-  }
-}
-
-async function rememberIgnoredTransaction(env, tx) {
-  const fingerprint = transactionFingerprint(tx);
-  if (!fingerprint) return;
-
-  const ignored = await loadIgnoredTransactionFingerprints(env);
-  ignored.add(fingerprint);
-  const next = Array.from(ignored).slice(-1000);
-  await setAppSetting(env, 'sync_ignored_transaction_fingerprints', JSON.stringify(next));
-}
-
-function transactionFingerprint(tx) {
-  const chatId = String(tx.chat_id || tx.chatId || '').trim();
-  const fecha = String(tx.fecha || tx.tx_date || '').slice(0, 10);
-  const hora = String(tx.hora || tx.tx_time || '00:00').slice(0, 5);
-  const tipo = String(tx.tipo || tx.type || '').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
-  const desc = normalizeKey(tx.desc || tx.description || 'Sin descripcion');
-  const amount = round(parseAmount(tx.monto ?? tx.amount ?? 0));
-  const currency = normalizeCurrency(tx.currency || tx.moneda);
-
-  if (!chatId || !fecha || amount <= 0) return '';
-  return [chatId, fecha, hora, tipo, desc, amount, currency].join('|');
-}
-
 async function mergeDuplicateTransaction(env, tx) {
   const duplicate = await env.DB.prepare(`
     SELECT id, source
@@ -2053,7 +2002,6 @@ async function mergeDuplicateTransaction(env, tx) {
       AND tx_time = ?
       AND type = ?
       AND lower(trim(description)) = lower(trim(?))
-      AND category = ?
       AND ABS(amount - ?) < 0.005
     ORDER BY
       CASE WHEN source <> 'gas' THEN 0 ELSE 1 END,
@@ -2066,7 +2014,6 @@ async function mergeDuplicateTransaction(env, tx) {
     tx.hora,
     tx.tipo,
     tx.desc,
-    tx.cat,
     tx.monto,
   ).first();
 
@@ -3193,7 +3140,7 @@ async function normalizeTransaction(env, raw, chatId) {
   const tipo = String(raw.tipo || raw.type || '').toLowerCase() === 'ingreso' ? 'ingreso' : 'gasto';
   const desc = String(raw.desc || raw.description || 'Sin descripcion').trim();
   const cat = (await classifyCategory(env, chatId, raw.cat || raw.category || 'otro', desc)).category;
-  const monto = parseAmount(raw.monto ?? raw.amount ?? 0);
+  const monto = Math.abs(parseAmount(raw.monto ?? raw.amount ?? 0));
   const currency = normalizeCurrency(raw.currency || raw.moneda);
   const rawId = String(raw.id || '').trim();
   const paymentMethod = normalizePaymentMethod(raw.payment_method || raw.paymentMethod || raw.metodo_pago || raw.metodoPago) || 'debito';
