@@ -71,7 +71,7 @@ export function AppHeader({
           </HeaderButton>
           {isConfigured ? (
             <HeaderButton icon={RiDatabase2Line} onClick={onSyncSheets} disabled={loading || syncing} tone="primary">
-              {syncing ? 'Sincronizando' : 'Sheets a D1'}
+              {syncing ? 'Sincronizando' : 'Sync manual'}
             </HeaderButton>
           ) : null}
           <HeaderButton icon={theme === 'dark' ? RiSunLine : RiMoonLine} onClick={onToggleTheme}>

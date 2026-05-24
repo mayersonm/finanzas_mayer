@@ -521,7 +521,7 @@ Desde el dashboard puedes hacerlo sin comando:
 
 ```text
 Entra al dashboard
-Pulsa Sheets a D1
+Pulsa Sync manual
 Revisa el mensaje con movimientos, presupuestos, fijos, deudas y metas revisadas
 Pulsa Actualizar si solo quieres volver a leer D1
 ```
@@ -693,7 +693,9 @@ Categorias y presupuestos
 Recibos adjuntos
 ```
 
-Pulsa `Actualizar` para volver a leer D1. Pulsa `Sheets a D1` solo cuando hayas corregido o agregado algo manualmente en Google Sheets y quieras importarlo a D1.
+Pulsa `Actualizar` para volver a leer D1. Pulsa `Sync manual` solo cuando hayas corregido o agregado algo manualmente en Google Sheets y quieras importarlo a D1.
+
+El Worker no debe traer Sheets automaticamente cada 15 minutos. Ese cron queda desactivado para que la sincronizacion la controles desde el dashboard.
 
 Si estas en local, el dashboard tambien usa la data real siempre que `.env.local` apunte a:
 

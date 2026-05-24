@@ -333,6 +333,9 @@ export default {
   },
 
   async scheduled(_event, env, ctx) {
+    if (String(env.ENABLE_AUTO_GAS_SYNC || '').toLowerCase() !== 'true') {
+      return;
+    }
     const params = new URLSearchParams({ limit: '500' });
     ctx.waitUntil(syncFromGas(env, params));
   },
