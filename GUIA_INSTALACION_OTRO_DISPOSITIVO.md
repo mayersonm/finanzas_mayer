@@ -515,6 +515,17 @@ cd ..
 
 El bot registra en Google Sheets y tambien envia datos a D1 si `d1_api_url` y `d1_admin_key` estan bien configurados.
 
+D1 es la fuente principal. Google Sheets queda como respaldo y como entrada para corregir manualidades antiguas. Por eso la sincronizacion normal va en una sola direccion: `Sheets -> D1`. Si ves datos en D1 que no estan en Sheets, no estan pendientes por sincronizar; son datos nuevos que ya viven en la base principal.
+
+Desde el dashboard puedes hacerlo sin comando:
+
+```text
+Entra al dashboard
+Pulsa Sheets a D1
+Revisa el mensaje con movimientos, presupuestos, fijos, deudas y metas revisadas
+Pulsa Actualizar si solo quieres volver a leer D1
+```
+
 Para forzar sincronizacion desde el Worker:
 
 ```powershell
@@ -522,7 +533,7 @@ $headers = @{ "x-admin-key" = "TU_D1_ADMIN_KEY" }
 Invoke-WebRequest -UseBasicParsing -Method POST -Headers $headers -Uri "https://TU_WORKER.TU_SUBDOMINIO.workers.dev/api/sync/gas" | Select-Object -ExpandProperty Content
 ```
 
-Usa esto cuando quieras que el dashboard local tenga la data actualizada desde Google Sheets.
+Usa esto cuando quieras importar manualidades de Google Sheets hacia D1. Para el uso diario, el dashboard lee D1 directamente.
 
 ## 13. Levantar el dashboard local
 
@@ -682,7 +693,7 @@ Categorias y presupuestos
 Recibos adjuntos
 ```
 
-Pulsa `Actualizar` para traer datos recientes.
+Pulsa `Actualizar` para volver a leer D1. Pulsa `Sheets a D1` solo cuando hayas corregido o agregado algo manualmente en Google Sheets y quieras importarlo a D1.
 
 Si estas en local, el dashboard tambien usa la data real siempre que `.env.local` apunte a:
 
