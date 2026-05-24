@@ -14,13 +14,13 @@ export const MOCK_DASHBOARD: DashboardData = {
   mesKey: '2026-05',
   transacciones: [
     { fecha: '2026-05-08', hora: '09:00', tipo: 'ingreso', desc: 'Salario', cat: 'salario', monto: 6500, currency: 'PEN' },
-    { fecha: '2026-05-08', hora: '13:20', tipo: 'gasto', desc: 'Almuerzo', cat: 'comida', monto: 60, currency: 'PEN', paymentMethod: 'debito' },
+    { fecha: '2026-05-08', hora: '13:20', tipo: 'gasto', desc: 'Almuerzo', cat: 'supermercado', monto: 60, currency: 'PEN', paymentMethod: 'debito' },
     { fecha: '2026-05-07', hora: '18:30', tipo: 'gasto', desc: 'Metro', cat: 'supermercado', monto: 135, currency: 'PEN', paymentMethod: 'credito', paymentDueDate: '2026-06-10' },
     { fecha: '2026-05-06', hora: '20:10', tipo: 'gasto', desc: 'Internet', cat: 'servicios', monto: 120, currency: 'PEN', paymentMethod: 'debito' },
     { fecha: '2026-05-04', hora: '21:00', tipo: 'gasto', desc: 'Netflix', cat: 'entretenimiento', monto: 45, currency: 'USD' },
   ],
   categorias: [
-    { cat: 'Comida', monto: 420, color: '#22c55e' },
+    { cat: 'Supermercado', monto: 420, color: '#84cc16' },
     { cat: 'Servicios', monto: 320, color: '#f59e0b' },
     { cat: 'Transporte', monto: 210, color: '#3b82f6' },
     { cat: 'Entretenimiento', monto: 120, color: '#ec4899' },
@@ -35,7 +35,7 @@ export const MOCK_DASHBOARD: DashboardData = {
     { mes: 'May', key: '2026-05', ingresos: 6500, gastos: 1150 },
   ],
   presupuestos: [
-    { cat: 'Comida', limite: 500, gasto: 420 },
+    { cat: 'Supermercado', limite: 500, gasto: 420 },
     { cat: 'Servicios', limite: 350, gasto: 320 },
     { cat: 'Transporte', limite: 300, gasto: 210 },
   ],
@@ -69,7 +69,7 @@ export const MOCK_DASHBOARD: DashboardData = {
     { level: 'info', title: 'Gasto fijo pendiente: Alquiler', message: 'Falta marcar S/ 1500.00 como pagado o saltado.' },
   ],
   insights: [
-    { title: 'Mayor fuga: Comida', message: 'Representa 37% del gasto del mes.' },
+    { title: 'Mayor fuga: Supermercado', message: 'Representa 37% del gasto del mes.' },
     { title: 'Deuda pendiente', message: 'Tienes S/ 2400.00 pendiente. Prioriza lo que vence primero.' },
   ],
   source: 'demo',

@@ -1,7 +1,6 @@
 const DEFAULT_TZ = 'America/Lima';
 
 const COLORS = {
-  comida: '#22c55e',
   supermercado: '#84cc16',
   transporte: '#3b82f6',
   servicios: '#f59e0b',
@@ -16,7 +15,6 @@ const COLORS = {
 };
 
 const VALID_CATEGORIES = [
-  'comida',
   'supermercado',
   'transporte',
   'servicios',
@@ -788,6 +786,7 @@ async function dashboard(env, params) {
   const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
   const emailConfig = await emailConfigFromGas(env);
+  const fixedSummary = fixedExpensesSummary(fixedExpenses, usdRate);
   const deudaPendiente = round(debts
     .filter((item) => item.estado !== 'pagada')
     .reduce((total, item) => total + currencyToPen(Number(item.pendiente || 0), item.currency || 'PEN', usdRate), 0));
@@ -796,12 +795,16 @@ async function dashboard(env, params) {
   const gastos = Number(totals?.gastos || 0);
   const ingresosMes = Number(monthTotals?.ingresosMes || 0);
   const gastosMes = Number(monthTotals?.gastosMes || 0);
+  const gastosConFijosPagados = round(gastos + fixedSummary.paid);
+  const gastosMesConFijosPagados = round(gastosMes + fixedSummary.paid);
+  const balanceCaja = round(ingresos - gastosConFijosPagados);
+  const balanceMesCaja = round(ingresosMes - gastosMesConFijosPagados);
 
   const alerts = smartAlerts({
     now,
     monthKey,
     ingresosMes,
-    gastosMes,
+    gastosMes: gastosMesConFijosPagados,
     budgets,
     fixedExpenses,
     debts,
@@ -809,8 +812,8 @@ async function dashboard(env, params) {
   });
   const insights = smartInsights({
     ingresosMes,
-    gastosMes,
-    balanceMes: ingresosMes - gastosMes,
+    gastosMes: gastosMesConFijosPagados,
+    balanceMes: balanceMesCaja,
     categories,
     budgets,
     debts,
@@ -819,14 +822,14 @@ async function dashboard(env, params) {
 
   return {
     ok: true,
-    balance: round(ingresos - gastos),
-    balanceGeneralNeto: round(ingresos - gastos - deudaPendiente),
-    balanceNeto: round(ingresos - gastos - deudaPendiente),
+    balance: balanceCaja,
+    balanceGeneralNeto: round(balanceCaja - deudaPendiente - fixedSummary.pending),
+    balanceNeto: round(balanceCaja - deudaPendiente - fixedSummary.pending),
     ingresos: round(ingresos),
-    gastos: round(gastos),
+    gastos: gastosConFijosPagados,
     ingresosMes: round(ingresosMes),
-    gastosMes: round(gastosMes),
-    balanceMes: round(ingresosMes - gastosMes),
+    gastosMes: gastosMesConFijosPagados,
+    balanceMes: balanceMesCaja,
     movimientos: Number(totals?.movimientos || 0),
     mes: monthName,
     mesKey: monthKey,
@@ -838,6 +841,8 @@ async function dashboard(env, params) {
     fijos: fixedExpenses,
     deudas: debts,
     deudaPendiente,
+    fijosPendientes: fixedSummary.pending,
+    fijosPagadosMes: fixedSummary.paid,
     gastosReales: realExpenses(fixedExpenses, budgets, usdRate),
     metas: goals,
     alertas: alerts,
@@ -2672,7 +2677,9 @@ async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85) {
       const currency = normalizeCurrency(row.currency || 'PEN');
       const monto = round(row.monto);
       const monthStatus = normalizeKey(row.month_status || '');
-      const paid = Boolean(row.pagadoMes) || monthStatus === 'pagado';
+      const paidByTransaction = Boolean(row.pagadoMes);
+      const paidByStatus = monthStatus === 'pagado';
+      const paid = paidByTransaction || paidByStatus;
       const skipped = !paid && monthStatus === 'saltado';
       return {
         id: row.id,
@@ -2683,6 +2690,8 @@ async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85) {
         cat: title(row.cat),
         color: COLORS[row.cat] || COLORS.otro,
         pagadoMes: paid,
+        pagadoManual: paidByStatus,
+        pagadoPorTransaccion: paidByTransaction,
         saltadoMes: skipped,
         estado: paid ? 'pagado' : skipped ? 'saltado' : 'pendiente',
         paidDate: row.paid_date || '',
@@ -2925,11 +2934,12 @@ async function netWorth(env, params) {
     if (row.type === 'gasto') expensesPen += amount;
   }
 
-  const cash = round(incomePen - expensesPen);
   const investments = (await investmentsList(env, params)).investments || [];
   const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
   const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, rate);
+  const fixedSummary = fixedExpensesSummary(fixedExpenses, rate);
+  const cash = round(incomePen - expensesPen - fixedSummary.paid);
 
   const investmentValue = round(investments.reduce((total, item) => (
     total + currencyToPen(Number(item.currentValue || 0), item.currency || 'PEN', rate)
@@ -2941,9 +2951,7 @@ async function netWorth(env, params) {
   const debtPending = round(debts
     .filter((item) => item.estado !== 'pagada')
     .reduce((total, item) => total + currencyToPen(Number(item.pendiente || 0), item.currency || 'PEN', rate), 0));
-  const fixedPending = round(fixedExpenses
-    .filter((item) => item.estado === 'pendiente')
-    .reduce((total, item) => total + Number(item.montoPen ?? currencyToPen(Number(item.monto || 0), item.currency || 'PEN', rate)), 0));
+  const fixedPending = fixedSummary.pending;
 
   const assets = {
     cash,
@@ -3151,12 +3159,7 @@ async function exchangeRate(env) {
 }
 
 function realExpenses(fixedExpenses, budgets, usdRate = 3.85) {
-  const totalFijos = fixedExpenses
-    .filter((item) => item.estado !== 'saltado')
-    .reduce((total, item) => {
-      const value = item.montoPen ?? currencyToPen(Number(item.monto || 0), item.currency || 'PEN', usdRate);
-      return total + Number(value || 0);
-    }, 0);
+  const fixedSummary = fixedExpensesSummary(fixedExpenses, usdRate);
   const totalPresupuesto = budgets.reduce((total, item) => {
     const spent = Number(item.gasto || 0);
     const limit = Number(item.limite || 0);
@@ -3164,10 +3167,29 @@ function realExpenses(fixedExpenses, budgets, usdRate = 3.85) {
   }, 0);
 
   return {
-    totalFijos: round(totalFijos),
+    totalFijos: fixedSummary.pending,
+    totalFijosPendientes: fixedSummary.pending,
+    totalFijosPagados: fixedSummary.paid,
+    totalFijosSaltados: fixedSummary.skipped,
     totalPresupuesto: round(totalPresupuesto),
-    total: round(totalFijos + totalPresupuesto),
-    regla: 'budget_spent_or_limit',
+    total: round(fixedSummary.pending + totalPresupuesto),
+    regla: 'pending_fixed_plus_budget_spent_or_limit',
+  };
+}
+
+function fixedExpensesSummary(fixedExpenses, usdRate = 3.85) {
+  const summary = (fixedExpenses || []).reduce((acc, item) => {
+    const value = Number(item.montoPen ?? currencyToPen(Number(item.monto || 0), item.currency || 'PEN', usdRate)) || 0;
+    if (item.estado === 'pendiente') acc.pending += value;
+    if (item.estado === 'saltado') acc.skipped += value;
+    if (item.estado === 'pagado' && item.pagadoManual && !item.pagadoPorTransaccion) acc.paid += value;
+    return acc;
+  }, { pending: 0, paid: 0, skipped: 0 });
+
+  return {
+    pending: round(summary.pending),
+    paid: round(summary.paid),
+    skipped: round(summary.skipped),
   };
 }
 
@@ -3733,7 +3755,7 @@ async function classifyCategory(env, chatId, value, description = '') {
   const match = matchCategoryRule(rules, value, description);
   if (match) {
     return {
-      category: match.category,
+      category: normalizeCategory(match.category),
       source: match.chat_id === '*' ? 'rule_global' : 'rule_personal',
       keyword: match.keyword,
     };
@@ -3776,7 +3798,7 @@ function matchCategoryRule(rules, value, description = '') {
 
 function classifyCategoryFromLoadedRules(rules, value, description = '') {
   const match = matchCategoryRule(rules, value, description);
-  return match ? match.category : normalizeCategory(value);
+  return match ? normalizeCategory(match.category) : normalizeCategory(value);
 }
 
 async function loadBudgetRules(env, chatId) {
@@ -3806,7 +3828,7 @@ async function loadBudgetRules(env, chatId) {
 function budgetCategoryKeysFromRules(rules, category) {
   const key = normalizeBaseCategory(category);
   const included = rules[key] || [];
-  return [key].concat(included).filter(Boolean);
+  return [...new Set([key].concat(included).filter(Boolean))];
 }
 
 function budgetSpendWithRules(spending, category, rules) {
@@ -3830,10 +3852,10 @@ function normalizeCategory(value) {
 function normalizeBaseCategory(value) {
   const key = normalizeKey(value);
   const aliases = {
-    alimentacion: 'comida',
-    alimento: 'comida',
-    alimentos: 'comida',
-    comida: 'comida',
+    alimentacion: 'supermercado',
+    alimento: 'supermercado',
+    alimentos: 'supermercado',
+    comida: 'supermercado',
     mercado: 'supermercado',
     supermercado: 'supermercado',
     transporte: 'transporte',

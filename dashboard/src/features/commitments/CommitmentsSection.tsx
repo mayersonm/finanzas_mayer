@@ -329,7 +329,7 @@ export function CommitmentsSection({
             <Title>Gastos fijos</Title>
             <Text>{fixedExpenses.length} activos</Text>
           </div>
-          <Badge color="amber">{formatMoney(realExpenses.totalFijos)}</Badge>
+          <Badge color="amber">{formatMoney(realExpenses.totalFijos)} pendientes</Badge>
         </div>
 
         <form className="mt-4 grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3" onSubmit={saveFixedExpense}>

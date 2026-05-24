@@ -17,7 +17,7 @@ function cmdReglas(chatId, text) {
     const budgetCategory = normalizarCatBasica_(match[1]);
     const includedCategory = normalizarCatBasica_(match[2]);
     if (!categoriaReglaValida_(budgetCategory) || !categoriaReglaValida_(includedCategory)) {
-      return sendMessage(chatId, '❌ Categoria invalida. Ej: `regla presupuesto comida incluye supermercado`', true);
+      return sendMessage(chatId, '❌ Categoria invalida. Ej: `regla presupuesto entretenimiento incluye otro`', true);
     }
 
     guardarReglaPresupuestoD1_(chatId, budgetCategory, includedCategory);
@@ -34,7 +34,7 @@ function cmdReglas(chatId, text) {
     const budgetCategory = normalizarCatBasica_(match[1]);
     const includedCategory = normalizarCatBasica_(match[2]);
     if (!categoriaReglaValida_(budgetCategory) || !categoriaReglaValida_(includedCategory)) {
-      return sendMessage(chatId, '❌ Categoria invalida. Ej: `regla presupuesto comida quitar supermercado`', true);
+      return sendMessage(chatId, '❌ Categoria invalida. Ej: `regla presupuesto entretenimiento quitar otro`', true);
     }
 
     eliminarReglaPresupuestoD1_(chatId, budgetCategory, includedCategory);
@@ -84,8 +84,8 @@ function cmdReglas(chatId, text) {
     '*Ejemplos:*\n' +
     '• `regla kfc entretenimiento`\n' +
     '• `regla borrar kfc`\n' +
-    '• `regla presupuesto comida incluye supermercado`\n' +
-    '• `regla presupuesto comida quitar supermercado`',
+    '• `regla presupuesto entretenimiento incluye otro`\n' +
+    '• `regla presupuesto entretenimiento quitar otro`',
     true
   );
 }

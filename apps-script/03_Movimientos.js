@@ -17,7 +17,7 @@ function registrarMovimiento(chatId, match, originalText) {
         : capitalizar(cat);
 
     if (isNaN(monto) || monto <= 0) {
-        return sendMessage(chatId, '❌ El monto debe ser un número positivo. Ej: *gasto 45.50 comida almuerzo*', true);
+        return sendMessage(chatId, '❌ El monto debe ser un número positivo. Ej: *gasto 45.50 supermercado almuerzo*', true);
     }
 
     if (monedaInfo.error || !moneda) {
@@ -73,7 +73,7 @@ function registrarMovimiento(chatId, match, originalText) {
 
 // ---- CORREGIR CATEGORIA ------------------------------------
 // Ejemplos:
-//   categoria ultimo comida
+//   categoria ultimo supermercado
 //   categoria 1 supermercado
 // Usa la numeracion que muestra el comando "ultimos".
 function cmdCategoria(chatId, text) {
@@ -81,7 +81,7 @@ function cmdCategoria(chatId, text) {
     if (!match) {
         return sendMessage(
             chatId,
-            '❌ Formato: `categoria ultimo comida` o `categoria 1 supermercado`.\n\nUsa `ultimos` para ver la numeración.',
+            '❌ Formato: `categoria ultimo supermercado` o `categoria 1 supermercado`.\n\nUsa `ultimos` para ver la numeración.',
             true
         );
     }
@@ -102,7 +102,7 @@ function cmdCategoria(chatId, text) {
         : parseInt(ref, 10) - 1;
 
     if (isNaN(index) || index < 0 || index >= ultimos.length) {
-        return sendMessage(chatId, '❌ Ese número no está en `ultimos`. Ej: `categoria 1 comida`.', true);
+        return sendMessage(chatId, '❌ Ese número no está en `ultimos`. Ej: `categoria 1 supermercado`.', true);
     }
 
     const item = ultimos[index];
@@ -254,7 +254,7 @@ function cmdPresupuesto(chatId, text) {
 
     if (!cat || isNaN(limit) || limit <= 0) {
         return sendMessage(chatId,
-            '❌ Formato: *presupuesto [categoría] [monto]* Ej: presupuesto comida 500', true);
+            '❌ Formato: *presupuesto [categoría] [monto]* Ej: presupuesto supermercado 500', true);
     }
 
     const guardadoD1 = guardarPresupuestoD1_(chatId, cat, limit);
@@ -289,7 +289,7 @@ function mostrarPresupuestos(chatId) {
         const presupuestosD1 = d1.presupuestos || [];
         if (!presupuestosD1.length) {
             return sendMessage(chatId,
-                '📭 No tienes presupuestos en D1. Crea uno: `presupuesto comida 500`', true);
+                '📭 No tienes presupuestos en D1. Crea uno: `presupuesto supermercado 500`', true);
         }
 
         const mesD1 = d1.mesKey || Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
@@ -321,7 +321,7 @@ function mostrarPresupuestos(chatId) {
 
     if (!data.length) {
         return sendMessage(chatId,
-            '📭 No tienes presupuestos. Crea uno: `presupuesto comida 500`', true);
+            '📭 No tienes presupuestos. Crea uno: `presupuesto supermercado 500`', true);
     }
 
     const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');

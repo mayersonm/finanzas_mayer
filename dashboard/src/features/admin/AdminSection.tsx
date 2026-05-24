@@ -4,7 +4,7 @@ import { RiAddLine, RiDeleteBinLine, RiRefreshLine } from '@remixicon/react';
 import { apiEndpoint } from '../../app/api';
 import type { BudgetRuleItem, CategoryDefinition, CategoryRuleItem, DashboardUser } from '../../types/dashboard';
 
-const CATEGORIES = ['comida', 'supermercado', 'transporte', 'servicios', 'entretenimiento', 'salud', 'ropa', 'educacion', 'salario', 'freelance', 'inversion', 'venta', 'otro'];
+const CATEGORIES = ['supermercado', 'transporte', 'servicios', 'entretenimiento', 'salud', 'ropa', 'educacion', 'salario', 'freelance', 'inversion', 'venta', 'otro'];
 
 export function AdminSection({
   authToken,
@@ -20,7 +20,7 @@ export function AdminSection({
   const [budgetRules, setBudgetRules] = useState<BudgetRuleItem[]>([]);
   const [categoryForm, setCategoryForm] = useState({ category: '', type: 'gasto', color: '#6b7280' });
   const [ruleForm, setRuleForm] = useState({ keyword: '', category: 'otro' });
-  const [budgetForm, setBudgetForm] = useState({ budgetCategory: 'comida', includedCategory: 'supermercado' });
+  const [budgetForm, setBudgetForm] = useState({ budgetCategory: 'supermercado', includedCategory: 'otro' });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');

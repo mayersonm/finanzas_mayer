@@ -6,6 +6,8 @@ function sendBalance(chatId) {
     const gastos = Number(d1.gastos || 0);
     const balance = Number(d1.balance || ingresos - gastos);
     const deudaPendiente = Number(d1.deudaPendiente || 0);
+    const fijosPendientes = Number(d1.fijosPendientes || (d1.gastosReales && d1.gastosReales.totalFijos) || 0);
+    const fijosPagadosMes = Number(d1.fijosPagadosMes || (d1.gastosReales && d1.gastosReales.totalFijosPagados) || 0);
     const balanceNeto = Number(d1.balanceGeneralNeto || d1.balanceNeto || (balance - deudaPendiente));
     const emoji = balance >= 0 ? '🟢' : '🔴';
     const emojiNeto = balanceNeto >= 0 ? '🟢' : '🔴';
@@ -14,6 +16,8 @@ function sendBalance(chatId) {
       `💰 *Tu Balance*\n\n` +
       `📥 Ingresos:  S/ ${ingresos.toFixed(2)}\n` +
       `📤 Gastos:    S/ ${gastos.toFixed(2)}\n` +
+      `✅ Fijos pagados: S/ ${fijosPagadosMes.toFixed(2)}\n` +
+      `🔁 Fijos pendientes: S/ ${fijosPendientes.toFixed(2)}\n` +
       `💳 Deudas pendientes: S/ ${deudaPendiente.toFixed(2)}\n` +
       `─────────────────\n` +
       `${emoji} Balance caja: S/ ${balance.toFixed(2)}\n` +
@@ -129,7 +133,7 @@ function sendUltimos(chatId) {
     chatId,
     `📋 *Últimos movimientos:*\n\n${lineas}\n\n` +
     `_Corrige categoria con:_\n` +
-    '`categoria 1 comida` o `categoria ultimo supermercado`',
+    '`categoria 1 supermercado` o `categoria ultimo supermercado`',
     true
   );
 }
@@ -755,8 +759,8 @@ function procesarFotoRecibo(chatId, msg) {
     const promptRecibo =
       'Analiza este recibo o ticket de compra y extrae la información.\n' +
       'Responde SOLO con este JSON exacto, sin explicaciones ni markdown:\n' +
-      '{"monto": 45.50, "moneda": "PEN", "descripcion": "Almuerzo pollo a la brasa", "categoria": "comida", "metodo_pago": "debito"}\n\n' +
-      'Categorías válidas: comida, supermercado, transporte, servicios, entretenimiento, salud, ropa, educacion, otro\n' +
+      '{"monto": 45.50, "moneda": "PEN", "descripcion": "Almuerzo pollo a la brasa", "categoria": "supermercado", "metodo_pago": "debito"}\n\n' +
+      'Categorías válidas: supermercado, transporte, servicios, entretenimiento, salud, ropa, educacion, otro\n' +
       'moneda valida: PEN o USD. Si no ves moneda clara, usa PEN.\n' +
       'metodo_pago valido: debito, credito o desconocido. Si ves tarjeta de credito, usa credito.\n' +
       'Si no puedes leer el monto exacto, estímalo.\n' +
@@ -836,7 +840,7 @@ function procesarFotoRecibo(chatId, msg) {
 
     if (datos.error) {
       return sendMessage(chatId,
-        '📸 Esa imagen no parece un recibo.\n\nEnvía una foto clara del ticket o agrega el gasto manualmente:\n`gasto 45 comida almuerzo`', true);
+        '📸 Esa imagen no parece un recibo.\n\nEnvía una foto clara del ticket o agrega el gasto manualmente:\n`gasto 45 supermercado almuerzo`', true);
     }
 
     const monto = parseFloat(datos.monto);

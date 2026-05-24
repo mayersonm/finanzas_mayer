@@ -16,7 +16,7 @@ function cmdOnboarding(chatId) {
     '',
     '*Comandos utiles*',
     '• `perfil Mayer mayer@email.com` - poner nombre/correo',
-    '• `gasto 25 comida almuerzo`',
+    '• `gasto 25 supermercado almuerzo`',
     '• `gasto 120 supermercado metro credito`',
     '• Envia una foto clara de un recibo',
     '• `ayuda` - ver comandos',

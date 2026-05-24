@@ -40,7 +40,7 @@ const EMPTY_HEALTH: SystemHealthData = {
   checks: [],
 };
 
-const BASE_CATEGORIES = ['comida', 'supermercado', 'transporte', 'servicios', 'entretenimiento', 'salud', 'ropa', 'educacion', 'salario', 'freelance', 'inversion', 'venta', 'otro'];
+const BASE_CATEGORIES = ['supermercado', 'transporte', 'servicios', 'entretenimiento', 'salud', 'ropa', 'educacion', 'salario', 'freelance', 'inversion', 'venta', 'otro'];
 
 const SECRET_LABELS: Record<string, string> = {
   dashboardApiKey: 'Dashboard API key',
@@ -66,7 +66,7 @@ export function SettingsSection({ authToken, chatId }: { authToken?: string | nu
   const [budgetRules, setBudgetRules] = useState<BudgetRuleItem[]>([]);
   const [categoryForm, setCategoryForm] = useState({ category: '', type: 'gasto', color: '#6b7280' });
   const [ruleForm, setRuleForm] = useState({ keyword: '', category: 'otro' });
-  const [budgetForm, setBudgetForm] = useState({ budgetCategory: 'comida', includedCategory: 'supermercado' });
+  const [budgetForm, setBudgetForm] = useState({ budgetCategory: 'supermercado', includedCategory: 'otro' });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
