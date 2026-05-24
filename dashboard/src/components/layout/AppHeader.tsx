@@ -1,4 +1,4 @@
-import { RiLockPasswordLine, RiLogoutBoxRLine, RiMoonLine, RiRefreshLine, RiSunLine } from '@remixicon/react';
+import { RiDatabase2Line, RiLockPasswordLine, RiLogoutBoxRLine, RiMoonLine, RiRefreshLine, RiSunLine } from '@remixicon/react';
 import { formatUpdatedAt } from '../../lib/formatters';
 import type { ApiStatus, DashboardData, DashboardUser } from '../../types/dashboard';
 
@@ -8,6 +8,8 @@ export function AppHeader({
   status,
   isConfigured,
   onRefresh,
+  onSyncSheets,
+  syncing,
   theme,
   onToggleTheme,
   onTogglePasswordPanel,
@@ -21,6 +23,8 @@ export function AppHeader({
   status: ApiStatus;
   isConfigured: boolean;
   onRefresh: () => void;
+  onSyncSheets: () => void;
+  syncing: boolean;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   onTogglePasswordPanel: () => void;
@@ -62,9 +66,14 @@ export function AppHeader({
               ))}
             </select>
           ) : null}
-          <HeaderButton icon={RiRefreshLine} onClick={onRefresh} disabled={loading} tone="primary">
+          <HeaderButton icon={RiRefreshLine} onClick={onRefresh} disabled={loading || syncing}>
             {loading ? 'Actualizando' : 'Actualizar'}
           </HeaderButton>
+          {isConfigured ? (
+            <HeaderButton icon={RiDatabase2Line} onClick={onSyncSheets} disabled={loading || syncing} tone="primary">
+              {syncing ? 'Sincronizando' : 'Sheets a D1'}
+            </HeaderButton>
+          ) : null}
           <HeaderButton icon={theme === 'dark' ? RiSunLine : RiMoonLine} onClick={onToggleTheme}>
             {theme === 'dark' ? 'Claro' : 'Oscuro'}
           </HeaderButton>

@@ -1815,14 +1815,19 @@ async function syncFromGas(env, params) {
   }
 
   const limit = clamp(Number(params.get('limit') || 500), 1, 500);
+  const chatId = String(params.get('chat_id') || env.DEFAULT_CHAT_ID || '').trim();
+  if (!chatId) throw httpError(400, 'Falta chat_id o DEFAULT_CHAT_ID');
+
   const txUrl = new URL(env.GAS_API_URL);
   txUrl.searchParams.set('action', 'txs');
   txUrl.searchParams.set('key', env.GAS_API_KEY);
   txUrl.searchParams.set('limit', String(limit));
+  txUrl.searchParams.set('chat_id', chatId);
 
   const dashUrl = new URL(env.GAS_API_URL);
   dashUrl.searchParams.set('action', 'dashboard');
   dashUrl.searchParams.set('key', env.GAS_API_KEY);
+  dashUrl.searchParams.set('chat_id', chatId);
 
   const [txResp, dashResp] = await Promise.all([fetch(txUrl), fetch(dashUrl)]);
   const txData = await txResp.json();
@@ -1830,9 +1835,6 @@ async function syncFromGas(env, params) {
 
   if (!txData.ok) throw httpError(502, txData.error || 'Error leyendo txs desde GAS');
   if (!dashData.ok) throw httpError(502, dashData.error || 'Error leyendo dashboard desde GAS');
-
-  const chatId = String(env.DEFAULT_CHAT_ID || '').trim();
-  if (!chatId) throw httpError(400, 'Falta secret DEFAULT_CHAT_ID');
 
   let txCount = 0;
   for (const raw of txData.transacciones || []) {
@@ -1866,11 +1868,12 @@ async function syncFromGas(env, params) {
   await env.DB.prepare(`
     INSERT INTO sync_runs (id, source, status, details)
     VALUES (?, 'gas', 'ok', ?)
-  `).bind(runId, JSON.stringify({ txCount, budgetCount, goalCount, fixedCount, debtCount })).run();
+  `).bind(runId, JSON.stringify({ chatId, txCount, budgetCount, goalCount, fixedCount, debtCount, limit })).run();
 
   return {
     ok: true,
     source: 'gas',
+    chatId,
     transactions: txCount,
     budgets: budgetCount,
     goals: goalCount,

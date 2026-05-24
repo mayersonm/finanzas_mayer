@@ -23,10 +23,6 @@ type Theme = 'light' | 'dark';
 const LOGIN_EMAIL_STORAGE_KEY = 'finanzas_dashboard_email';
 const DEFAULT_LOGIN_EMAIL = 'mayersonm@gmail.com';
 
-interface FetchOptions {
-  sync?: boolean;
-}
-
 export default function App() {
   const [data, setData] = useState<DashboardData>(MOCK_DASHBOARD);
   const [tab, setTab] = useState<TabId>('inicio');
@@ -52,6 +48,9 @@ export default function App() {
   const [users, setUsers] = useState<DashboardUser[]>([]);
   const [selectedChatId, setSelectedChatId] = useState('');
   const [exchangeRate, setExchangeRate] = useState(3.85);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncError, setSyncError] = useState('');
 
   const configured = isApiConfigured();
   const realExpenses = useMemo(() => getRealExpenses(data), [data]);
@@ -63,29 +62,12 @@ export default function App() {
     setStatus('error');
   }, []);
 
-  const fetchData = useCallback(async (sessionToken?: string | null, options: FetchOptions = {}) => {
+  const fetchData = useCallback(async (sessionToken?: string | null) => {
     const activeToken = sessionToken ?? token;
     if (!configured || !activeToken) return;
 
     setLoading(true);
     try {
-      if (options.sync) {
-        const syncResponse = await fetch(apiEndpoint('sync'), {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${activeToken}` },
-        });
-
-        if (syncResponse.status === 401) {
-          clearSession();
-          return;
-        }
-
-        const syncData = (await syncResponse.json()) as { ok?: boolean; error?: string };
-        if (!syncResponse.ok || syncData.ok === false) {
-          throw new Error(syncData.error || 'No se pudo sincronizar con Sheets');
-        }
-      }
-
       const url = new URL(apiEndpoint('dashboard'));
       if (selectedChatId) url.searchParams.set('chat_id', selectedChatId);
 
@@ -112,6 +94,52 @@ export default function App() {
       setLoading(false);
     }
   }, [clearSession, configured, selectedChatId, token]);
+
+  const syncSheetsToD1 = useCallback(async () => {
+    if (!configured || !token) return;
+
+    setSyncing(true);
+    setSyncMessage('');
+    setSyncError('');
+    try {
+      const url = new URL(apiEndpoint('sync'));
+      url.searchParams.set('limit', '500');
+      if (selectedChatId) url.searchParams.set('chat_id', selectedChatId);
+
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 401) {
+        clearSession();
+        return;
+      }
+
+      const result = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        transactions?: number;
+        budgets?: number;
+        fixedExpenses?: number;
+        debts?: number;
+        goals?: number;
+      };
+
+      if (!response.ok || result.ok === false) {
+        throw new Error(result.error || 'No se pudo sincronizar Sheets con D1');
+      }
+
+      setSyncMessage(`Sheets a D1: ${result.transactions || 0} movimientos, ${result.budgets || 0} presupuestos, ${result.fixedExpenses || 0} fijos, ${result.debts || 0} deudas y ${result.goals || 0} metas revisadas.`);
+      await fetchData(token);
+    } catch (error) {
+      console.error('Sync error:', error);
+      setSyncError(error instanceof Error ? error.message : 'No se pudo sincronizar Sheets con D1');
+      setStatus('error');
+    } finally {
+      setSyncing(false);
+    }
+  }, [clearSession, configured, fetchData, selectedChatId, token]);
 
   const fetchUsers = useCallback(async (sessionToken?: string | null) => {
     const activeToken = sessionToken ?? token;
@@ -276,7 +304,9 @@ export default function App() {
           loading={loading}
           status={status}
           isConfigured={configured}
-          onRefresh={() => void fetchData(undefined, { sync: true })}
+          onRefresh={() => void fetchData()}
+          onSyncSheets={() => void syncSheetsToD1()}
+          syncing={syncing}
           theme={theme}
           onToggleTheme={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
           onTogglePasswordPanel={() => {
@@ -289,6 +319,18 @@ export default function App() {
           selectedChatId={selectedChatId}
           onSelectedChatIdChange={setSelectedChatId}
         />
+
+        {syncMessage ? (
+          <div className="mb-4 rounded-tremor-default border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm font-medium text-emerald-100">
+            {syncMessage}
+          </div>
+        ) : null}
+
+        {syncError ? (
+          <div className="mb-4 rounded-tremor-default border border-rose-400/30 bg-rose-500/10 p-3 text-sm font-medium text-rose-100">
+            {syncError}
+          </div>
+        ) : null}
 
         <DashboardTabs activeTab={tab} onTabChange={setTab} />
 

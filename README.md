@@ -58,6 +58,8 @@ La pestana `Config` guarda las preferencias en D1 y concentra:
 - estado operativo de Worker, D1, R2 y Apps Script;
 - administrador de categorias, reglas IA y reglas de presupuesto.
 
+El boton `Actualizar` solo vuelve a leer D1. El boton `Sheets a D1` importa el respaldo de Google Sheets hacia D1 y muestra cuantos movimientos, presupuestos, fijos, deudas y metas se revisaron. No existe sincronizacion D1 -> Sheets: si algo esta solo en D1, es normal porque D1 es la fuente principal y Sheets queda como respaldo.
+
 ### Worker D1
 
 Configura los secrets con Wrangler:
