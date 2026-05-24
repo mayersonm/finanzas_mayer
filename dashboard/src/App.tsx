@@ -124,13 +124,21 @@ export default function App() {
         fixedExpenses?: number;
         debts?: number;
         goals?: number;
+        removedTransactions?: number;
+        mirrorTransactions?: boolean;
       };
 
       if (!response.ok || result.ok === false) {
         throw new Error(result.error || 'No se pudo sincronizar Sheets con D1');
       }
 
-      setSyncMessage(`Sheets a D1: ${result.transactions || 0} movimientos, ${result.budgets || 0} presupuestos, ${result.fixedExpenses || 0} fijos, ${result.debts || 0} deudas y ${result.goals || 0} metas revisadas.`);
+      const removedText = result.removedTransactions
+        ? `, ${result.removedTransactions} extra${result.removedTransactions === 1 ? '' : 's'} removido${result.removedTransactions === 1 ? '' : 's'} de D1`
+        : '';
+      const mirrorText = result.mirrorTransactions === false
+        ? ' No se podaron extras porque Sheets devolvio una lista parcial.'
+        : '';
+      setSyncMessage(`Sheets a D1: ${result.transactions || 0} movimientos${removedText}, ${result.budgets || 0} presupuestos, ${result.fixedExpenses || 0} fijos, ${result.debts || 0} deudas y ${result.goals || 0} metas revisadas.${mirrorText}`);
       await fetchData(token);
     } catch (error) {
       console.error('Sync error:', error);
