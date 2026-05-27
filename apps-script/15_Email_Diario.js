@@ -4,22 +4,18 @@ function construirResumenDiarioEmail_(chatId) {
   const hoy = new Date();
   const fechaKey = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM-dd');
   const fechaLarga = Utilities.formatDate(hoy, 'America/Lima', 'dd/MM/yyyy');
-  const mesKey = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM');
-  const nombreMes = nombreMesEmail_(hoy);
+  const periodoPago = periodoPagoEmail_(hoy);
+  const mesKey = periodoPago.key;
+  const nombreMes = periodoPago.label;
 
-  const txs = obtenerTransacciones(chatId);
-  const txsHoy = txs.filter(function (r) {
-    return Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM-dd') === fechaKey;
-  });
-
-  const txsMes = txs.filter(function (r) {
-    return Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mesKey;
-  });
+  const txs = obtenerTransaccionesEmail_(chatId);
+  const txsHoy = filtrarTransaccionesDiaEmail_(txs, fechaKey);
+  const txsMes = filtrarTransaccionesPeriodoEmail_(txs, periodoPago);
 
   const totalesHoy = calcularTotalesEmail_(txsHoy);
   const totalesMes = calcularTotalesEmail_(txsMes);
   const categoriasHoy = agruparGastosPorCategoriaEmail_(txsHoy);
-  const presupuestos = obtenerPresupuestosEmail_(chatId, mesKey);
+  const presupuestos = obtenerPresupuestosEmail_(chatId, mesKey, txsMes);
   const metas = obtenerMetasEmail_(chatId);
 
   const subject = 'Resumen financiero diario - ' + fechaLarga;
@@ -257,7 +253,82 @@ function agruparGastosPorCategoriaEmail_(txs) {
     });
 }
 
-function obtenerPresupuestosEmail_(chatId, mesKey) {
+function obtenerTransaccionesEmail_(chatId) {
+  const d1Txs = leerTransaccionesD1_(chatId, 500);
+  if (d1Txs !== null) {
+    const rows = d1Txs.map(function (tx) {
+      return txD1ToEmailRow_(tx, chatId);
+    }).concat(fijosPagadosVirtualesEmail_(chatId));
+
+    return rows.sort(function (a, b) {
+      return fechaKeyFilaEmail_(a[0]).localeCompare(fechaKeyFilaEmail_(b[0])) ||
+        horaKeyFilaEmail_(a[1]).localeCompare(horaKeyFilaEmail_(b[1]));
+    });
+  }
+
+  return obtenerTransacciones(chatId);
+}
+
+function txD1ToEmailRow_(tx, chatId) {
+  return [
+    fechaLocalEmail_(tx.fecha),
+    horaLocalEmail_(tx.hora),
+    String(tx.tipo || 'gasto'),
+    String(tx.desc || ''),
+    normalizarCat(tx.cat || 'otro', tx.desc || '', chatId),
+    Number(tx.monto || 0),
+    String(chatId),
+    tx.paymentMethod || tx.payment_method || 'debito',
+    tx.paymentDueDate || tx.payment_due_date || '',
+    tx.cardName || tx.card_name || '',
+    tx.currency || 'PEN',
+  ];
+}
+
+function fijosPagadosVirtualesEmail_(chatId) {
+  const d1 = leerDashboardD1_(chatId);
+  if (!d1 || !d1.ok || !d1.fijos) return [];
+
+  return d1.fijos
+    .filter(function (item) {
+      return item.estado === 'pagado' && item.pagadoManual === true && item.pagadoPorTransaccion !== true && item.paidDate;
+    })
+    .map(function (item) {
+      return [
+        fechaLocalEmail_(item.paidDate),
+        horaLocalEmail_('00:00'),
+        'gasto',
+        'Fijo pagado: ' + String(item.nombre || ''),
+        normalizarCat(item.cat || 'servicios', item.nombre || '', chatId),
+        Number(item.montoPen || item.monto || 0),
+        String(chatId),
+        'debito',
+        '',
+        '',
+        'PEN',
+      ];
+    });
+}
+
+function obtenerPresupuestosEmail_(chatId, mesKey, txsPeriodo) {
+  const d1 = leerDashboardD1_(chatId);
+  if (d1 && d1.ok && d1.presupuestos) {
+    const gastos = gastosPorCategoriaDesdeTxsEmail_(txsPeriodo || []);
+
+    return d1.presupuestos
+      .map(function (p) {
+        const cat = normalizarCat(p.cat || 'otro', '', chatId);
+        return {
+          cat: cat,
+          limite: Number(p.limite || 0),
+          gasto: gastoPresupuestoEmail_(gastos, cat, d1.budgetRules || [], chatId),
+        };
+      })
+      .filter(function (p) {
+        return p.limite > 0;
+      });
+  }
+
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Presupuestos');
   if (!sheet) return [];
 
@@ -281,6 +352,19 @@ function obtenerPresupuestosEmail_(chatId, mesKey) {
 }
 
 function obtenerMetasEmail_(chatId) {
+  const d1 = leerDashboardD1_(chatId);
+  if (d1 && d1.ok && d1.metas) {
+    return d1.metas.map(function (m) {
+      return {
+        nombre: String(m.nombre || ''),
+        objetivo: Number(m.objetivo || 0),
+        ahorrado: Number(m.ahorrado || 0),
+      };
+    }).filter(function (m) {
+      return m.nombre && m.objetivo > 0;
+    });
+  }
+
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Metas');
   if (!sheet) return [];
 
@@ -298,6 +382,111 @@ function obtenerMetasEmail_(chatId) {
     .filter(function (m) {
       return m.nombre && m.objetivo > 0;
     });
+}
+
+function gastosPorCategoriaDesdeTxsEmail_(txs) {
+  const map = {};
+  (txs || []).forEach(function (r) {
+    if (r[2] !== 'gasto') return;
+    const cat = normalizarCat(r[4] || 'otro', r[3], r[6]);
+    map[cat] = (map[cat] || 0) + (parseFloat(r[5]) || 0);
+  });
+  return map;
+}
+
+function gastoPresupuestoEmail_(gastos, cat, budgetRules, chatId) {
+  const base = normalizarCat(cat || 'otro', '', chatId);
+  const keys = [base];
+
+  (budgetRules || []).forEach(function (rule) {
+    const budgetCat = normalizarCat(rule.budgetCategory || rule.budget_category || '', '', chatId);
+    const includedCat = normalizarCat(rule.includedCategory || rule.included_category || '', '', chatId);
+    if (budgetCat === base && includedCat && keys.indexOf(includedCat) < 0) keys.push(includedCat);
+  });
+
+  return keys.reduce(function (total, key) {
+    return total + Number(gastos[key] || 0);
+  }, 0);
+}
+
+function filtrarTransaccionesDiaEmail_(txs, fechaKey) {
+  return (txs || []).filter(function (r) {
+    return fechaKeyFilaEmail_(r[0]) === fechaKey;
+  });
+}
+
+function filtrarTransaccionesPeriodoEmail_(txs, periodo) {
+  const p = normalizarPeriodoPagoEmail_(periodo);
+  return (txs || []).filter(function (r) {
+    const key = fechaKeyFilaEmail_(r[0]);
+    return key >= p.startKey && key <= p.endKey;
+  });
+}
+
+function periodoPagoEmail_(date) {
+  const base = fechaLocalEmail_(Utilities.formatDate(date || new Date(), 'America/Lima', 'yyyy-MM-dd'));
+  const start = base.getDate() >= 23
+    ? new Date(base.getFullYear(), base.getMonth(), 23)
+    : new Date(base.getFullYear(), base.getMonth() - 1, 23);
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, 22);
+  const startKey = Utilities.formatDate(start, 'America/Lima', 'yyyy-MM-dd');
+  const endKey = Utilities.formatDate(end, 'America/Lima', 'yyyy-MM-dd');
+
+  return {
+    start: start,
+    end: end,
+    startKey: startKey,
+    endKey: endKey,
+    key: Utilities.formatDate(start, 'America/Lima', 'yyyy-MM'),
+    label: Utilities.formatDate(start, 'America/Lima', 'dd/MM/yyyy') + ' - ' + Utilities.formatDate(end, 'America/Lima', 'dd/MM/yyyy'),
+  };
+}
+
+function periodoPagoCerradoEmail_(date) {
+  const base = fechaLocalEmail_(Utilities.formatDate(date || new Date(), 'America/Lima', 'yyyy-MM-dd'));
+  base.setDate(base.getDate() - 1);
+  return periodoPagoEmail_(base);
+}
+
+function periodoPagoRelativoEmail_(periodo, offset) {
+  const p = normalizarPeriodoPagoEmail_(periodo);
+  return periodoPagoEmail_(new Date(p.start.getFullYear(), p.start.getMonth() + offset, p.start.getDate()));
+}
+
+function normalizarPeriodoPagoEmail_(periodo) {
+  if (periodo && periodo.start && periodo.end) return periodo;
+  return periodoPagoEmail_(periodo || new Date());
+}
+
+function fechaLocalEmail_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  const text = String(value || '').slice(0, 10);
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+
+  const parsed = new Date(value);
+  if (!isNaN(parsed.getTime())) return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  return new Date();
+}
+
+function horaLocalEmail_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    return new Date(2000, 0, 1, value.getHours(), value.getMinutes());
+  }
+
+  const match = String(value || '00:00').match(/^(\d{1,2}):(\d{2})/);
+  return new Date(2000, 0, 1, match ? Number(match[1]) : 0, match ? Number(match[2]) : 0);
+}
+
+function fechaKeyFilaEmail_(value) {
+  return Utilities.formatDate(fechaLocalEmail_(value), 'America/Lima', 'yyyy-MM-dd');
+}
+
+function horaKeyFilaEmail_(value) {
+  return Utilities.formatDate(horaLocalEmail_(value), 'America/Lima', 'HH:mm');
 }
 
 function construirExcelDiarioEmail_(data) {
@@ -386,8 +575,8 @@ function llenarHojaTransaccionesEmail_(sheet, txs) {
   if (txs.length) {
     const rows = txs.map(function (r) {
       return [
-        Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM-dd'),
-        Utilities.formatDate(new Date(r[1]), 'America/Lima', 'HH:mm'),
+        Utilities.formatDate(fechaLocalEmail_(r[0]), 'America/Lima', 'yyyy-MM-dd'),
+        Utilities.formatDate(horaLocalEmail_(r[1]), 'America/Lima', 'HH:mm'),
         r[2],
         r[3],
         r[4],

@@ -24,13 +24,19 @@ function testEnviarResumenDiarioEmail() {
 }
 
 function enviarResumenMensualEmail() {
-  const periodo = mesRelativoEmail_(new Date(), -1);
+  const periodo = periodoPagoCerradoEmail_(new Date());
   return enviarResumenMensualEmailPeriodo_(periodo, 'cierre');
 }
 
 function resumenMensualAutomatico() {
-  const periodo = mesRelativoEmail_(new Date(), -1);
-  const periodoKey = Utilities.formatDate(periodo, 'America/Lima', 'yyyy-MM');
+  const now = new Date();
+  const dia = Number(Utilities.formatDate(now, 'America/Lima', 'd'));
+  if (dia !== 23) {
+    return 'No corresponde resumen mensual hoy';
+  }
+
+  const periodo = periodoPagoCerradoEmail_(now);
+  const periodoKey = periodo.key;
   const props = PropertiesService.getScriptProperties();
   const sentKey = 'monthly_email_sent_' + periodoKey;
 
@@ -46,7 +52,7 @@ function resumenMensualAutomatico() {
 
 function enviarResumenMensualSiCorrespondeEmail() {
   const dia = Number(Utilities.formatDate(new Date(), 'America/Lima', 'd'));
-  if (dia !== 1) {
+  if (dia !== 23) {
     return 'No corresponde resumen mensual hoy';
   }
 
@@ -54,7 +60,7 @@ function enviarResumenMensualSiCorrespondeEmail() {
 }
 
 function testEnviarResumenMensualEmail() {
-  return enviarResumenMensualEmailPeriodo_(new Date(), 'prueba');
+  return enviarResumenMensualEmailPeriodo_(periodoPagoEmail_(new Date()), 'prueba');
 }
 
 function enviarResumenAnualEmail() {

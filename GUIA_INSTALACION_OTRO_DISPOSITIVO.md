@@ -699,6 +699,8 @@ En movimientos, Google Sheets manda. Si Sheets tiene 24 movimientos, D1 debe que
 
 El Worker no debe traer Sheets automaticamente cada 15 minutos. Ese cron queda desactivado para que la sincronizacion la controles desde el dashboard.
 
+Los correos usan D1 como fuente principal. El diario compara el dia contra el ciclo de pago vigente, el mensual cierra ciclos del dia 23 al 22 y el automatico se envia cada dia 23. Si D1 no responde, Apps Script usa Sheets como respaldo.
+
 Si estas en local, el dashboard tambien usa la data real siempre que `.env.local` apunte a:
 
 ```text

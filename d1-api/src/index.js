@@ -108,6 +108,11 @@ export default {
         return json(await systemHealth(env));
       }
 
+      if (url.pathname === '/api/apps-script/setup-triggers' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        return json(await gasConfigRequest(env, 'setup_triggers'));
+      }
+
       if (url.pathname === '/api/exchange-rate' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json(await exchangeRate(env));
