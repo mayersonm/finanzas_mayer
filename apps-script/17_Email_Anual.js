@@ -21,7 +21,7 @@ function enviarResumenAnualEmailAnio_(year, modo, chatIdOverride) {
 
 function construirResumenAnualEmail_(chatId, year, modo) {
   const previousYear = Number(year) - 1;
-  const txs = obtenerTransacciones(chatId);
+  const txs = obtenerTransaccionesEmail_(chatId);
   const txsYear = filtrarTransaccionesAnioEmail_(txs, year);
   const txsPrevious = filtrarTransaccionesAnioEmail_(txs, previousYear);
   const totals = calcularTotalesEmail_(txsYear);
@@ -554,12 +554,7 @@ function filtrarTransaccionesMesEmail_(txs, mesKey) {
 }
 
 function keyMesFilaEmail_(value) {
-  const date = Object.prototype.toString.call(value) === '[object Date]'
-    ? value
-    : new Date(value);
-
-  if (isNaN(date.getTime())) return '';
-  return Utilities.formatDate(date, 'America/Lima', 'yyyy-MM');
+  return fechaKeyFilaEmail_(value).slice(0, 7);
 }
 
 function inicioMesEmail_(date) {

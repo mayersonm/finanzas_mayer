@@ -125,21 +125,22 @@ function setupTriggersDiarios() {
     .atHour(8)
     .create();
 
-  // Resumen mensual del mes cerrado - dia 1 a las 9AM Lima
+  // Resumen mensual del ciclo de pago cerrado - dia 23 a las 9AM Lima
   ScriptApp.newTrigger('resumenMensualAutomatico')
     .timeBased()
-    .onMonthDay(1)
+    .onMonthDay(23)
     .atHour(9)
     .create();
 
-  // Resumen anual - corre mensual, pero solo envia en enero
+  // Resumen anual - corre el dia 23, pero solo envia en enero
   ScriptApp.newTrigger('resumenAnualAutomatico')
     .timeBased()
-    .onMonthDay(1)
+    .onMonthDay(23)
     .atHour(10)
     .create();
 
   Logger.log('✅ Triggers diarios y mensuales creados');
+  return 'Triggers diarios y mensuales creados: resumen mensual dia 23';
 }
 
 

@@ -76,10 +76,14 @@ function handleDashboardApi(e) {
       return dashJson_(dashUpdateConfig_(params));
     }
 
+    if (action === 'setup_triggers' || action === 'triggers') {
+      return dashJson_(dashSetupTriggers_());
+    }
+
     return dashJson_({
       ok: false,
       error: 'Accion no valida',
-      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config'],
+      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers'],
     });
   } catch (err) {
     Logger.log('Dashboard API error: ' + (err && err.stack ? err.stack : err));
@@ -250,6 +254,19 @@ function dashUpdateConfig_(params) {
     ok: true,
     saved: Object.keys(updates),
     config: dashConfig_().config,
+  };
+}
+
+function dashSetupTriggers_() {
+  const result = setupTriggersDiarios();
+
+  return {
+    ok: true,
+    result: result || 'Triggers recreados',
+    dailySummaryHour: 21,
+    monthlySummaryDay: 23,
+    annualSummaryDay: 23,
+    updatedAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
   };
 }
 

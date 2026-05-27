@@ -21,22 +21,22 @@ function enviarResumenMensualEmailPeriodo_(periodoDate, modo) {
 }
 
 function construirResumenMensualEmail_(chatId, periodoDate, modo) {
-  const periodo = inicioMesEmail_(periodoDate);
-  const anterior = mesRelativoEmail_(periodo, -1);
-  const periodoKey = Utilities.formatDate(periodo, 'America/Lima', 'yyyy-MM');
-  const anteriorKey = Utilities.formatDate(anterior, 'America/Lima', 'yyyy-MM');
-  const nombrePeriodo = nombreMesAnioEmail_(periodo);
-  const nombreAnterior = nombreMesAnioEmail_(anterior);
+  const periodo = normalizarPeriodoPagoEmail_(periodoDate);
+  const anterior = periodoPagoRelativoEmail_(periodo, -1);
+  const periodoKey = periodo.key;
+  const anteriorKey = anterior.key;
+  const nombrePeriodo = periodo.label;
+  const nombreAnterior = anterior.label;
 
-  const txs = obtenerTransacciones(chatId);
-  const txsPeriodo = filtrarTransaccionesMesEmail_(txs, periodoKey);
-  const txsAnterior = filtrarTransaccionesMesEmail_(txs, anteriorKey);
+  const txs = obtenerTransaccionesEmail_(chatId);
+  const txsPeriodo = filtrarTransaccionesPeriodoEmail_(txs, periodo);
+  const txsAnterior = filtrarTransaccionesPeriodoEmail_(txs, anterior);
   const totalesPeriodo = calcularTotalesEmail_(txsPeriodo);
   const totalesAnterior = calcularTotalesEmail_(txsAnterior);
   const categoriasPeriodo = agruparGastosPorCategoriaEmail_(txsPeriodo);
   const categoriasAnterior = agruparGastosPorCategoriaEmail_(txsAnterior);
   const comparativoCategorias = compararCategoriasMensualEmail_(categoriasPeriodo, categoriasAnterior);
-  const presupuestos = obtenerPresupuestosEmail_(chatId, periodoKey);
+  const presupuestos = obtenerPresupuestosEmail_(chatId, periodoKey, txsPeriodo);
   const metas = obtenerMetasEmail_(chatId);
 
   const data = {
