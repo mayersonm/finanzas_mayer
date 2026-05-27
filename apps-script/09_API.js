@@ -80,10 +80,14 @@ function handleDashboardApi(e) {
       return dashJson_(dashSetupTriggers_());
     }
 
+    if (action === 'send_daily_email' || action === 'email_daily') {
+      return dashJson_(dashSendDailyEmail_());
+    }
+
     return dashJson_({
       ok: false,
       error: 'Accion no valida',
-      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers'],
+      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email'],
     });
   } catch (err) {
     Logger.log('Dashboard API error: ' + (err && err.stack ? err.stack : err));
@@ -267,6 +271,17 @@ function dashSetupTriggers_() {
     monthlySummaryDay: 23,
     annualSummaryDay: 23,
     updatedAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
+  };
+}
+
+function dashSendDailyEmail_() {
+  const result = enviarResumenDiarioEmail();
+
+  return {
+    ok: true,
+    result: result || 'Resumen diario enviado',
+    type: 'daily',
+    sentAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
   };
 }
 

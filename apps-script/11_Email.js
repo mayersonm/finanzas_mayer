@@ -17,6 +17,7 @@ function enviarResumenDiarioEmail() {
   });
 
   Logger.log('Resumen diario enviado a ' + emailTo);
+  return 'Resumen diario enviado a ' + emailTo;
 }
 
 function testEnviarResumenDiarioEmail() {
