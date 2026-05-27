@@ -113,6 +113,11 @@ export default {
         return json(await gasConfigRequest(env, 'setup_triggers'));
       }
 
+      if (url.pathname === '/api/apps-script/send-daily-email' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        return json(await gasConfigRequest(env, 'send_daily_email'));
+      }
+
       if (url.pathname === '/api/exchange-rate' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json(await exchangeRate(env));
