@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RiDownloadLine } from '@remixicon/react';
-import { Badge, Card, Text, Title } from '@tremor/react';
+import { Card, Text, Title } from '@tremor/react';
 import { apiEndpoint } from '../../app/api';
 import { TransactionsTable } from '../../components/dashboard/TransactionsTable';
 import type { DashboardData, Transaction } from '../../types/dashboard';
@@ -105,17 +105,19 @@ export function MovementsSection({
           <Title>Movimientos</Title>
           <Text>{transactions.length} registros {loading ? 'cargando...' : 'filtrados'}</Text>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center">
           <button
             type="button"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default border border-emerald-400/50 bg-emerald-500 px-3.5 text-sm font-semibold text-slate-950 shadow-sm shadow-emerald-950/30 transition hover:-translate-y-0.5 hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300/50 disabled:translate-y-0 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
+            className="inline-flex h-10 w-full min-w-[9.5rem] items-center justify-center gap-2 rounded-tremor-default border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 shadow-sm transition hover:border-emerald-400/60 hover:bg-emerald-500/15 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:opacity-55 min-[420px]:w-auto"
             disabled={!transactions.length || loading}
             onClick={exportFiltered}
           >
             <RiDownloadLine className="h-4 w-4 shrink-0" aria-hidden="true" />
             Exportar Movimiento
           </button>
-          <Badge color="emerald">{data.mes}</Badge>
+          <span className="inline-flex h-10 w-full min-w-[7rem] items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-300 shadow-sm min-[420px]:w-auto">
+            Mes: {data.mes}
+          </span>
         </div>
       </div>
 
