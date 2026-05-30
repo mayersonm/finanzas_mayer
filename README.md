@@ -153,4 +153,4 @@ Cuando pagas una deuda, tambien se registra un movimiento de gasto para que el b
 
 El dashboard incluye `Inversiones` para registrar posiciones con tipo, monto invertido, valor actual, moneda `PEN` o `USD` y notas.
 
-La pestaña `Patrimonio` calcula activos, pasivos y patrimonio neto usando balance, inversiones, metas y deudas. Tambien permite guardar cortes historicos en D1 para comparar la evolucion.
+La pestaña `Patrimonio` separa dos numeros: `Patrimonio disponible`, que es el balance caja menos deudas activas y fijos pendientes, y `Patrimonio total`, que suma inversiones y metas al disponible. Tambien permite guardar cortes historicos en D1 para comparar la evolucion.

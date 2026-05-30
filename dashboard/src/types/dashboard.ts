@@ -189,6 +189,8 @@ export interface NetWorthData {
     total: number;
   };
   netWorth: number;
+  availableBalance?: number;
+  patrimonioDisponible?: number;
   investmentGain: number;
   ratios: {
     debtToAssetsPct: number;
@@ -286,6 +288,8 @@ export interface SystemHealthData {
 export interface DashboardData {
   ok?: boolean;
   balance: number;
+  patrimonio?: number;
+  patrimonioDisponible?: number;
   balanceGeneralNeto?: number;
   balanceNeto?: number;
   ingresos: number;

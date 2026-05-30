@@ -16,6 +16,15 @@ function sendHelp(chatId) {
     .filter(r => r[2] === 'gasto')
     .reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
   const balance = ingresos - gastos;
+  let patrimonioDisponible = balance;
+  try {
+    const d1 = leerDashboardD1_(chatId);
+    if (d1 && d1.ok) {
+      patrimonioDisponible = Number(d1.patrimonioDisponible || d1.patrimonio || d1.balanceGeneralNeto || d1.balanceNeto || patrimonioDisponible);
+    }
+  } catch (_err) {
+    patrimonioDisponible = balance;
+  }
   const emoji = balance >= 0 ? '🟢' : '🔴';
 
   const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
@@ -137,7 +146,8 @@ function sendHelp(chatId) {
     '',
     '💼 *Categorias ingreso*',
     ingresoTxt,
-  ].join('\n');
+  ].join('\n')
+    .replace(/Balance: \*S\/ [^*]+\*/, 'Patrimonio disponible: *S/ ' + patrimonioDisponible.toFixed(2) + '*');
 
   return sendMessage(chatId, help, true);
 }

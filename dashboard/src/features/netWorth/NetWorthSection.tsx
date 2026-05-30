@@ -12,6 +12,8 @@ const emptyNetWorth: NetWorthData = {
   assets: { cash: 0, investments: 0, goals: 0, total: 0 },
   liabilities: { debts: 0, fixedExpenses: 0, total: 0 },
   netWorth: 0,
+  availableBalance: 0,
+  patrimonioDisponible: 0,
   investmentGain: 0,
   ratios: { debtToAssetsPct: 0, investmentSharePct: 0, liquiditySharePct: 0 },
   composition: [],
@@ -78,6 +80,8 @@ export function NetWorthSection({
   };
 
   const positive = data.netWorth >= 0;
+  const patrimonioDisponible = data.patrimonioDisponible ?? data.availableBalance ?? (data.assets.cash - data.liabilities.total);
+  const availablePositive = patrimonioDisponible >= 0;
   const maxComposition = useMemo(() => Math.max(...data.composition.map((item) => Math.abs(item.value)), 1), [data.composition]);
 
   return (
@@ -113,10 +117,10 @@ export function NetWorthSection({
       {error ? <div className="rounded-tremor-default border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">{error}</div> : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <MetricCard label="Patrimonio neto" value={formatMoney(data.netWorth)} tone={positive ? 'good' : 'bad'} sub="Activos menos deudas y fijos" />
+        <MetricCard label="Patrimonio disponible" value={formatMoney(patrimonioDisponible)} tone={availablePositive ? 'good' : 'bad'} sub="Lo que queda tras deudas y fijos" />
+        <MetricCard label="Patrimonio total" value={formatMoney(data.netWorth)} tone={positive ? 'good' : 'bad'} sub="Disponible + inversiones + metas" />
         <MetricCard label="Activos" value={formatMoney(data.assets.total)} sub={`${data.ratios.liquiditySharePct.toFixed(1)}% liquidez`} />
         <MetricCard label="Pasivos" value={formatMoney(data.liabilities.total)} tone={data.liabilities.total > 0 ? 'bad' : 'good'} sub={`${data.ratios.debtToAssetsPct.toFixed(1)}% de activos`} />
-        <MetricCard label="Fijos pendientes" value={formatMoney(data.liabilities.fixedExpenses || 0)} tone={(data.liabilities.fixedExpenses || 0) > 0 ? 'bad' : 'good'} sub="Del mes actual" />
         <MetricCard label="Ganancia inversiones" value={formatMoney(data.investmentGain)} tone={data.investmentGain >= 0 ? 'good' : 'bad'} sub={`USD/PEN ${data.exchangeRate.toFixed(3)}`} />
       </div>
 
