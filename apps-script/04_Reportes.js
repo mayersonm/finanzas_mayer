@@ -61,7 +61,7 @@ function sendResumen(chatId) {
       .join('\n');
 
     return sendMessage(chatId,
-      `📊 *Resumen de ${d1.mes || 'este mes'}*\n\n` +
+      `📊 *Resumen del ciclo ${d1.mes || '23-22'}*\n\n` +
       `📥 Ingresos: S/ ${Number(d1.ingresosMes || 0).toFixed(2)}\n` +
       `📤 Gastos:   S/ ${Number(d1.gastosMes || 0).toFixed(2)}\n` +
       `💰 Balance:  S/ ${Number(d1.balanceMes || 0).toFixed(2)}\n\n` +
@@ -71,14 +71,14 @@ function sendResumen(chatId) {
     );
   }
 
-  const hoy       = new Date();
-  const mesActual = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM');
+  const hoy = new Date();
+  const periodo = cicloPagoDesdeFecha_(hoy);
 
   const data = obtenerTransacciones(chatId)
-    .filter(row => mesKey_(row[0]) === mesActual);
+    .filter(row => filtrarTransaccionesCiclo_([row], periodo).length > 0);
 
   if (data.length === 0) {
-    return sendMessage(chatId, '📭 No hay movimientos este mes todavía.');
+    return sendMessage(chatId, '📭 No hay movimientos en este ciclo todavía.');
   }
 
   // Solo calcula totales — categorías las maneja obtenerGastosPorMesCat
@@ -90,18 +90,19 @@ function sendResumen(chatId) {
   });
 
   // Categorías agrupadas y normalizadas (siempre minúscula)
-  const porCat    = (obtenerGastosPorMesCat(chatId, mesActual)[mesActual]) || {};
+  const porCat = {};
+  data.forEach(function (row) {
+    if (row[2] !== 'gasto') return;
+    const cat = normalizarCat(row[4] || 'otro', row[3], chatId);
+    porCat[cat] = (porCat[cat] || 0) + (parseFloat(row[5]) || 0);
+  });
   const lineasCat = Object.entries(porCat)
     .sort((a, b) => b[1] - a[1])
     .map(([cat, monto]) => `  • ${capitalizar(cat)}: S/ ${monto.toFixed(2)}`)
     .join('\n');
 
-  const meses     = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-                     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const nombreMes = meses[hoy.getMonth()];
-
   sendMessage(chatId,
-    `📊 *Resumen de ${nombreMes}*\n\n` +
+    `📊 *Resumen del ciclo ${periodo.label}*\n\n` +
     `📥 Ingresos: S/ ${ingresos.toFixed(2)}\n` +
     `📤 Gastos:   S/ ${gastos.toFixed(2)}\n` +
     `💰 Balance:  S/ ${(ingresos - gastos).toFixed(2)}\n\n` +
@@ -363,18 +364,16 @@ function cmdBuscar(chatId, text) {
 // Calcula a qué ritmo vas y proyecta el balance al 31
 
 function cmdProyeccion(chatId) {
-  const hoy       = new Date();
-  const mesActual = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM');
-  const diaHoy    = hoy.getDate();
-  const diasMes   = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
-  const diasRest  = diasMes - diaHoy;
+  const hoy = new Date();
+  const periodo = cicloPagoDesdeFecha_(hoy);
+  const diaHoy = diasTranscurridosCiclo_(periodo, hoy);
+  const diasMes = diasTotalesCiclo_(periodo);
+  const diasRest = Math.max(diasMes - diaHoy, 0);
 
-  const data = obtenerTransacciones(chatId).filter(r =>
-    mesKey_(r[0]) === mesActual
-  );
+  const data = filtrarTransaccionesCiclo_(obtenerTransacciones(chatId), periodo);
 
   if (!data.length) {
-    return sendMessage(chatId, '📭 No hay movimientos este mes para proyectar.');
+    return sendMessage(chatId, '📭 No hay movimientos en este ciclo para proyectar.');
   }
 
   let ingresos = 0, gastos = 0;
@@ -402,7 +401,7 @@ function cmdProyeccion(chatId) {
     : '';
 
   sendMessage(chatId,
-    `📈 *Proyección — fin de mes*\n\n` +
+    `📈 *Proyección — cierre del ciclo 23-22*\n_${periodo.label}_\n\n` +
     `📅 Día ${diaHoy} de ${diasMes} (faltan ${diasRest} días)\n\n` +
     `💸 Gasto diario promedio: S/ ${gastoDiario.toFixed(2)}\n` +
     `📤 Gastos proyectados:    S/ ${gastoProyect.toFixed(2)}\n` +
@@ -421,22 +420,18 @@ function cmdProyeccion(chatId) {
 // Archivo → Propiedades del proyecto → claude_api_key
 function cmdAnalisisIA(chatId) {
   // chatId = 1538086276;
-  sendMessage(chatId, '🤖 Analizando tus finanzas...\n\nEstoy revisando ingresos, gastos, categorias, presupuestos, metas y proyeccion del mes.', true);
+  sendMessage(chatId, '🤖 Analizando tus finanzas...\n\nEstoy revisando ingresos, gastos, categorias, presupuestos, metas y proyeccion del ciclo 23-22.', true);
  
-  const hoy       = new Date();
-  const mesActual = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM');
-  const meses     = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-                     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const nombreMes = meses[hoy.getMonth()];
+  const hoy = new Date();
+  const periodo = cicloPagoDesdeFecha_(hoy);
+  const nombreMes = periodo.label;
  
-  // Datos del mes
-  const data = obtenerTransacciones(chatId).filter(r =>
-    mesKey_(r[0]) === mesActual
-  );
+  // Datos del ciclo de pago
+  const data = filtrarTransaccionesCiclo_(obtenerTransacciones(chatId), periodo);
  
   if (data.length < 3) {
     return sendMessage(chatId,
-      '📭 Necesito al menos 3 movimientos este mes para hacer un análisis útil.', true);
+      '📭 Necesito al menos 3 movimientos en este ciclo para hacer un análisis útil.', true);
   }
  
   let ingresos = 0, gastos = 0;
@@ -472,18 +467,18 @@ function cmdAnalisisIA(chatId) {
     .map(r => `- ${r[1]}: S/ ${r[3]} de S/ ${r[2]} ahorrados`)
     .join('\n');
  
-  const diaHoy      = hoy.getDate();
-  const diasMes     = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+  const diaHoy      = diasTranscurridosCiclo_(periodo, hoy);
+  const diasMes     = diasTotalesCiclo_(periodo);
   const pctMes      = Math.round((diaHoy / diasMes) * 100);
   const gastoDiario = gastos / diaHoy;
   const gastoProyect = gastoDiario * diasMes;
  
   const prompt = [
   'Eres un asesor financiero personal para Mayeson, un desarrollador independiente en Perú.',
-  'Analiza sus finanzas de este mes y da 5 consejos concretos con números reales.',
+  'Analiza sus finanzas del ciclo de pago 23-22 y da 5 consejos concretos con números reales.',
   '',
-  'DATOS DEL MES:',
-  `Mes: ${nombreMes} | Día ${diaHoy} de ${diasMes} (${pctMes}% del mes transcurrido)`,
+  'DATOS DEL CICLO:',
+  `Ciclo: ${nombreMes} | Día ${diaHoy} de ${diasMes} (${pctMes}% del ciclo transcurrido)`,
   `Ingresos: S/ ${ingresos.toFixed(2)}`,
   `Gastos: S/ ${gastos.toFixed(2)}`,
   `Balance: S/ ${(ingresos - gastos).toFixed(2)}`,
@@ -508,7 +503,7 @@ function cmdAnalisisIA(chatId) {
   '- Cierra con una frase corta de motivación.',
   '',
   'FORMATO EXACTO (respeta el markdown para Telegram):',
-  '💡 *Análisis de ' + nombreMes + '*',
+  '💡 *Análisis del ciclo ' + nombreMes + '*',
   '',
   '1. [consejo con número real]',
   '2. [consejo con número real]',
@@ -636,24 +631,16 @@ function alertarFijosPendientes() {
 // Uso: "comparar"
 
 function cmdCompararMeses(chatId) {
-  const hoy    = new Date();
-  const mesAct = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM');
-
-  // Mes anterior
-  const fechaAnt = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
-  const mesAnt   = Utilities.formatDate(fechaAnt, 'America/Lima', 'yyyy-MM');
-
-  const meses    = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-                    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const nomAct   = meses[hoy.getMonth()];
-  const nomAnt   = meses[fechaAnt.getMonth()];
+  const hoy = new Date();
+  const periodoAct = cicloPagoDesdeFecha_(hoy);
+  const periodoAnt = cicloPagoRelativo_(periodoAct, -1);
+  const nomAct = periodoAct.shortLabel;
+  const nomAnt = periodoAnt.shortLabel;
 
   const txs = obtenerTransacciones(chatId);
 
-  function calcular(mes) {
-    const data = txs.filter(r =>
-      mesKey_(r[0]) === mes
-    );
+  function calcular(periodo) {
+    const data = filtrarTransaccionesCiclo_(txs, periodo);
     let ing = 0, gas = 0;
     const cats = {};
     data.forEach(r => {
@@ -668,8 +655,8 @@ function cmdCompararMeses(chatId) {
     return { ing, gas, bal: ing - gas, cats, total: data.length };
   }
 
-  const act = calcular(mesAct);
-  const ant = calcular(mesAnt);
+  const act = calcular(periodoAct);
+  const ant = calcular(periodoAnt);
 
   if (!ant.total) {
     return sendMessage(chatId,
@@ -706,7 +693,7 @@ function cmdCompararMeses(chatId) {
     .join('\n');
 
   sendMessage(chatId,
-    `📆 *${nomAnt} vs ${nomAct}*\n\n` +
+    `📆 *Ciclos de pago 23-22*\n_${nomAnt} vs ${nomAct}_\n\n` +
     `*Ingresos*\n` +
     `${flecha(act.ing, ant.ing)} ${nomAnt}: S/ ${ant.ing.toFixed(2)}\n` +
     `${flecha(act.ing, ant.ing)} ${nomAct}: S/ ${act.ing.toFixed(2)} (${diff(act.ing, ant.ing)})\n\n` +

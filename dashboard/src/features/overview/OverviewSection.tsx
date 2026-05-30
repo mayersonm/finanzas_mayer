@@ -33,9 +33,9 @@ export function OverviewSection({
           color={patrimonioDisponible >= 0 ? 'emerald' : 'rose'}
         />
         <KpiCard
-          label={`Balance ${data.mes}`}
+          label="Balance del ciclo"
           value={formatMoney(monthBalance)}
-          detail={`${data.movimientos} movimientos registrados`}
+          detail={`${data.mes} · ${data.movimientosMes ?? data.movimientos} movimientos`}
           color={monthBalance >= 0 ? 'emerald' : 'rose'}
         />
         <KpiCard
@@ -62,8 +62,8 @@ export function OverviewSection({
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <Title>Ultimos 6 meses</Title>
-              <Text>Ingresos contra gastos</Text>
+              <Title>Ultimos 6 ciclos</Title>
+              <Text>Cierres 23-22, ingresos contra gastos</Text>
             </div>
             <Badge color="emerald">S/</Badge>
           </div>

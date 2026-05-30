@@ -177,6 +177,9 @@ export interface NetWorthData {
   currency: Currency | 'PEN';
   exchangeRate: number;
   exchangeRateSource?: string;
+  cycleStart?: string;
+  cycleEnd?: string;
+  cycleLabel?: string;
   assets: {
     cash: number;
     investments: number;
@@ -298,8 +301,11 @@ export interface DashboardData {
   gastosMes: number;
   balanceMes?: number;
   movimientos: number;
+  movimientosMes?: number;
   mes: string;
   mesKey?: string;
+  cycleStart?: string;
+  cycleEnd?: string;
   transacciones: Transaction[];
   categorias: CategoryTotal[];
   budgetRules?: BudgetRule[];

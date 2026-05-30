@@ -84,6 +84,14 @@ function handleDashboardApi(e) {
       return dashJson_(dashSendDailyEmail_());
     }
 
+    if (action === 'send_monthly_email' || action === 'email_monthly') {
+      return dashJson_(dashSendMonthlyEmail_(params));
+    }
+
+    if (action === 'send_yearly_email' || action === 'email_yearly') {
+      return dashJson_(dashSendYearlyEmail_(params));
+    }
+
     if (action === 'send_daily_telegram' || action === 'telegram_daily') {
       return dashJson_(dashSendDailyTelegram_(params));
     }
@@ -91,7 +99,7 @@ function handleDashboardApi(e) {
     return dashJson_({
       ok: false,
       error: 'Accion no valida',
-      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email', 'send_daily_telegram'],
+      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email', 'send_monthly_email', 'send_yearly_email', 'send_daily_telegram'],
     });
   } catch (err) {
     Logger.log('Dashboard API error: ' + (err && err.stack ? err.stack : err));
@@ -104,10 +112,11 @@ function handleDashboardApi(e) {
 
 function dashDashboardData_(params) {
   const now = new Date();
-  const monthKey = Utilities.formatDate(now, DASH_TZ, 'yyyy-MM');
+  const periodo = cicloPagoDesdeFecha_(now);
+  const monthKey = periodo.key;
   const allTxs = dashReadTransactions_(params);
   const monthTxs = allTxs.filter(function (tx) {
-    return tx.fecha.indexOf(monthKey) === 0;
+    return tx.fecha >= periodo.startKey && tx.fecha <= periodo.endKey;
   });
 
   const ingresos = dashSum_(allTxs, 'ingreso');
@@ -131,8 +140,11 @@ function dashDashboardData_(params) {
     gastosMes: dashRound_(gastosMes),
     balanceMes: dashRound_(ingresosMes - gastosMes),
     movimientos: allTxs.length,
-    mes: dashMonthName_(now),
+    movimientosMes: monthTxs.length,
+    mes: periodo.label,
     mesKey: monthKey,
+    cycleStart: periodo.startKey,
+    cycleEnd: periodo.endKey,
     transacciones: allTxs.slice(-20).reverse(),
     categorias: categorias,
     meses: meses,
@@ -285,6 +297,35 @@ function dashSendDailyEmail_() {
     ok: true,
     result: result || 'Resumen diario enviado',
     type: 'daily',
+    sentAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
+  };
+}
+
+function dashSendMonthlyEmail_(params) {
+  const current = String(params.current || params.actual || '1') !== '0';
+  const result = current
+    ? enviarResumenMensualEmailPeriodo_(periodoPagoEmail_(new Date()), 'manual')
+    : enviarResumenMensualEmail();
+
+  return {
+    ok: true,
+    result: result || 'Resumen mensual enviado',
+    type: 'monthly',
+    cycleDay: 23,
+    sentAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
+  };
+}
+
+function dashSendYearlyEmail_(params) {
+  const year = Number(params.year || Utilities.formatDate(new Date(), DASH_TZ, 'yyyy'));
+  const result = enviarResumenAnualEmailAnio_(year, 'manual');
+
+  return {
+    ok: true,
+    result: result || 'Resumen anual enviado',
+    type: 'yearly',
+    year: year,
+    cycleDay: 23,
     sentAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
   };
 }
