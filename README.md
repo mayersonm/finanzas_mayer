@@ -116,10 +116,14 @@ credito configurar corte 25 pago 10
 Registra o corrige movimientos:
 
 ```text
+cobro salario sueldo mayo 3000
+gasto supermercado arroz plaza vea 25
 gasto 120 supermercado metro credito
 pago ultimo credito
 pago 1 debito
 ```
+
+Si escribes una palabra que no es categoria, el bot la conserva como descripcion y deja la categoria como `otro` o la reclasifica por reglas si aplica.
 
 ## Gastos fijos
 

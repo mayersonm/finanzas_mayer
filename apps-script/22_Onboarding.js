@@ -16,6 +16,8 @@ function cmdOnboarding(chatId) {
     '',
     '*Comandos utiles*',
     '• `perfil Mayer mayer@email.com` - poner nombre/correo',
+    '• `cobro salario sueldo mayo 3000`',
+    '• `gasto supermercado arroz plaza vea 25`',
     '• `gasto 25 supermercado almuerzo`',
     '• `gasto 120 supermercado metro credito`',
     '• Envia una foto clara de un recibo',

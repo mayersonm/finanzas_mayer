@@ -12,6 +12,12 @@ Dashboard Inicio:
 - Cerrar mes guarda el corte actual en D1.
 - Top fugas muestra los 5 gastos variables principales del mes.
 
+Telegram movimientos:
+- cobro salario sueldo mayo 3000
+- gasto supermercado arroz plaza vea 25
+- gasto 25 supermercado almuerzo
+- gasto 25 arroz conserva "arroz" como descripcion aunque la categoria sea otro.
+
 cd dashboard
 npm ci
 $env:VITE_GAS_API_URL="https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard"

@@ -1,7 +1,7 @@
 ﻿// ---- REGISTRAR MOVIMIENTO ----------------------------------
 
 function registrarMovimiento(chatId, match, originalText) {
-    const tipo = match[1];
+    const tipo = String(match[1]).toLowerCase() === 'cobro' ? 'ingreso' : match[1];
     const monto = parseFloat(match[2].replace(',', '.'));
     const monedaDirecta = normalizarMoneda_(match[3]);
     const catTexto = match[4];
@@ -11,10 +11,9 @@ function registrarMovimiento(chatId, match, originalText) {
     const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
     const hora = Utilities.formatDate(new Date(), 'America/Lima', 'HH:mm');
     const pago = resolverPagoMovimiento_(tipo, monedaInfo.texto || '', fecha);
-    const cat = normalizarCat(catTexto, pago.descripcion || monedaInfo.texto, chatId);
-    const desc = pago.descripcion
-        ? capitalizar(pago.descripcion)
-        : capitalizar(cat);
+    const detalle = resolverDetalleMovimiento_(catTexto, pago.descripcion, chatId);
+    const cat = detalle.cat;
+    const desc = capitalizar(detalle.desc);
 
     if (isNaN(monto) || monto <= 0) {
         return sendMessage(chatId, '❌ El monto debe ser un número positivo. Ej: *gasto 45.50 supermercado almuerzo*', true);
@@ -69,6 +68,30 @@ function registrarMovimiento(chatId, match, originalText) {
     );
     // Alerta si supera el presupuesto de esta categoría
     if (tipo === 'gasto') verificarPresupuesto(chatId, cat);
+}
+
+function resolverDetalleMovimiento_(catTexto, descTexto, chatId) {
+    const catOriginal = String(catTexto || '').trim();
+    const descLimpia = String(descTexto || '').trim();
+    const categoriaExplicita = esCategoriaExplicitaMovimiento_(catOriginal, chatId);
+    const descripcion = categoriaExplicita
+        ? (descLimpia || catOriginal)
+        : [catOriginal, descLimpia].filter(Boolean).join(' ');
+    const cat = categoriaExplicita
+        ? normalizarCatBasica_(catOriginal)
+        : normalizarCat('otro', descripcion, chatId);
+
+    return {
+        cat: cat || 'otro',
+        desc: descripcion || catOriginal || cat || 'Movimiento',
+    };
+}
+
+function esCategoriaExplicitaMovimiento_(catTexto, chatId) {
+    const key = normalizarTextoClave_(catTexto);
+    if (!key) return false;
+    if (key === 'otro' || key === 'otros') return true;
+    return normalizarCatBasica_(catTexto) !== 'otro';
 }
 
 // ---- CORREGIR CATEGORIA ------------------------------------

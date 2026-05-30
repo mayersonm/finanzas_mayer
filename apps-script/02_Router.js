@@ -121,12 +121,36 @@ function handleMessage(chatId, text) {
   
 
   // ── REGISTRAR MOVIMIENTO (siempre al final) ──────────────
-  const match = lower.match(/^(gasto|ingreso)\s+([\d]+(?:[.,]\d{1,2})?)(?:\s+(pen|usd))?\s+(\w+)(?:\s+(.+))?$/);
+  const match = lower.match(/^(gasto|ingreso|cobro)\s+([\d]+(?:[.,]\d{1,2})?)(?:\s+(pen|usd))?\s+([^\s]+)(?:\s+(.+))?$/);
   if (match) return registrarMovimiento(chatId, match, text);
+
+  const matchCategoriaPrimero = parseMovimientoCategoriaPrimero_(lower);
+  if (matchCategoriaPrimero) return registrarMovimiento(chatId, matchCategoriaPrimero, text);
 
   // ── NO RECONOCIDO ────────────────────────────────────────
   sendMessage(chatId,
     '❓ No entendí ese mensaje.\n\nEscribe *ayuda* para ver los comandos.',
     true
   );
+}
+
+function parseMovimientoCategoriaPrimero_(text) {
+  const match = String(text || '').trim().match(/^(gasto|ingreso|cobro)\s+([^\s]+)\s+(.+)$/i);
+  if (!match) return null;
+
+  const tipo = match[1];
+  const cat = match[2];
+  const resto = String(match[3] || '').trim();
+
+  const amountFirst = resto.match(/^([\d]+(?:[.,]\d{1,2})?)(?:\s+(pen|usd))?(?:\s+(.+))?$/i);
+  if (amountFirst) {
+    return [match[0], tipo, amountFirst[1], amountFirst[2] || '', cat, amountFirst[3] || ''];
+  }
+
+  const amountLast = resto.match(/^(.+?)\s+([\d]+(?:[.,]\d{1,2})?)(?:\s+(pen|usd))?$/i);
+  if (amountLast) {
+    return [match[0], tipo, amountLast[2], amountLast[3] || '', cat, amountLast[1] || ''];
+  }
+
+  return null;
 }
