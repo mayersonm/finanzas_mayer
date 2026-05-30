@@ -89,7 +89,7 @@ function construirTextoEmail_(data) {
     'Movimientos',
     movimientos,
     '',
-    'Mes de ' + data.nombreMes,
+    'Ciclo de pago ' + data.nombreMes,
     'Ingresos: ' + fmtEmail_(data.totalesMes.ingresos),
     'Gastos: ' + fmtEmail_(data.totalesMes.gastos),
     'Balance: ' + fmtSignedEmail_(balanceMes),
@@ -104,7 +104,7 @@ function construirHtmlEmail_(data) {
 
   const categoriasRows = data.categoriasHoy.length
     ? data.categoriasHoy.map(function (c) {
-        return '<tr><td>' + escEmail_(capitalizar(c.cat)) + '</td><td align="right"><strong>' + fmtEmail_(c.monto) + '</strong></td></tr>';
+        return '<tr><td style="padding:8px 8px 8px 0;word-break:break-word">' + escEmail_(capitalizar(c.cat)) + '</td><td width="120" align="right" style="padding:8px 0 8px 8px;white-space:nowrap"><strong>' + fmtEmail_(c.monto) + '</strong></td></tr>';
       }).join('')
     : '<tr><td colspan="2" style="color:#6b7280">Sin gastos por categoria hoy</td></tr>';
 
@@ -115,8 +115,8 @@ function construirHtmlEmail_(data) {
         const signo = tipo === 'ingreso' ? '+' : '-';
         return [
           '<tr>',
-          '<td><strong>' + escEmail_(r[3]) + '</strong><br><span style="color:#6b7280">' + escEmail_(r[4]) + '</span></td>',
-          '<td align="right" style="color:' + color + '"><strong>' + signo + fmtEmail_(parseFloat(r[5]) || 0) + '</strong></td>',
+          '<td style="padding:9px 8px 9px 0;word-break:break-word"><strong>' + escEmail_(r[3]) + '</strong><br><span style="color:#6b7280">' + escEmail_(r[4]) + '</span></td>',
+          '<td width="130" align="right" style="padding:9px 0 9px 8px;color:' + color + ';white-space:nowrap"><strong>' + signo + ' ' + fmtEmail_(parseFloat(r[5]) || 0) + '</strong></td>',
           '</tr>',
         ].join('');
       }).join('')
@@ -151,8 +151,8 @@ function construirHtmlEmail_(data) {
 
   return [
     '<div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827">',
-    '<div style="max-width:680px;margin:0 auto;padding:24px">',
-    '<div style="background:#111827;color:#f9fafb;border-radius:14px;padding:22px;margin-bottom:16px">',
+    '<div style="max-width:680px;width:100%;margin:0 auto;padding:16px;box-sizing:border-box">',
+    '<div style="background:#111827;color:#f9fafb;border-radius:10px;padding:18px;margin-bottom:14px">',
     '<div style="font-size:12px;text-transform:uppercase;color:#9ca3af">Resumen financiero diario</div>',
     '<h1 style="margin:6px 0 0;font-size:24px">' + escEmail_(data.fechaLarga) + '</h1>',
     '</div>',
@@ -163,10 +163,11 @@ function construirHtmlEmail_(data) {
     ]),
     seccionEmail_('Movimientos de hoy', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse">' + txRows + '</table>'),
     seccionEmail_('Gastos por categoria', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse">' + categoriasRows + '</table>'),
+    '<div style="font-size:13px;color:#6b7280;margin:2px 0 10px;line-height:1.4">Ciclo de pago: <strong style="color:#111827">' + escEmail_(data.nombreMes) + '</strong></div>',
     cardsEmail_([
-      ['Ingresos ' + data.nombreMes, fmtEmail_(data.totalesMes.ingresos), '#16a34a'],
-      ['Gastos ' + data.nombreMes, fmtEmail_(data.totalesMes.gastos), '#dc2626'],
-      ['Balance mes', fmtSignedEmail_(balanceMes), colorBalanceMes],
+      ['Ingresos del ciclo', fmtEmail_(data.totalesMes.ingresos), '#16a34a'],
+      ['Gastos del ciclo', fmtEmail_(data.totalesMes.gastos), '#dc2626'],
+      ['Balance del ciclo', fmtSignedEmail_(balanceMes), colorBalanceMes],
     ]),
     seccionEmail_('Presupuestos', presupuestosHtml),
     seccionEmail_('Metas', metasHtml),
@@ -178,16 +179,18 @@ function construirHtmlEmail_(data) {
 
 function cardEmail_(label, value, color) {
   return [
-    '<div style="background:#ffffff;border-radius:12px;padding:16px;border:1px solid #e5e7eb">',
-    '<div style="font-size:11px;text-transform:uppercase;color:#6b7280">' + escEmail_(label) + '</div>',
-    '<div style="font-size:22px;font-weight:700;color:' + color + ';margin-top:6px">' + escEmail_(value) + '</div>',
-    '</div>',
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0;background:#ffffff;border:1px solid #e5e7eb;border-radius:10px">',
+    '<tr><td style="padding:14px 16px">',
+    '<div style="font-size:11px;line-height:1.35;text-transform:uppercase;color:#6b7280;word-break:break-word">' + escEmail_(label) + '</div>',
+    '<div style="font-size:21px;line-height:1.25;font-weight:700;color:' + color + ';margin-top:6px;word-break:break-word">' + escEmail_(value) + '</div>',
+    '</td></tr>',
+    '</table>',
   ].join('');
 }
 
 function seccionEmail_(title, content) {
   return [
-    '<div style="background:#ffffff;border-radius:12px;padding:18px;border:1px solid #e5e7eb;margin-bottom:16px">',
+    '<div style="background:#ffffff;border-radius:10px;padding:16px;border:1px solid #e5e7eb;margin-bottom:14px">',
     '<h2 style="font-size:16px;margin:0 0 12px">' + escEmail_(title) + '</h2>',
     content,
     '</div>',
@@ -195,16 +198,15 @@ function seccionEmail_(title, content) {
 }
 
 function cardsEmail_(items) {
-  const width = Math.floor(100 / Math.max(items.length, 1));
-  const cells = items.map(function (item) {
+  const rows = items.map(function (item) {
     return [
-      '<td width="' + width + '%" valign="top" style="padding:0 6px 12px 6px">',
+      '<tr><td style="padding:0 0 10px 0">',
       cardEmail_(item[0], item[1], item[2]),
-      '</td>',
+      '</td></tr>',
     ].join('');
   }).join('');
 
-  return '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 4px"><tr>' + cells + '</tr></table>';
+  return '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 4px">' + rows + '</table>';
 }
 
 function bloqueAvanceEmail_(label, value, pct, color, caption) {
@@ -213,15 +215,17 @@ function bloqueAvanceEmail_(label, value, pct, color, caption) {
   return [
     '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:10px 0 14px">',
     '<tr>',
-    '<td style="font-size:13px;font-weight:700;color:#111827;padding:0 12px 6px 0">' + escEmail_(label) + '</td>',
-    '<td align="right" style="font-size:13px;color:#111827;padding:0 0 6px 12px;white-space:nowrap">' + escEmail_(value) + '</td>',
+    '<td style="font-size:13px;font-weight:700;color:#111827;padding:0 0 3px 0;word-break:break-word">' + escEmail_(label) + '</td>',
     '</tr>',
-    '<tr><td colspan="2" style="padding:0">',
+    '<tr>',
+    '<td style="font-size:13px;color:#111827;padding:0 0 8px 0;word-break:break-word">' + escEmail_(value) + '</td>',
+    '</tr>',
+    '<tr><td style="padding:0">',
     '<div style="height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden">',
     '<div style="width:' + safePct + '%;height:8px;background:' + color + ';border-radius:999px"></div>',
     '</div>',
     '</td></tr>',
-    '<tr><td colspan="2" style="font-size:12px;color:' + color + ';padding-top:4px">' + escEmail_(caption) + '</td></tr>',
+    '<tr><td style="font-size:12px;color:' + color + ';padding-top:4px">' + escEmail_(caption) + '</td></tr>',
     '</table>',
   ].join('');
 }
