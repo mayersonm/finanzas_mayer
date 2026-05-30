@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { RiDownloadLine } from '@remixicon/react';
 import { Badge, Card, Text, Title } from '@tremor/react';
 import { apiEndpoint } from '../../app/api';
 import { TransactionsTable } from '../../components/dashboard/TransactionsTable';
@@ -55,6 +56,48 @@ export function MovementsSection({
     void loadTransactions();
   }, [loadTransactions]);
 
+  const exportFiltered = useCallback(() => {
+    if (!transactions.length) return;
+
+    const headers = [
+      'fecha',
+      'hora',
+      'tipo',
+      'descripcion',
+      'categoria',
+      'metodo_pago',
+      'fecha_pago',
+      'tarjeta',
+      'moneda',
+      'monto',
+      'recibo',
+    ];
+    const rows = transactions.map((tx) => [
+      tx.fecha,
+      tx.hora || '',
+      tx.tipo,
+      tx.desc,
+      tx.cat,
+      tx.paymentMethod || '',
+      tx.paymentDueDate || '',
+      tx.cardName || '',
+      tx.currency || 'PEN',
+      Number(tx.monto || 0).toFixed(2),
+      tx.receipt?.id || '',
+    ]);
+    const csv = `\ufeff${[headers, ...rows].map((row) => row.map(csvCell).join(';')).join('\r\n')}`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const month = filters.month || data.mesKey || new Date().toISOString().slice(0, 7);
+    link.href = url;
+    link.download = `movimientos-filtrados-${month}-${transactions.length}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, [data.mesKey, filters.month, transactions]);
+
   return (
     <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -62,7 +105,18 @@ export function MovementsSection({
           <Title>Movimientos</Title>
           <Text>{transactions.length} registros {loading ? 'cargando...' : 'filtrados'}</Text>
         </div>
-        <Badge color="emerald">{data.mes}</Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-tremor-default border border-cyan-500/30 bg-cyan-500/10 px-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400/60 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!transactions.length || loading}
+            onClick={exportFiltered}
+          >
+            <RiDownloadLine className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Exportar filtrado
+          </button>
+          <Badge color="emerald">{data.mes}</Badge>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-3 lg:grid-cols-6">
@@ -100,4 +154,9 @@ export function MovementsSection({
       />
     </Card>
   );
+}
+
+function csvCell(value: unknown) {
+  const text = String(value ?? '').replace(/\r?\n/g, ' ').trim();
+  return `"${text.replace(/"/g, '""')}"`;
 }
