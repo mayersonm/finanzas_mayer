@@ -1,7 +1,12 @@
 
 function normalizarCat(cat, desc, chatId) {
   const remote = clasificarCategoriaD1_(cat, desc, chatId);
-  return normalizarCatBasica_(remote || cat);
+  if (remote) return normalizarCatBasica_(remote);
+
+  const semantica = normalizarCatPorTexto_(cat, desc);
+  if (semantica) return semantica;
+
+  return normalizarCatBasica_(cat);
 }
 
 function normalizarCatBasica_(cat) {
@@ -14,6 +19,8 @@ function normalizarCatBasica_(cat) {
     comida: 'supermercado',
     mercado: 'supermercado',
     supermercado: 'supermercado',
+    supermercados: 'supermercado',
+    abarrotes: 'supermercado',
     fruta: 'supermercado',
     frutas: 'supermercado',
     hortaliza: 'supermercado',
@@ -42,6 +49,55 @@ function normalizarCatBasica_(cat) {
 
   if (direct[rawCat]) return direct[rawCat];
   return 'otro';
+}
+
+function normalizarCatPorTexto_(cat, desc) {
+  const text = normalizarTextoClave_((cat || '') + ' ' + (desc || ''));
+  if (!text) return '';
+
+  const entretenimiento = [
+    'comida rapida',
+    'fast food',
+    'kfc',
+    'popeyes',
+    'bembos',
+    'mcdonalds',
+    'mc donald',
+    'burger king',
+    'pizza hut',
+    'dominos',
+    'papa john',
+    'hamburguesa',
+    'salchipapa'
+  ];
+  if (entretenimiento.some(function (keyword) { return textoTieneClave_(text, keyword); })) return 'entretenimiento';
+
+  const supermercado = [
+    'supermercado',
+    'supermercados',
+    'comida',
+    'alimentacion',
+    'alimento',
+    'alimentos',
+    'abarrotes',
+    'mercado',
+    'fruta',
+    'frutas',
+    'hortaliza',
+    'hortalizas',
+    'verdura',
+    'verduras'
+  ];
+  if (supermercado.some(function (keyword) { return textoTieneClave_(text, keyword); })) return 'supermercado';
+
+  return '';
+}
+
+function textoTieneClave_(text, keyword) {
+  const clean = normalizarTextoClave_(keyword);
+  if (!clean) return false;
+  const pattern = clean.split(/\s+/).filter(Boolean).join('\\s+');
+  return new RegExp('(^|\\s)' + pattern + '(\\s|$)').test(text);
 }
 
 function categoriasParaPresupuesto_(cat, chatId) {
