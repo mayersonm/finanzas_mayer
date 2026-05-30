@@ -77,7 +77,7 @@ export function OverviewSection({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Title>{closure.label || 'Cierre 23'}</Title>
-              <Text>{closure.range || 'Mes calendario del cierre'}</Text>
+              <Text>{data.mes} · cierre mensual {formatDateLabel(closure.closeDate)}</Text>
             </div>
             <Badge color={closure.queQueda >= 0 ? 'emerald' : 'rose'}>
               {closure.movimientos ?? data.movimientosMes ?? 0} movimientos
@@ -260,4 +260,11 @@ function ClosureLine({ label, value, strong, danger }: { label: string; value: n
       <span className={`shrink-0 font-mono ${strong || danger ? 'font-semibold' : ''} ${valueClass}`}>{formatMoney(value)}</span>
     </div>
   );
+}
+
+function formatDateLabel(value?: string) {
+  if (!value) return '23';
+  const [year, month, day] = value.split('-');
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
 }
