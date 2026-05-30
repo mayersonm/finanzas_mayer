@@ -759,7 +759,7 @@ async function dashboard(env, params) {
   const cycle = payCycleFromDate(now);
   const monthKey = localDateKey(now).slice(0, 7);
   const calendarMonth = monthRangeFromKey(monthKey);
-  const cycleKey = cycle.key;
+  const cycleKey = monthKey;
   const monthName = monthLongNameFromKey(`${monthKey}-01`);
   const usdRate = Number((await exchangeRate(env)).rate || 3.85);
 
@@ -780,15 +780,6 @@ async function dashboard(env, params) {
     FROM transactions
     WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
   `).bind(usdRate, usdRate, chatId, calendarMonth.startKey, calendarMonth.endKey).first();
-
-  const cycleTotals = await env.DB.prepare(`
-    SELECT
-      COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresosCierre,
-      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastosCierre,
-      COUNT(*) AS movimientosCierre
-    FROM transactions
-    WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
-  `).bind(usdRate, usdRate, chatId, cycle.startKey, cycle.endKey).first();
 
   const latest = await env.DB.prepare(`
     SELECT
@@ -818,9 +809,9 @@ async function dashboard(env, params) {
   const categories = await categoriesWithSpending(env, chatId, calendarMonth, usdRate);
 
   const months = await lastMonths(env, chatId, now, usdRate);
-  const budgets = await budgetsWithSpending(env, chatId, cycle, usdRate);
+  const budgets = await budgetsWithSpending(env, chatId, calendarMonth, usdRate);
   const budgetRules = await loadBudgetRules(env, chatId);
-  const fixedExpenses = await fixedExpensesList(env, chatId, cycleKey, usdRate, cycle);
+  const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, usdRate, calendarMonth);
   const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
   const emailConfig = await emailConfigFromGas(env);
@@ -833,8 +824,8 @@ async function dashboard(env, params) {
   const gastos = Number(totals?.gastos || 0);
   const ingresosMes = Number(monthTotals?.ingresosMes || 0);
   const gastosMes = Number(monthTotals?.gastosMes || 0);
-  const ingresosCierre = Number(cycleTotals?.ingresosCierre || 0);
-  const gastosCierre = Number(cycleTotals?.gastosCierre || 0);
+  const ingresosCierre = ingresosMes;
+  const gastosCierre = gastosMes;
   const gastosConFijosPagados = round(gastos + fixedSummary.paid);
   const gastosMesConFijosPagados = round(gastosMes + fixedSummary.paid);
   const balanceCaja = round(ingresos - gastosConFijosPagados);
@@ -845,16 +836,16 @@ async function dashboard(env, params) {
   const balanceCierre = round(ingresosCierre - gastosCierreConFijos);
   const pendienteComprometido = round(deudaPendiente + fixedSummary.pending + budget.remaining);
   const cierre = {
-    label: 'Cierre 23',
-    range: cycle.rangeLabel,
-    start: cycle.startKey,
-    end: cycle.endKey,
-    closeDate: cycle.closeDate,
+    label: `Cierre ${calendarMonth.closeDate.slice(8, 10)}/${calendarMonth.closeDate.slice(5, 7)}`,
+    range: calendarMonth.rangeLabel,
+    start: calendarMonth.startKey,
+    end: calendarMonth.endKey,
+    closeDate: calendarMonth.closeDate,
     ingresos: round(ingresosCierre),
     gastos: gastosCierreConFijos,
     gastosMovimientos: round(gastosCierre),
     balance: balanceCierre,
-    movimientos: Number(cycleTotals?.movimientosCierre || 0),
+    movimientos: Number(monthTotals?.movimientosMes || 0),
     fijosPagados: fixedSummary.paid,
     fijosPendientes: fixedSummary.pending,
     deudasPendientes: deudaPendiente,
@@ -904,10 +895,10 @@ async function dashboard(env, params) {
     mes: monthName,
     mesKey: monthKey,
     cycleKey,
-    cycleStart: cycle.startKey,
-    cycleEnd: cycle.endKey,
-    cycleClose: cycle.closeDate,
-    cycleRange: cycle.rangeLabel,
+    cycleStart: calendarMonth.startKey,
+    cycleEnd: calendarMonth.endKey,
+    cycleClose: calendarMonth.closeDate,
+    cycleRange: calendarMonth.rangeLabel,
     movimientosMes: Number(monthTotals?.movimientosMes || 0),
     cierre,
     transacciones: (latest.results || []).map(txShape),
@@ -3905,12 +3896,15 @@ function monthRangeFromKey(monthKey) {
   const part = parseDateKeyParts(`${String(monthKey || '').slice(0, 7)}-01`);
   const startKey = dateKeyFromParts(part.year, part.monthIndex, 1);
   const endKey = dateKeyFromParts(part.year, part.monthIndex + 1, 0);
+  const closeDate = dateKeyFromParts(part.year, part.monthIndex, 23);
   return {
     key: startKey.slice(0, 7),
     startKey,
     endKey,
+    closeDate,
     label: monthLongNameFromKey(startKey),
     shortLabel: monthShortNameFromKey(startKey),
+    rangeLabel: `${startKey.slice(8, 10)}/${startKey.slice(5, 7)}/${startKey.slice(0, 4)} - ${endKey.slice(8, 10)}/${endKey.slice(5, 7)}/${endKey.slice(0, 4)}`,
   };
 }
 

@@ -112,13 +112,15 @@ function handleDashboardApi(e) {
 
 function dashDashboardData_(params) {
   const now = new Date();
-  const periodo = cicloPagoDesdeFecha_(now);
   const monthKey = Utilities.formatDate(now, DASH_TZ, 'yyyy-MM');
-  const cycleKey = periodo.key;
+  const monthStart = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 1), DASH_TZ, 'yyyy-MM-dd');
+  const monthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const monthEnd = Utilities.formatDate(monthEndDate, DASH_TZ, 'yyyy-MM-dd');
+  const closeDate = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 23), DASH_TZ, 'yyyy-MM-dd');
+  const closeLabel = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 23), DASH_TZ, 'dd/MM');
+  const monthRangeLabel = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 1), DASH_TZ, 'dd/MM/yyyy') + ' - ' + Utilities.formatDate(monthEndDate, DASH_TZ, 'dd/MM/yyyy');
+  const cycleKey = monthKey;
   const allTxs = dashReadTransactions_(params);
-  const cycleTxs = allTxs.filter(function (tx) {
-    return tx.fecha >= periodo.startKey && tx.fecha <= periodo.endKey;
-  });
   const monthTxs = allTxs.filter(function (tx) {
     return tx.fecha.indexOf(monthKey) === 0;
   });
@@ -128,28 +130,27 @@ function dashDashboardData_(params) {
   const ingresosMes = dashSum_(monthTxs, 'ingreso');
   const gastosMes = dashSum_(monthTxs, 'gasto');
   const categorias = dashCategories_(monthTxs);
-  const categoriasCiclo = dashCategories_(cycleTxs);
-  const presupuestos = dashReadBudgets_(params, categoriasCiclo);
-  const fijos = dashReadFixedExpenses_(params, cycleTxs, cycleKey);
+  const presupuestos = dashReadBudgets_(params, categorias);
+  const fijos = dashReadFixedExpenses_(params, monthTxs, cycleKey);
   const deudas = dashReadDebts_(params);
   const fijosResumen = dashFixedSummary_(fijos);
   const presupuestoResumen = dashBudgetSummary_(presupuestos);
   const deudaPendiente = dashDebtPending_(deudas);
-  const ingresosCierre = dashSum_(cycleTxs, 'ingreso');
-  const gastosCierre = dashSum_(cycleTxs, 'gasto');
+  const ingresosCierre = ingresosMes;
+  const gastosCierre = gastosMes;
   const balanceCierre = ingresosCierre - gastosCierre;
   const pendienteComprometido = deudaPendiente + fijosResumen.pending + presupuestoResumen.remaining;
   const cierre = {
-    label: 'Cierre 23',
-    range: periodo.rangeLabel,
-    start: periodo.startKey,
-    end: periodo.endKey,
-    closeDate: periodo.closeKey,
+    label: 'Cierre ' + closeLabel,
+    range: monthRangeLabel,
+    start: monthStart,
+    end: monthEnd,
+    closeDate: closeDate,
     ingresos: dashRound_(ingresosCierre),
     gastos: dashRound_(gastosCierre),
     gastosMovimientos: dashRound_(gastosCierre),
     balance: dashRound_(balanceCierre),
-    movimientos: cycleTxs.length,
+    movimientos: monthTxs.length,
     fijosPagados: fijosResumen.paid,
     fijosPendientes: fijosResumen.pending,
     deudasPendientes: deudaPendiente,
@@ -178,9 +179,10 @@ function dashDashboardData_(params) {
     mes: nombreMesCiclo_(now),
     mesKey: monthKey,
     cycleKey: cycleKey,
-    cycleStart: periodo.startKey,
-    cycleEnd: periodo.endKey,
-    cycleRange: periodo.rangeLabel,
+    cycleStart: monthStart,
+    cycleEnd: monthEnd,
+    cycleClose: closeDate,
+    cycleRange: monthRangeLabel,
     transacciones: allTxs.slice(-20).reverse(),
     categorias: categorias,
     meses: meses,
