@@ -633,6 +633,8 @@ Envia estos comandos al bot:
 ```text
 ayuda
 credito configurar corte 25 pago 10
+cobro salario sueldo mayo 3000
+gasto supermercado arroz plaza vea 25
 gasto 10 supermercado prueba debito
 gasto 12 USD supermercado cafe
 gasto 120 supermercado metro credito
@@ -652,6 +654,8 @@ reglas
 regla kfc entretenimiento
 regla presupuesto entretenimiento incluye otro
 ```
+
+El bot acepta monto primero o categoria primero. Si la palabra despues del monto no es una categoria conocida, no la pierde: la conserva como descripcion y la categoria queda como `otro` o se reclasifica por reglas.
 
 Las deudas pueden registrarse en `PEN` o `USD`. El dashboard muestra el monto original y, para USD, una conversion referencial a soles usando la tasa USD/PEN que consulta y cachea el Worker.
 Cada pago de deuda tambien se registra como movimiento de gasto para que el balance de caja refleje el dinero que salio.
