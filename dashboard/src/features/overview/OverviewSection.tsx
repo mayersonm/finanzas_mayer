@@ -49,7 +49,7 @@ export function OverviewSection({
         <KpiCard
           label="Balance del mes"
           value={formatMoney(monthBalance)}
-          detail={`${data.mes} · ${data.movimientosMes ?? data.movimientos} movimientos`}
+          detail={`${data.mes} - ${data.movimientosMes ?? data.movimientos} movimientos`}
           color={monthBalance >= 0 ? 'emerald' : 'rose'}
         />
         <KpiCard
@@ -77,7 +77,7 @@ export function OverviewSection({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Title>{closure.label || 'Cierre 23'}</Title>
-              <Text>{data.mes} · cierre mensual {formatDateLabel(closure.closeDate)}</Text>
+              <Text>{data.mes} - cierre mensual {formatDateLabel(closure.closeDate)}</Text>
             </div>
             <Badge color={closure.queQueda >= 0 ? 'emerald' : 'rose'}>
               {closure.movimientos ?? data.movimientosMes ?? 0} movimientos
@@ -94,26 +94,28 @@ export function OverviewSection({
           <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
             <ClosureLine label="Fijos pagados" value={closure.fijosPagados} />
             <ClosureLine label="Fijos pendientes" value={closure.fijosPendientes} />
+            <ClosureLine label="Presupuesto usado" value={closure.presupuestoUsado} />
+            <ClosureLine label="Presupuesto pendiente" value={closure.presupuestoRestante} strong />
             <ClosureLine label="Deudas pendientes" value={closure.deudasPendientes} />
-            <ClosureLine label="Pendiente comprometido" value={closure.pendienteComprometido} strong />
+            <ClosureLine label="Total pendiente" value={closure.pendienteComprometido} strong />
           </div>
         </Card>
 
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <Title>Presupuesto del cierre</Title>
-              <Text>{closureBudgetPct}% usado</Text>
+              <Title>Presupuesto pendiente</Title>
+              <Text>{closureBudgetPct}% usado del limite</Text>
             </div>
             <Badge color={closure.presupuestoExcedido && closure.presupuestoExcedido > 0 ? 'rose' : closureBudgetPct >= 80 ? 'amber' : 'emerald'}>
-              {formatMoney(closure.presupuestoUsado)}
+              {formatMoney(closure.presupuestoRestante)}
             </Badge>
           </div>
           <ProgressBar className="mt-5" value={closureBudgetPct} color={closureBudgetPct >= 100 ? 'rose' : closureBudgetPct >= 80 ? 'amber' : 'emerald'} />
           <div className="mt-4 space-y-2 text-sm">
             <ClosureLine label="Limite" value={closure.presupuestoLimite} />
             <ClosureLine label="Usado" value={closure.presupuestoUsado} />
-            <ClosureLine label="Restante" value={closure.presupuestoRestante} strong />
+            <ClosureLine label="Pendiente" value={closure.presupuestoRestante} strong />
             {closure.presupuestoExcedido && closure.presupuestoExcedido > 0 ? (
               <ClosureLine label="Excedido" value={closure.presupuestoExcedido} danger />
             ) : null}
