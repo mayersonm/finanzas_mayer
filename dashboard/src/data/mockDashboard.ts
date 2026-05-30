@@ -13,7 +13,7 @@ export const MOCK_DASHBOARD: DashboardData = {
   balanceMes: 5350,
   movimientos: 12,
   movimientosMes: 12,
-  mes: '23/05/2026 - 22/06/2026',
+  mes: 'Mayo',
   mesKey: '2026-05',
   cycleStart: '2026-05-23',
   cycleEnd: '2026-06-22',

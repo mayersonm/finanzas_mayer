@@ -446,7 +446,8 @@ function periodoPagoEmail_(date) {
     endKey: endKey,
     closeKey: closeKey,
     key: Utilities.formatDate(start, 'America/Lima', 'yyyy-MM'),
-    label: 'Cierre ' + Utilities.formatDate(close, 'America/Lima', 'dd/MM/yyyy'),
+    label: nombreMesEmail_(start),
+    shortLabel: nombreMesCortoEmail_(start),
     rangeLabel: Utilities.formatDate(start, 'America/Lima', 'dd/MM/yyyy') + ' - ' + Utilities.formatDate(end, 'America/Lima', 'dd/MM/yyyy'),
   };
 }
@@ -723,6 +724,11 @@ function escEmail_(value) {
 function nombreMesEmail_(date) {
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return meses[date.getMonth()];
+}
+
+function nombreMesCortoEmail_(date) {
+  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   return meses[date.getMonth()];
 }
 

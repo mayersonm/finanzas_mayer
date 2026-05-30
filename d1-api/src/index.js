@@ -3833,8 +3833,8 @@ function payCycleFromDate(date) {
     startKey,
     endKey,
     closeDate: closeKey,
-    label: `Cierre ${closeKey.slice(8, 10)}/${closeKey.slice(5, 7)}/${closeKey.slice(0, 4)}`,
-    shortLabel: `Cierre ${closeKey.slice(8, 10)}/${closeKey.slice(5, 7)}`,
+    label: monthLongNameFromKey(startKey),
+    shortLabel: monthShortNameFromKey(startKey),
     rangeLabel: `${startKey.slice(8, 10)}/${startKey.slice(5, 7)}/${startKey.slice(0, 4)} - ${endKey.slice(8, 10)}/${endKey.slice(5, 7)}/${endKey.slice(0, 4)}`,
   };
 }
@@ -4031,6 +4031,29 @@ function monthLongName(date) {
     'Noviembre',
     'Diciembre',
   ][date.getMonth()];
+}
+
+function monthShortNameFromKey(value) {
+  const part = parseDateKeyParts(value);
+  return ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][part.monthIndex];
+}
+
+function monthLongNameFromKey(value) {
+  const part = parseDateKeyParts(value);
+  return [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre',
+  ][part.monthIndex];
 }
 
 function localIso(date) {
