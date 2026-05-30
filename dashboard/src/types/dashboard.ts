@@ -316,6 +316,8 @@ export interface DashboardData {
   fijos?: FixedExpense[];
   deudas?: Debt[];
   deudaPendiente?: number;
+  fijosPendientes?: number;
+  fijosPagadosMes?: number;
   gastosReales?: RealExpenses;
   metas: Goal[];
   alertas?: SmartAlert[];

@@ -758,6 +758,7 @@ async function dashboard(env, params) {
   const now = new Date();
   const cycle = payCycleFromDate(now);
   const monthKey = localDateKey(now).slice(0, 7);
+  const calendarMonth = monthRangeFromKey(monthKey);
   const cycleKey = cycle.key;
   const monthName = monthLongNameFromKey(`${monthKey}-01`);
   const usdRate = Number((await exchangeRate(env)).rate || 3.85);
@@ -778,7 +779,7 @@ async function dashboard(env, params) {
       COUNT(*) AS movimientosMes
     FROM transactions
     WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
-  `).bind(usdRate, usdRate, chatId, cycle.startKey, cycle.endKey).first();
+  `).bind(usdRate, usdRate, chatId, calendarMonth.startKey, calendarMonth.endKey).first();
 
   const latest = await env.DB.prepare(`
     SELECT
@@ -805,7 +806,7 @@ async function dashboard(env, params) {
     LIMIT 20
   `).bind(chatId).all();
 
-  const categories = await categoriesWithSpending(env, chatId, cycle, usdRate);
+  const categories = await categoriesWithSpending(env, chatId, calendarMonth, usdRate);
 
   const months = await lastMonths(env, chatId, now, usdRate);
   const budgets = await budgetsWithSpending(env, chatId, cycle, usdRate);
@@ -3841,6 +3842,19 @@ function payCycleFromDate(date) {
 function payCycleRelative(cycle, offset) {
   const start = parseDateKeyParts(cycle.startKey);
   return payCycleFromDate(new Date(Date.UTC(start.year, start.monthIndex + offset, 23, 12)));
+}
+
+function monthRangeFromKey(monthKey) {
+  const part = parseDateKeyParts(`${String(monthKey || '').slice(0, 7)}-01`);
+  const startKey = dateKeyFromParts(part.year, part.monthIndex, 1);
+  const endKey = dateKeyFromParts(part.year, part.monthIndex + 1, 0);
+  return {
+    key: startKey.slice(0, 7),
+    startKey,
+    endKey,
+    label: monthLongNameFromKey(startKey),
+    shortLabel: monthShortNameFromKey(startKey),
+  };
 }
 
 function daysBetween(fromDateKey, toDateKey) {
