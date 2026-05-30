@@ -113,6 +113,16 @@ function horaKey_(value) {
   return Utilities.formatDate(horaLocalDesdeValor_(value), 'America/Lima', 'HH:mm');
 }
 
+function nombreMesCiclo_(date) {
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return meses[fechaLocalDesdeValor_(date).getMonth()];
+}
+
+function nombreMesCortoCiclo_(date) {
+  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return meses[fechaLocalDesdeValor_(date).getMonth()];
+}
+
 function cicloPagoDesdeFecha_(value) {
   const base = fechaLocalDesdeValor_(value || new Date());
   const start = base.getDate() >= 23
@@ -132,8 +142,8 @@ function cicloPagoDesdeFecha_(value) {
     endKey: endKey,
     closeKey: closeKey,
     key: Utilities.formatDate(start, 'America/Lima', 'yyyy-MM'),
-    label: 'Cierre ' + Utilities.formatDate(close, 'America/Lima', 'dd/MM/yyyy'),
-    shortLabel: 'Cierre ' + Utilities.formatDate(close, 'America/Lima', 'dd/MM'),
+    label: nombreMesCiclo_(start),
+    shortLabel: nombreMesCortoCiclo_(start),
     rangeLabel: Utilities.formatDate(start, 'America/Lima', 'dd/MM/yyyy') + ' - ' + Utilities.formatDate(end, 'America/Lima', 'dd/MM/yyyy'),
   };
 }
