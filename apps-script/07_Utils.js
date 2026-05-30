@@ -113,6 +113,58 @@ function horaKey_(value) {
   return Utilities.formatDate(horaLocalDesdeValor_(value), 'America/Lima', 'HH:mm');
 }
 
+function cicloPagoDesdeFecha_(value) {
+  const base = fechaLocalDesdeValor_(value || new Date());
+  const start = base.getDate() >= 23
+    ? new Date(base.getFullYear(), base.getMonth(), 23)
+    : new Date(base.getFullYear(), base.getMonth() - 1, 23);
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, 22);
+  const startKey = fechaKey_(start);
+  const endKey = fechaKey_(end);
+
+  return {
+    start: start,
+    end: end,
+    startKey: startKey,
+    endKey: endKey,
+    key: Utilities.formatDate(start, 'America/Lima', 'yyyy-MM'),
+    label: Utilities.formatDate(start, 'America/Lima', 'dd/MM/yyyy') + ' - ' + Utilities.formatDate(end, 'America/Lima', 'dd/MM/yyyy'),
+    shortLabel: Utilities.formatDate(start, 'America/Lima', 'dd/MM') + ' - ' + Utilities.formatDate(end, 'America/Lima', 'dd/MM'),
+  };
+}
+
+function cicloPagoCerrado_(value) {
+  const base = fechaLocalDesdeValor_(value || new Date());
+  base.setDate(base.getDate() - 1);
+  return cicloPagoDesdeFecha_(base);
+}
+
+function cicloPagoRelativo_(periodo, offset) {
+  const p = periodo && periodo.start ? periodo : cicloPagoDesdeFecha_(periodo || new Date());
+  return cicloPagoDesdeFecha_(new Date(p.start.getFullYear(), p.start.getMonth() + offset, p.start.getDate()));
+}
+
+function filtrarTransaccionesCiclo_(txs, periodo) {
+  const p = periodo && periodo.startKey ? periodo : cicloPagoDesdeFecha_(periodo || new Date());
+  return (txs || []).filter(function (r) {
+    const key = fechaKey_(r[0]);
+    return key >= p.startKey && key <= p.endKey;
+  });
+}
+
+function diasTranscurridosCiclo_(periodo, value) {
+  const p = periodo && periodo.start ? periodo : cicloPagoDesdeFecha_(periodo || new Date());
+  const currentKey = fechaKey_(value || new Date());
+  const cappedKey = currentKey < p.startKey ? p.startKey : currentKey > p.endKey ? p.endKey : currentKey;
+  const current = fechaLocalDesdeValor_(cappedKey);
+  return Math.max(1, Math.floor((current.getTime() - p.start.getTime()) / 86400000) + 1);
+}
+
+function diasTotalesCiclo_(periodo) {
+  const p = periodo && periodo.start ? periodo : cicloPagoDesdeFecha_(periodo || new Date());
+  return Math.max(1, Math.floor((p.end.getTime() - p.start.getTime()) / 86400000) + 1);
+}
+
 // ---- NUEVA: barra de progreso visual --------------
 function buildBar(pct) {
   const filled = Math.round(Math.min(pct, 100) / 10);

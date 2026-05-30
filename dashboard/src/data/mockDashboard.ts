@@ -12,8 +12,11 @@ export const MOCK_DASHBOARD: DashboardData = {
   gastosMes: 1150,
   balanceMes: 5350,
   movimientos: 12,
-  mes: 'Mayo',
+  movimientosMes: 12,
+  mes: '23/05/2026 - 22/06/2026',
   mesKey: '2026-05',
+  cycleStart: '2026-05-23',
+  cycleEnd: '2026-06-22',
   transacciones: [
     { fecha: '2026-05-08', hora: '09:00', tipo: 'ingreso', desc: 'Salario', cat: 'salario', monto: 6500, currency: 'PEN' },
     { fecha: '2026-05-08', hora: '13:20', tipo: 'gasto', desc: 'Almuerzo', cat: 'supermercado', monto: 60, currency: 'PEN', paymentMethod: 'debito' },

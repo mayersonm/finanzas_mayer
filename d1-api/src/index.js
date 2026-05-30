@@ -118,6 +118,16 @@ export default {
         return json(await gasConfigRequest(env, 'send_daily_email'));
       }
 
+      if (url.pathname === '/api/apps-script/send-monthly-email' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        return json(await gasConfigRequest(env, 'send_monthly_email', url.searchParams));
+      }
+
+      if (url.pathname === '/api/apps-script/send-yearly-email' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        return json(await gasConfigRequest(env, 'send_yearly_email', url.searchParams));
+      }
+
       if (url.pathname === '/api/apps-script/send-daily-telegram' && request.method === 'POST') {
         await requireDashboardAccess(request, env);
         return json(await gasConfigRequest(env, 'send_daily_telegram', url.searchParams));
@@ -746,8 +756,9 @@ function serviceLabel(name) {
 async function dashboard(env, params) {
   const chatId = getChatId(env, params);
   const now = new Date();
-  const monthKey = formatMonth(now);
-  const monthName = monthLongName(now);
+  const cycle = payCycleFromDate(now);
+  const monthKey = cycle.key;
+  const monthName = cycle.label;
   const usdRate = Number((await exchangeRate(env)).rate || 3.85);
 
   const totals = await env.DB.prepare(`
@@ -762,10 +773,11 @@ async function dashboard(env, params) {
   const monthTotals = await env.DB.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresosMes,
-      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastosMes
+      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastosMes,
+      COUNT(*) AS movimientosMes
     FROM transactions
-    WHERE chat_id = ? AND substr(tx_date, 1, 7) = ?
-  `).bind(usdRate, usdRate, chatId, monthKey).first();
+    WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
+  `).bind(usdRate, usdRate, chatId, cycle.startKey, cycle.endKey).first();
 
   const latest = await env.DB.prepare(`
     SELECT
@@ -792,12 +804,12 @@ async function dashboard(env, params) {
     LIMIT 20
   `).bind(chatId).all();
 
-  const categories = await categoriesWithSpending(env, chatId, monthKey, usdRate);
+  const categories = await categoriesWithSpending(env, chatId, cycle, usdRate);
 
   const months = await lastMonths(env, chatId, now, usdRate);
-  const budgets = await budgetsWithSpending(env, chatId, monthKey, usdRate);
+  const budgets = await budgetsWithSpending(env, chatId, cycle, usdRate);
   const budgetRules = await loadBudgetRules(env, chatId);
-  const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, usdRate);
+  const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, usdRate, cycle);
   const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
   const emailConfig = await emailConfigFromGas(env);
@@ -819,6 +831,7 @@ async function dashboard(env, params) {
   const alerts = smartAlerts({
     now,
     monthKey,
+    cycle,
     ingresosMes,
     gastosMes: gastosMesConFijosPagados,
     budgets,
@@ -851,6 +864,9 @@ async function dashboard(env, params) {
     movimientos: Number(totals?.movimientos || 0),
     mes: monthName,
     mesKey: monthKey,
+    cycleStart: cycle.startKey,
+    cycleEnd: cycle.endKey,
+    movimientosMes: Number(monthTotals?.movimientosMes || 0),
     transacciones: (latest.results || []).map(txShape),
     categorias: categories,
     budgetRules: budgetRulesForDashboard(budgetRules),
@@ -2585,21 +2601,22 @@ async function insertDebtPaymentTransaction(env, { chatId, paymentId, debtName, 
 async function lastMonths(env, chatId, now, usdRate = 3.85) {
   const result = [];
   const shortNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const currentCycle = payCycleFromDate(now);
 
   for (let i = 5; i >= 0; i--) {
-    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
-    const key = formatMonth(date);
+    const cycle = payCycleRelative(currentCycle, -i);
     const row = await env.DB.prepare(`
       SELECT
         COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
         COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos
       FROM transactions
-      WHERE chat_id = ? AND substr(tx_date, 1, 7) = ?
-    `).bind(usdRate, usdRate, chatId, key).first();
+      WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
+    `).bind(usdRate, usdRate, chatId, cycle.startKey, cycle.endKey).first();
 
     result.push({
-      mes: shortNames[date.getUTCMonth()],
-      key,
+      mes: shortNames[parseDateKeyParts(cycle.startKey).monthIndex],
+      key: cycle.key,
+      label: cycle.shortLabel,
       ingresos: round(row?.ingresos || 0),
       gastos: round(row?.gastos || 0),
     });
@@ -2608,14 +2625,14 @@ async function lastMonths(env, chatId, now, usdRate = 3.85) {
   return result;
 }
 
-async function categoriesWithSpending(env, chatId, monthKey, usdRate = 3.85) {
+async function categoriesWithSpending(env, chatId, cycle, usdRate = 3.85) {
   const rows = await env.DB.prepare(`
     SELECT category AS cat, description AS desc, amount, currency
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
-      AND substr(tx_date, 1, 7) = ?
-  `).bind(chatId, monthKey).all();
+      AND tx_date BETWEEN ? AND ?
+  `).bind(chatId, cycle.startKey, cycle.endKey).all();
 
   const rules = await loadCategoryRules(env, chatId);
   const spending = {};
@@ -2633,7 +2650,7 @@ async function categoriesWithSpending(env, chatId, monthKey, usdRate = 3.85) {
     .sort((a, b) => b.monto - a.monto || a.cat.localeCompare(b.cat));
 }
 
-async function budgetsWithSpending(env, chatId, monthKey, usdRate = 3.85) {
+async function budgetsWithSpending(env, chatId, cycle, usdRate = 3.85) {
   const rows = await env.DB.prepare(`
     SELECT category AS cat, limit_amount AS limite
     FROM budgets
@@ -2645,8 +2662,8 @@ async function budgetsWithSpending(env, chatId, monthKey, usdRate = 3.85) {
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
-      AND substr(tx_date, 1, 7) = ?
-  `).bind(chatId, monthKey).all();
+      AND tx_date BETWEEN ? AND ?
+  `).bind(chatId, cycle.startKey, cycle.endKey).all();
 
   const categoryRules = await loadCategoryRules(env, chatId);
   const budgetRules = await loadBudgetRules(env, chatId);
@@ -2663,7 +2680,9 @@ async function budgetsWithSpending(env, chatId, monthKey, usdRate = 3.85) {
   })).sort((a, b) => b.gasto - a.gasto || a.cat.localeCompare(b.cat));
 }
 
-async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85) {
+async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85, cycle = null) {
+  const startKey = cycle?.startKey || `${monthKey}-01`;
+  const endKey = cycle?.endKey || `${monthKey}-31`;
   const rows = await env.DB.prepare(`
     SELECT
       f.id AS id,
@@ -2678,7 +2697,7 @@ async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85) {
         FROM transactions t
         WHERE t.chat_id = f.chat_id
           AND t.type = 'gasto'
-          AND substr(t.tx_date, 1, 7) = ?
+          AND t.tx_date BETWEEN ? AND ?
           AND lower(t.description) = lower(f.name)
       ) AS pagadoMes
     FROM fixed_expenses f
@@ -2688,7 +2707,7 @@ async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85) {
       AND s.month_key = ?
     WHERE f.chat_id = ? AND f.active = 1
     ORDER BY f.name ASC
-  `).bind(monthKey, monthKey, chatId).all();
+  `).bind(startKey, endKey, monthKey, chatId).all();
 
   return (rows.results || [])
     .map((row) => {
@@ -2937,7 +2956,8 @@ async function netWorth(env, params) {
   const chatId = getChatId(env, params);
   const rateInfo = await exchangeRate(env);
   const rate = Number(rateInfo.rate || 3.85);
-  const monthKey = localDateKey(new Date()).slice(0, 7);
+  const cycle = payCycleFromDate(new Date());
+  const monthKey = cycle.key;
 
   const cashRows = await env.DB.prepare(`
     SELECT type, amount, currency
@@ -2955,7 +2975,7 @@ async function netWorth(env, params) {
   const investments = (await investmentsList(env, params)).investments || [];
   const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
-  const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, rate);
+  const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, rate, cycle);
   const fixedSummary = fixedExpensesSummary(fixedExpenses, rate);
   const cash = round(incomePen - expensesPen - fixedSummary.paid);
 
@@ -2995,6 +3015,9 @@ async function netWorth(env, params) {
     currency: 'PEN',
     exchangeRate: rate,
     exchangeRateSource: rateInfo.source || '',
+    cycleStart: cycle.startKey,
+    cycleEnd: cycle.endKey,
+    cycleLabel: cycle.label,
     assets,
     liabilities,
     netWorth: net,
@@ -3307,9 +3330,10 @@ function txShape(row) {
   };
 }
 
-function smartAlerts({ now, ingresosMes, gastosMes, budgets, fixedExpenses, debts, latest }) {
+function smartAlerts({ now, cycle, ingresosMes, gastosMes, budgets, fixedExpenses, debts, latest }) {
   const alerts = [];
   const today = localDateKey(now);
+  const cycleLabel = cycle?.shortLabel || '23-22';
 
   budgets.forEach((item) => {
     const spent = Number(item.gasto || 0);
@@ -3339,7 +3363,7 @@ function smartAlerts({ now, ingresosMes, gastosMes, budgets, fixedExpenses, debt
       alerts.push({
         level: 'info',
         title: `Gasto fijo pendiente: ${item.nombre}`,
-        message: `Falta marcar ${formatCurrency(item.monto, item.currency)} como pagado o saltado este mes.`,
+        message: `Falta marcar ${formatCurrency(item.monto, item.currency)} como pagado o saltado en el ciclo ${cycleLabel}.`,
       });
     });
 
@@ -3380,7 +3404,7 @@ function smartAlerts({ now, ingresosMes, gastosMes, budgets, fixedExpenses, debt
     alerts.push({
       level: 'danger',
       title: 'Gastos sobre ingresos',
-      message: `Este mes gastaste S/ ${round(gastosMes)} contra S/ ${round(ingresosMes)} de ingresos.`,
+      message: `En el ciclo ${cycleLabel} gastaste S/ ${round(gastosMes)} contra S/ ${round(ingresosMes)} de ingresos.`,
     });
   }
 
@@ -3404,7 +3428,7 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets
     const pct = Math.round((Number(topCategory.monto || 0) / gastosMes) * 100);
     insights.push({
       title: `Mayor fuga: ${title(topCategory.cat)}`,
-      message: `Representa ${pct}% del gasto del mes. Revisa si ese ritmo sigue siendo intencional.`,
+      message: `Representa ${pct}% del gasto del ciclo. Revisa si ese ritmo sigue siendo intencional.`,
     });
   }
 
@@ -3412,7 +3436,7 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets
     const delta = Math.round(((Number(current.gastos || 0) - Number(prev.gastos || 0)) / Number(prev.gastos || 1)) * 100);
     insights.push({
       title: delta >= 0 ? 'Gasto acelerado' : 'Gasto mas controlado',
-      message: `Vas ${Math.abs(delta)}% ${delta >= 0 ? 'por encima' : 'por debajo'} del mes anterior.`,
+      message: `Vas ${Math.abs(delta)}% ${delta >= 0 ? 'por encima' : 'por debajo'} del ciclo anterior.`,
     });
   }
 
@@ -3442,7 +3466,7 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets
     const savingsRate = Math.round((balanceMes / ingresosMes) * 100);
     insights.push({
       title: savingsRate >= 20 ? 'Buen margen de ahorro' : 'Margen ajustado',
-      message: `Tu margen del mes es ${savingsRate}%. ${savingsRate >= 20 ? 'Buen espacio para metas.' : 'Conviene proteger caja.'}`,
+      message: `Tu margen del ciclo es ${savingsRate}%. ${savingsRate >= 20 ? 'Buen espacio para metas.' : 'Conviene proteger caja.'}`,
     });
   }
 
@@ -3769,6 +3793,46 @@ function localDateKey(date) {
     month: '2-digit',
     day: '2-digit',
   }).format(date);
+}
+
+function dateKeyFromParts(year, monthIndex, day) {
+  const date = new Date(Date.UTC(year, monthIndex, day));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function parseDateKeyParts(value) {
+  const match = String(value || '').slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    const now = new Date();
+    const key = localDateKey(now);
+    return parseDateKeyParts(key);
+  }
+  return {
+    year: Number(match[1]),
+    monthIndex: Number(match[2]) - 1,
+    day: Number(match[3]),
+  };
+}
+
+function payCycleFromDate(date) {
+  const parts = parseDateKeyParts(localDateKey(date || new Date()));
+  const startMonthIndex = parts.day >= 23 ? parts.monthIndex : parts.monthIndex - 1;
+  const startYear = parts.year;
+  const startKey = dateKeyFromParts(startYear, startMonthIndex, 23);
+  const start = parseDateKeyParts(startKey);
+  const endKey = dateKeyFromParts(start.year, start.monthIndex + 1, 22);
+  return {
+    key: startKey.slice(0, 7),
+    startKey,
+    endKey,
+    label: `${startKey.slice(8, 10)}/${startKey.slice(5, 7)}/${startKey.slice(0, 4)} - ${endKey.slice(8, 10)}/${endKey.slice(5, 7)}/${endKey.slice(0, 4)}`,
+    shortLabel: `${startKey.slice(8, 10)}/${startKey.slice(5, 7)} - ${endKey.slice(8, 10)}/${endKey.slice(5, 7)}`,
+  };
+}
+
+function payCycleRelative(cycle, offset) {
+  const start = parseDateKeyParts(cycle.startKey);
+  return payCycleFromDate(new Date(Date.UTC(start.year, start.monthIndex + offset, 23, 12)));
 }
 
 function daysBetween(fromDateKey, toDateKey) {

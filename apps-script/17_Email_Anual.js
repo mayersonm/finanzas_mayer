@@ -84,7 +84,7 @@ function construirTextoAnualEmail_(data) {
     'Ingresos: ' + fmtEmail_(data.totals.ingresos) + ' (' + fmtDeltaMontoEmail_(data.totals.ingresos, data.previousTotals.ingresos) + ')',
     'Gastos: ' + fmtEmail_(data.totals.gastos) + ' (' + fmtDeltaMontoEmail_(data.totals.gastos, data.previousTotals.gastos) + ')',
     'Balance: ' + fmtSignedEmail_(balance) + ' (' + fmtDeltaMontoEmail_(balance, previousBalance) + ')',
-    'Meses en negativo: ' + monthsNegative,
+    'Ciclos en negativo: ' + monthsNegative,
     'Categoria principal: ' + (top ? capitalizar(top.cat) + ' ' + fmtEmail_(top.actual) : 'Sin datos'),
     '',
     'Nivel de alerta: ' + data.alertaAnual.nivel,
@@ -160,12 +160,12 @@ function construirHtmlAnualEmail_(data) {
       ['Ingresos', fmtEmail_(data.totals.ingresos), '#16a34a'],
       ['Gastos', fmtEmail_(data.totals.gastos), '#dc2626'],
       ['Balance', fmtSignedEmail_(balance), colorBalance],
-      ['Meses negativos', String(monthsNegative), monthsNegative > 0 ? '#dc2626' : '#16a34a'],
+      ['Ciclos negativos', String(monthsNegative), monthsNegative > 0 ? '#dc2626' : '#16a34a'],
     ]),
     seccionEmail_('Periodos comparados', periodosHtml),
     seccionEmail_('Comparativo anual', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Indicador</th><th align="right">' + escEmail_(data.year) + '</th><th align="right">' + escEmail_(data.previousYear) + '</th><th align="right">Cambio</th></tr>' + comparativoRows + '</table>'),
     seccionEmail_('Alerta anual', '<p style="margin:0;line-height:1.55"><strong>' + escEmail_(data.alertaAnual.nivel) + ':</strong> ' + escEmail_(data.alertaAnual.texto) + '</p>'),
-    seccionEmail_('Mes a mes', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Mes</th><th align="right">Ingresos</th><th align="right">Gastos</th><th align="right">Balance</th><th align="right">Mov.</th></tr>' + monthsRows + '</table>'),
+    seccionEmail_('Ciclo a ciclo', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Ciclo</th><th align="right">Ingresos</th><th align="right">Gastos</th><th align="right">Balance</th><th align="right">Mov.</th></tr>' + monthsRows + '</table>'),
     seccionEmail_('Categorias principales', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Categoria</th><th align="right">' + escEmail_(data.year) + '</th><th align="right">' + escEmail_(data.previousYear) + '</th><th align="right">Cambio</th></tr>' + categoryRows + '</table>'),
     seccionEmail_('Sugerencia IA anual', '<div style="line-height:1.55;font-size:14px">' + iaHtml + '</div><p style="font-size:12px;color:#6b7280;margin:14px 0 0">Contenido educativo para organizacion personal. No reemplaza asesoria financiera profesional.</p>'),
     '<p style="font-size:12px;color:#6b7280;text-align:center;margin-top:18px">Archivo Excel adjunto generado el ' + escEmail_(data.generadoEn) + '.</p>',
@@ -250,7 +250,7 @@ function llenarHojaMesesAnualEmail_(sheet, data) {
     return [m.key, m.nombre, m.ingresos, m.gastos, m.balance, m.movimientos, m.categoriaPrincipal, m.montoCategoriaPrincipal];
   });
 
-  sheet.getRange(1, 1, 1, 8).setValues([['Mes', 'Nombre', 'Ingresos', 'Gastos', 'Balance', 'Movimientos', 'Categoria principal', 'Monto categoria']]);
+  sheet.getRange(1, 1, 1, 8).setValues([['Ciclo', 'Nombre', 'Ingresos', 'Gastos', 'Balance', 'Movimientos', 'Categoria principal', 'Monto categoria']]);
   if (rows.length) sheet.getRange(2, 1, rows.length, 8).setValues(rows);
   aplicarTablaEmail_(sheet, 1, 1, Math.max(rows.length + 1, 2), 8);
   sheet.getRange('C:E').setNumberFormat('"S/ "#,##0.00');
@@ -436,12 +436,12 @@ function construirAlertaAnualEmail_(data) {
   }
 
   if (monthsNegative >= 3) {
-    motivos.push(monthsNegative + ' meses cerraron en negativo');
+    motivos.push(monthsNegative + ' ciclos cerraron en negativo');
     nivel = 'ALERTA';
   }
 
   if (monthsWithNoIncome >= 2) {
-    motivos.push(monthsWithNoIncome + ' meses con movimientos pero sin ingresos registrados');
+    motivos.push(monthsWithNoIncome + ' ciclos con movimientos pero sin ingresos registrados');
     if (nivel === 'OK') nivel = 'REVISAR';
   }
 
@@ -470,10 +470,9 @@ function construirMesesAnualesEmail_(txs, year) {
   const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
   return meses.map(function (name, index) {
-    const key = String(year) + '-' + String(index + 1).padStart(2, '0');
-    const rows = txs.filter(function (r) {
-      return keyMesFilaEmail_(r[0]) === key;
-    });
+    const periodo = periodoPagoEmail_(new Date(Number(year), index, 23));
+    const key = periodo.key;
+    const rows = filtrarTransaccionesPeriodoEmail_(txs, periodo);
     const totals = calcularTotalesEmail_(rows);
     const cats = agruparGastosPorCategoriaEmail_(rows);
     const top = cats[0] || { cat: '', monto: 0 };
@@ -481,6 +480,7 @@ function construirMesesAnualesEmail_(txs, year) {
     return {
       key: key,
       nombre: name,
+      periodo: periodo.label,
       ingresos: totals.ingresos,
       gastos: totals.gastos,
       balance: totals.ingresos - totals.gastos,
@@ -516,8 +516,11 @@ function leerCierresMensualesAnioEmail_(chatId, year) {
 }
 
 function filtrarTransaccionesAnioEmail_(txs, year) {
+  const startKey = String(year) + '-01-23';
+  const endKey = String(Number(year) + 1) + '-01-22';
   return txs.filter(function (r) {
-    return keyMesFilaEmail_(r[0]).indexOf(String(year) + '-') === 0;
+    const key = fechaKeyFilaEmail_(r[0]);
+    return key >= startKey && key <= endKey;
   });
 }
 

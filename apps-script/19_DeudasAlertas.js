@@ -267,7 +267,7 @@ function contextoInsightsIA_(chatId) {
     const alertas = d1.alertas || [];
 
     return {
-      movimientosMes: d1.movimientos || 0,
+      movimientosMes: d1.movimientosMes || d1.movimientos || 0,
       categoriasCount: (d1.categorias || []).length,
       deudasActivas: deudas.length,
       alertasCount: alertas.length,
@@ -275,11 +275,14 @@ function contextoInsightsIA_(chatId) {
     };
   }
 
-  const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
-  const txs = obtenerTransacciones(chatId).filter(r =>
-    mesKey_(r[0]) === mes
-  );
-  const gastosCat = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {};
+  const periodo = cicloPagoDesdeFecha_(new Date());
+  const txs = filtrarTransaccionesCiclo_(obtenerTransacciones(chatId), periodo);
+  const gastosCat = {};
+  txs.forEach(function (r) {
+    if (r[2] !== 'gasto') return;
+    const cat = normalizarCat(r[4] || 'otro', r[3], chatId);
+    gastosCat[cat] = (gastosCat[cat] || 0) + (parseFloat(r[5]) || 0);
+  });
   const deudas = leerDeudas_(chatId).filter(d => d.estado !== 'pagada' && d.pendiente > 0);
   const alertas = calcularAlertasInteligentes_(chatId);
 
@@ -302,15 +305,19 @@ function calcularAlertasInteligentes_(chatId) {
     }));
   }
 
-  const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
+  const periodo = cicloPagoDesdeFecha_(new Date());
+  const mes = periodo.key;
   const hoy = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
   const presupuestos = leerPresupuestosReales_(chatId);
-  const gastosCat = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {};
+  const txsMes = filtrarTransaccionesCiclo_(obtenerTransacciones(chatId), periodo);
+  const gastosCat = {};
+  txsMes.forEach(function (r) {
+    if (r[2] !== 'gasto') return;
+    const cat = normalizarCat(r[4] || 'otro', r[3], chatId);
+    gastosCat[cat] = (gastosCat[cat] || 0) + (parseFloat(r[5]) || 0);
+  });
   const fijos = leerFijos_(chatId);
   const deudas = leerDeudas_(chatId).filter(d => d.estado !== 'pagada' && d.pendiente > 0);
-  const txsMes = obtenerTransacciones(chatId).filter(r =>
-    mesKey_(r[0]) === mes
-  );
   const ingresosMes = txsMes.filter(r => r[2] === 'ingreso').reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
   const gastosMes = txsMes.filter(r => r[2] === 'gasto').reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
   const alertas = [];
@@ -333,7 +340,7 @@ function calcularAlertasInteligentes_(chatId) {
   });
 
   if (ingresosMes > 0 && gastosMes > ingresosMes) {
-    alertas.push({ icon: '[!]', titulo: 'Gastos sobre ingresos', mensaje: `Este mes gastaste S/ ${gastosMes.toFixed(2)} vs S/ ${ingresosMes.toFixed(2)} de ingresos.` });
+    alertas.push({ icon: '[!]', titulo: 'Gastos sobre ingresos', mensaje: `En el ciclo ${periodo.shortLabel} gastaste S/ ${gastosMes.toFixed(2)} vs S/ ${ingresosMes.toFixed(2)} de ingresos.` });
   }
 
   return alertas.slice(0, 8);
@@ -351,7 +358,7 @@ function resumenFinancieroParaIA_(chatId) {
       .join('\n');
 
     return [
-      `Mes: ${d1.mesKey || ''}`,
+      `Ciclo: ${d1.mes || d1.mesKey || ''}`,
       `Ingresos: S/ ${Number(d1.ingresosMes || 0).toFixed(2)}`,
       `Gastos: S/ ${Number(d1.gastosMes || 0).toFixed(2)}`,
       `Balance: S/ ${Number(d1.balanceMes || 0).toFixed(2)}`,
@@ -365,13 +372,16 @@ function resumenFinancieroParaIA_(chatId) {
     ].join('\n');
   }
 
-  const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
-  const txs = obtenerTransacciones(chatId).filter(r =>
-    mesKey_(r[0]) === mes
-  );
+  const periodo = cicloPagoDesdeFecha_(new Date());
+  const txs = filtrarTransaccionesCiclo_(obtenerTransacciones(chatId), periodo);
   const ingresos = txs.filter(r => r[2] === 'ingreso').reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
   const gastos = txs.filter(r => r[2] === 'gasto').reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
-  const gastosCat = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {};
+  const gastosCat = {};
+  txs.forEach(function (r) {
+    if (r[2] !== 'gasto') return;
+    const cat = normalizarCat(r[4] || 'otro', r[3], chatId);
+    gastosCat[cat] = (gastosCat[cat] || 0) + (parseFloat(r[5]) || 0);
+  });
   const deudas = leerDeudas_(chatId).filter(d => d.estado !== 'pagada' && d.pendiente > 0);
   const deudaPen = deudas.filter(d => d.currency !== 'USD').reduce((a, d) => a + d.pendiente, 0);
   const deudaUsd = deudas.filter(d => d.currency === 'USD').reduce((a, d) => a + d.pendiente, 0);
@@ -382,7 +392,7 @@ function resumenFinancieroParaIA_(chatId) {
     .join('\n');
 
   return [
-    `Mes: ${mes}`,
+    `Ciclo: ${periodo.label}`,
     `Ingresos: S/ ${ingresos.toFixed(2)}`,
     `Gastos: S/ ${gastos.toFixed(2)}`,
     `Balance: S/ ${(ingresos - gastos).toFixed(2)}`,
