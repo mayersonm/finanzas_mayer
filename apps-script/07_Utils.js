@@ -121,15 +121,20 @@ function cicloPagoDesdeFecha_(value) {
   const end = new Date(start.getFullYear(), start.getMonth() + 1, 22);
   const startKey = fechaKey_(start);
   const endKey = fechaKey_(end);
+  const close = new Date(start.getFullYear(), start.getMonth() + 1, 23);
+  const closeKey = fechaKey_(close);
 
   return {
     start: start,
     end: end,
+    close: close,
     startKey: startKey,
     endKey: endKey,
+    closeKey: closeKey,
     key: Utilities.formatDate(start, 'America/Lima', 'yyyy-MM'),
-    label: Utilities.formatDate(start, 'America/Lima', 'dd/MM/yyyy') + ' - ' + Utilities.formatDate(end, 'America/Lima', 'dd/MM/yyyy'),
-    shortLabel: Utilities.formatDate(start, 'America/Lima', 'dd/MM') + ' - ' + Utilities.formatDate(end, 'America/Lima', 'dd/MM'),
+    label: 'Cierre ' + Utilities.formatDate(close, 'America/Lima', 'dd/MM/yyyy'),
+    shortLabel: 'Cierre ' + Utilities.formatDate(close, 'America/Lima', 'dd/MM'),
+    rangeLabel: Utilities.formatDate(start, 'America/Lima', 'dd/MM/yyyy') + ' - ' + Utilities.formatDate(end, 'America/Lima', 'dd/MM/yyyy'),
   };
 }
 

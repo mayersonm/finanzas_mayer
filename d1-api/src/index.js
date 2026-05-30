@@ -866,6 +866,8 @@ async function dashboard(env, params) {
     mesKey: monthKey,
     cycleStart: cycle.startKey,
     cycleEnd: cycle.endKey,
+    cycleClose: cycle.closeDate,
+    cycleRange: cycle.rangeLabel,
     movimientosMes: Number(monthTotals?.movimientosMes || 0),
     transacciones: (latest.results || []).map(txShape),
     categorias: categories,
@@ -2616,8 +2618,10 @@ async function lastMonths(env, chatId, now, usdRate = 3.85) {
       mes: cycle.shortLabel,
       key: cycle.key,
       label: cycle.shortLabel,
+      rangeLabel: cycle.rangeLabel,
       cycleStart: cycle.startKey,
       cycleEnd: cycle.endKey,
+      cycleClose: cycle.closeDate,
       ingresos: round(row?.ingresos || 0),
       gastos: round(row?.gastos || 0),
     });
@@ -3822,12 +3826,16 @@ function payCycleFromDate(date) {
   const startKey = dateKeyFromParts(startYear, startMonthIndex, 23);
   const start = parseDateKeyParts(startKey);
   const endKey = dateKeyFromParts(start.year, start.monthIndex + 1, 22);
+  const closeKey = dateKeyFromParts(start.year, start.monthIndex + 1, 23);
   return {
     key: startKey.slice(0, 7),
+    closeKey: closeKey.slice(0, 7),
     startKey,
     endKey,
-    label: `${startKey.slice(8, 10)}/${startKey.slice(5, 7)}/${startKey.slice(0, 4)} - ${endKey.slice(8, 10)}/${endKey.slice(5, 7)}/${endKey.slice(0, 4)}`,
-    shortLabel: `${startKey.slice(8, 10)}/${startKey.slice(5, 7)} - ${endKey.slice(8, 10)}/${endKey.slice(5, 7)}`,
+    closeDate: closeKey,
+    label: `Cierre ${closeKey.slice(8, 10)}/${closeKey.slice(5, 7)}/${closeKey.slice(0, 4)}`,
+    shortLabel: `Cierre ${closeKey.slice(8, 10)}/${closeKey.slice(5, 7)}`,
+    rangeLabel: `${startKey.slice(8, 10)}/${startKey.slice(5, 7)}/${startKey.slice(0, 4)} - ${endKey.slice(8, 10)}/${endKey.slice(5, 7)}/${endKey.slice(0, 4)}`,
   };
 }
 
