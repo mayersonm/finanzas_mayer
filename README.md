@@ -60,7 +60,9 @@ La pestana `Config` guarda las preferencias en D1 y concentra:
 
 El boton `Actualizar` solo vuelve a leer D1. El boton `Sync manual` importa el respaldo de Google Sheets hacia D1 y muestra cuantos movimientos, presupuestos, fijos, deudas y metas se revisaron. Para movimientos, Google Sheets manda: si Sheets tiene 24 movimientos, D1 debe quedar con esos mismos 24 para ese `chat_id`; cualquier movimiento extra que exista solo en D1 se elimina durante la sincronizacion manual. No existe sincronizacion D1 -> Sheets.
 
-Los correos diario, mensual y anual leen movimientos, presupuestos y metas desde D1; Sheets queda como respaldo si D1 no responde. El dashboard, las alertas, insights, proyecciones y comparativos usan ciclo de pago del dia 23 al 22, y el resumen mensual automatico se envia todos los dias 23.
+En `Inicio`, el boton `Cerrar mes` guarda el corte actual en D1 (`financial_closures`). El cierre se etiqueta con el dia 23, por ejemplo `Cierre 23/05`, pero los movimientos mantienen sus fechas reales dentro del mes calendario. El bloque `Top fugas` muestra los 5 gastos variables que mas pesan en el mes.
+
+Los correos diario, mensual y anual leen movimientos, presupuestos y metas desde D1; Sheets queda como respaldo si D1 no responde. El cierre mensual automatico se envia todos los dias 23, pero los movimientos se reportan con sus fechas reales.
 
 La sincronizacion automatica por cron del Worker esta desactivada para evitar que el respaldo de Sheets reimporte filas antiguas sin control. Si algun dia se necesita reactivarla, configura el secret `ENABLE_AUTO_GAS_SYNC=true` y vuelve a declarar el cron en `d1-api/wrangler.toml`.
 

@@ -78,6 +78,11 @@ export const MOCK_DASHBOARD: DashboardData = {
     queQueda: 1130,
     patrimonioDisponible: 2950,
   },
+  topFugas: [
+    { label: 'Supermercado', category: 'Supermercado', amount: 420, count: 3, sharePct: 36.5, reason: '3 movimientos - 36.5% del gasto variable' },
+    { label: 'Internet', category: 'Servicios', amount: 120, count: 1, sharePct: 10.4, reason: '10.4% del gasto variable' },
+    { label: 'Netflix', category: 'Entretenimiento', amount: 45, count: 1, sharePct: 3.9, reason: '3.9% del gasto variable' },
+  ],
   gastosReales: {
     totalFijos: 1620,
     totalPresupuesto: 950,

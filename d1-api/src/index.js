@@ -153,6 +153,17 @@ export default {
         return json(await saveNetWorthSnapshot(env, url.searchParams), 201);
       }
 
+      if (url.pathname === '/api/closures' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await financialClosures(env, url.searchParams));
+      }
+
+      if (url.pathname === '/api/closures' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        const payload = await safeJson(request);
+        return json(await saveFinancialClosure(env, url.searchParams, payload), payload?.dryRun ? 200 : 201);
+      }
+
       if (url.pathname === '/api/rules' && request.method === 'GET') {
         await requireDashboardOrAdminAccess(request, env);
         return json(await rulesList(env, url.searchParams));
@@ -807,6 +818,7 @@ async function dashboard(env, params) {
   `).bind(chatId).all();
 
   const categories = await categoriesWithSpending(env, chatId, calendarMonth, usdRate);
+  const topFugas = await topLeaks(env, chatId, calendarMonth, usdRate);
 
   const months = await lastMonths(env, chatId, now, usdRate);
   const budgets = await budgetsWithSpending(env, chatId, calendarMonth, usdRate);
@@ -857,6 +869,12 @@ async function dashboard(env, params) {
     queQueda: round(balanceCierre - pendienteComprometido),
     patrimonioDisponible,
   };
+  const savedClosure = await currentFinancialClosure(env, chatId, monthKey);
+  if (savedClosure) {
+    cierre.saved = true;
+    cierre.savedAt = savedClosure.updated_at || '';
+    cierre.snapshotId = savedClosure.id || '';
+  }
 
   const alerts = smartAlerts({
     now,
@@ -901,6 +919,7 @@ async function dashboard(env, params) {
     cycleRange: calendarMonth.rangeLabel,
     movimientosMes: Number(monthTotals?.movimientosMes || 0),
     cierre,
+    topFugas,
     transacciones: (latest.results || []).map(txShape),
     categorias: categories,
     budgetRules: budgetRulesForDashboard(budgetRules),
@@ -988,6 +1007,165 @@ async function transactions(env, params) {
     total: rows.results?.length || 0,
     limit,
     transacciones: (rows.results || []).map(txShape),
+  };
+}
+
+async function financialClosures(env, params) {
+  const chatId = getChatId(env, params);
+  const rows = await env.DB.prepare(`
+    SELECT *
+    FROM financial_closures
+    WHERE chat_id = ?
+    ORDER BY closure_key DESC
+    LIMIT 12
+  `).bind(chatId).all();
+
+  return {
+    ok: true,
+    closures: (rows.results || []).map(financialClosureShape),
+  };
+}
+
+async function saveFinancialClosure(env, params, payload = {}) {
+  const chatId = getChatId(env, params);
+  const data = await dashboard(env, params);
+  const closure = data.cierre;
+  if (!closure) throw httpError(500, 'No se pudo calcular el cierre');
+
+  if (payload?.dryRun) {
+    return {
+      ok: true,
+      dryRun: true,
+      closure,
+      topFugas: data.topFugas || [],
+    };
+  }
+
+  const closureKey = data.mesKey || closure.closeDate?.slice(0, 7) || localDateKey(new Date()).slice(0, 7);
+  const id = `closure:${chatId}:${closureKey}`.slice(0, 180);
+  const topFugasJson = JSON.stringify(data.topFugas || []);
+  const detailsJson = JSON.stringify({
+    cierre: closure,
+    topFugas: data.topFugas || [],
+    presupuestos: data.presupuestos || [],
+    fijos: data.fijos || [],
+    deudas: data.deudas || [],
+    source: data.source || 'd1',
+    updatedAt: data.updatedAt || '',
+  });
+
+  await env.DB.prepare(`
+    INSERT INTO financial_closures (
+      id, chat_id, closure_key, close_date, label, month_key, start_date, end_date,
+      ingresos, gastos, balance, fijos_pagados, fijos_pendientes, deudas_pendientes,
+      presupuesto_limite, presupuesto_usado, presupuesto_restante, presupuesto_excedido,
+      pendiente_comprometido, que_queda, patrimonio_disponible, movimientos,
+      top_fugas_json, details_json, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(chat_id, closure_key) DO UPDATE SET
+      close_date = excluded.close_date,
+      label = excluded.label,
+      month_key = excluded.month_key,
+      start_date = excluded.start_date,
+      end_date = excluded.end_date,
+      ingresos = excluded.ingresos,
+      gastos = excluded.gastos,
+      balance = excluded.balance,
+      fijos_pagados = excluded.fijos_pagados,
+      fijos_pendientes = excluded.fijos_pendientes,
+      deudas_pendientes = excluded.deudas_pendientes,
+      presupuesto_limite = excluded.presupuesto_limite,
+      presupuesto_usado = excluded.presupuesto_usado,
+      presupuesto_restante = excluded.presupuesto_restante,
+      presupuesto_excedido = excluded.presupuesto_excedido,
+      pendiente_comprometido = excluded.pendiente_comprometido,
+      que_queda = excluded.que_queda,
+      patrimonio_disponible = excluded.patrimonio_disponible,
+      movimientos = excluded.movimientos,
+      top_fugas_json = excluded.top_fugas_json,
+      details_json = excluded.details_json,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(
+    id,
+    chatId,
+    closureKey,
+    closure.closeDate || '',
+    closure.label || 'Cierre',
+    data.mesKey || closureKey,
+    closure.start || '',
+    closure.end || '',
+    round(closure.ingresos || 0),
+    round(closure.gastos || 0),
+    round(closure.balance || 0),
+    round(closure.fijosPagados || 0),
+    round(closure.fijosPendientes || 0),
+    round(closure.deudasPendientes || 0),
+    round(closure.presupuestoLimite || 0),
+    round(closure.presupuestoUsado || 0),
+    round(closure.presupuestoRestante || 0),
+    round(closure.presupuestoExcedido || 0),
+    round(closure.pendienteComprometido || 0),
+    round(closure.queQueda || 0),
+    round(closure.patrimonioDisponible || 0),
+    Number(closure.movimientos || 0),
+    topFugasJson,
+    detailsJson,
+  ).run();
+
+  const saved = await env.DB.prepare('SELECT * FROM financial_closures WHERE id = ?')
+    .bind(id)
+    .first();
+
+  return {
+    ok: true,
+    saved: true,
+    closure: financialClosureShape(saved),
+  };
+}
+
+async function currentFinancialClosure(env, chatId, closureKey) {
+  try {
+    return await env.DB.prepare(`
+      SELECT id, updated_at
+      FROM financial_closures
+      WHERE chat_id = ? AND closure_key = ?
+      LIMIT 1
+    `).bind(chatId, closureKey).first();
+  } catch (_error) {
+    return null;
+  }
+}
+
+function financialClosureShape(row) {
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    chatId: row.chat_id,
+    key: row.closure_key,
+    closeDate: row.close_date,
+    label: row.label,
+    monthKey: row.month_key,
+    start: row.start_date,
+    end: row.end_date,
+    ingresos: round(row.ingresos),
+    gastos: round(row.gastos),
+    balance: round(row.balance),
+    fijosPagados: round(row.fijos_pagados),
+    fijosPendientes: round(row.fijos_pendientes),
+    deudasPendientes: round(row.deudas_pendientes),
+    presupuestoLimite: round(row.presupuesto_limite),
+    presupuestoUsado: round(row.presupuesto_usado),
+    presupuestoRestante: round(row.presupuesto_restante),
+    presupuestoExcedido: round(row.presupuesto_excedido),
+    pendienteComprometido: round(row.pendiente_comprometido),
+    queQueda: round(row.que_queda),
+    patrimonioDisponible: round(row.patrimonio_disponible),
+    movimientos: Number(row.movimientos || 0),
+    topFugas: safeJsonParse(row.top_fugas_json, []),
+    createdAt: row.created_at || '',
+    updatedAt: row.updated_at || '',
   };
 }
 
@@ -2684,6 +2862,71 @@ async function categoriesWithSpending(env, chatId, cycle, usdRate = 3.85) {
     .sort((a, b) => b.monto - a.monto || a.cat.localeCompare(b.cat));
 }
 
+async function topLeaks(env, chatId, period, usdRate = 3.85) {
+  const rows = await env.DB.prepare(`
+    SELECT description AS desc, category AS cat, amount, currency, source
+    FROM transactions
+    WHERE chat_id = ?
+      AND type = 'gasto'
+      AND tx_date BETWEEN ? AND ?
+  `).bind(chatId, period.startKey, period.endKey).all();
+
+  const rules = await loadCategoryRules(env, chatId);
+  const grouped = {};
+  let total = 0;
+
+  for (const row of rows.results || []) {
+    const cat = classifyCategoryFromLoadedRules(rules, row.cat, row.desc);
+    const source = normalizeKey(row.source || '');
+    const descKey = normalizeKey(row.desc || '');
+    if (cat === 'deudas' || source === 'debt_payment' || descKey.startsWith('fijo pagado')) continue;
+
+    const amount = currencyToPen(Number(row.amount || 0), row.currency || 'PEN', usdRate);
+    if (amount <= 0) continue;
+
+    const label = leakLabel(row.desc, cat);
+    const key = `${normalizeKey(label)}|${cat}`;
+    if (!grouped[key]) {
+      grouped[key] = {
+        label,
+        category: title(cat),
+        amount: 0,
+        count: 0,
+      };
+    }
+    grouped[key].amount += amount;
+    grouped[key].count += 1;
+    total += amount;
+  }
+
+  return Object.values(grouped)
+    .map((item) => {
+      const sharePct = total > 0 ? round((item.amount / total) * 100) : 0;
+      return {
+        label: item.label,
+        category: item.category,
+        amount: round(item.amount),
+        count: item.count,
+        sharePct,
+        reason: item.count > 1
+          ? `${item.count} movimientos - ${sharePct}% del gasto variable`
+          : `${sharePct}% del gasto variable`,
+      };
+    })
+    .sort((a, b) => b.amount - a.amount || b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, 5);
+}
+
+function leakLabel(description, category) {
+  const raw = normalizeKey(description || '');
+  const cleaned = raw
+    .replace(/^(compra|consumo|pago|gasto|recibo|boleta|factura)\s+(en|de|por)?\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const label = title(cleaned || category || 'gasto');
+  return label.length > 54 ? `${label.slice(0, 51).trim()}...` : label;
+}
+
 async function budgetsWithSpending(env, chatId, cycle, usdRate = 3.85) {
   const rows = await env.DB.prepare(`
     SELECT category AS cat, limit_amount AS limite
@@ -3690,6 +3933,22 @@ function base64UrlDecode(value) {
   const binary = atob(padded);
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
+}
+
+async function safeJson(request) {
+  try {
+    return await request.json();
+  } catch (_error) {
+    return {};
+  }
+}
+
+function safeJsonParse(value, fallback) {
+  try {
+    return JSON.parse(String(value || ''));
+  } catch (_error) {
+    return fallback;
+  }
 }
 
 function constantTimeEqual(a, b) {

@@ -218,6 +218,15 @@ export interface SmartInsight {
   message: string;
 }
 
+export interface TopLeak {
+  label: string;
+  category: string;
+  amount: number;
+  count: number;
+  sharePct: number;
+  reason: string;
+}
+
 export interface RealExpenses {
   totalFijos: number;
   totalFijosPendientes?: number;
@@ -234,6 +243,9 @@ export interface ClosureSummary {
   start?: string;
   end?: string;
   closeDate?: string;
+  saved?: boolean;
+  savedAt?: string;
+  snapshotId?: string;
   ingresos: number;
   gastos: number;
   gastosMovimientos?: number;
@@ -342,6 +354,7 @@ export interface DashboardData {
   fijosPendientes?: number;
   fijosPagadosMes?: number;
   cierre?: ClosureSummary;
+  topFugas?: TopLeak[];
   gastosReales?: RealExpenses;
   metas: Goal[];
   alertas?: SmartAlert[];
