@@ -470,9 +470,9 @@ function construirMesesAnualesEmail_(txs, year) {
   const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
   return meses.map(function (name, index) {
-    const periodo = periodoPagoEmail_(new Date(Number(year), index, 23));
-    const key = periodo.key;
-    const rows = filtrarTransaccionesPeriodoEmail_(txs, periodo);
+    const date = new Date(Number(year), index, 1);
+    const key = Utilities.formatDate(date, 'America/Lima', 'yyyy-MM');
+    const rows = filtrarTransaccionesMesEmail_(txs, key);
     const totals = calcularTotalesEmail_(rows);
     const cats = agruparGastosPorCategoriaEmail_(rows);
     const top = cats[0] || { cat: '', monto: 0 };
@@ -480,7 +480,7 @@ function construirMesesAnualesEmail_(txs, year) {
     return {
       key: key,
       nombre: name,
-      periodo: periodo.label,
+      periodo: nombreMesAnioEmail_(date),
       ingresos: totals.ingresos,
       gastos: totals.gastos,
       balance: totals.ingresos - totals.gastos,

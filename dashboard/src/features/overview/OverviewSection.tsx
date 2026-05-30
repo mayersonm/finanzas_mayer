@@ -35,7 +35,7 @@ export function OverviewSection({
         <KpiCard
           label="Balance del mes"
           value={formatMoney(monthBalance)}
-          detail={`${data.mes} · ${data.movimientosMes ?? data.movimientos} movimientos`}
+          detail={`${data.mes} · corte interno 23-22 · ${data.movimientosMes ?? data.movimientos} movimientos`}
           color={monthBalance >= 0 ? 'emerald' : 'rose'}
         />
         <KpiCard
@@ -63,7 +63,7 @@ export function OverviewSection({
           <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Title>Ultimos 6 meses</Title>
-              <Text>Mes financiero 23-22, ingresos contra gastos</Text>
+              <Text>Por fecha real del movimiento</Text>
             </div>
             <Badge color="emerald">S/</Badge>
           </div>
