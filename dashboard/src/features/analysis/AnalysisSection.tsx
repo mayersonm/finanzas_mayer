@@ -38,7 +38,7 @@ export function AnalysisSection({ data }: { data: DashboardData }) {
     <section className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.6fr)]">
       <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
         <Title>Tendencia</Title>
-        <Text>Ingresos y gastos por mes</Text>
+        <Text>Ingresos y gastos por fecha real</Text>
         <AreaChart
           className="mt-4 h-56 sm:mt-6 sm:h-80"
           data={data.meses}

@@ -757,8 +757,9 @@ async function dashboard(env, params) {
   const chatId = getChatId(env, params);
   const now = new Date();
   const cycle = payCycleFromDate(now);
-  const monthKey = cycle.key;
-  const monthName = cycle.label;
+  const monthKey = localDateKey(now).slice(0, 7);
+  const cycleKey = cycle.key;
+  const monthName = monthLongNameFromKey(`${monthKey}-01`);
   const usdRate = Number((await exchangeRate(env)).rate || 3.85);
 
   const totals = await env.DB.prepare(`
@@ -809,7 +810,7 @@ async function dashboard(env, params) {
   const months = await lastMonths(env, chatId, now, usdRate);
   const budgets = await budgetsWithSpending(env, chatId, cycle, usdRate);
   const budgetRules = await loadBudgetRules(env, chatId);
-  const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, usdRate, cycle);
+  const fixedExpenses = await fixedExpensesList(env, chatId, cycleKey, usdRate, cycle);
   const debts = await debtsList(env, chatId);
   const goals = await goalsList(env, chatId);
   const emailConfig = await emailConfigFromGas(env);
@@ -864,6 +865,7 @@ async function dashboard(env, params) {
     movimientos: Number(totals?.movimientos || 0),
     mes: monthName,
     mesKey: monthKey,
+    cycleKey,
     cycleStart: cycle.startKey,
     cycleEnd: cycle.endKey,
     cycleClose: cycle.closeDate,
@@ -2602,26 +2604,23 @@ async function insertDebtPaymentTransaction(env, { chatId, paymentId, debtName, 
 
 async function lastMonths(env, chatId, now, usdRate = 3.85) {
   const result = [];
-  const currentCycle = payCycleFromDate(now);
+  const current = parseDateKeyParts(localDateKey(now));
 
   for (let i = 5; i >= 0; i--) {
-    const cycle = payCycleRelative(currentCycle, -i);
+    const monthStart = dateKeyFromParts(current.year, current.monthIndex - i, 1);
+    const monthKey = monthStart.slice(0, 7);
     const row = await env.DB.prepare(`
       SELECT
         COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
         COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos
       FROM transactions
-      WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
-    `).bind(usdRate, usdRate, chatId, cycle.startKey, cycle.endKey).first();
+      WHERE chat_id = ? AND substr(tx_date, 1, 7) = ?
+    `).bind(usdRate, usdRate, chatId, monthKey).first();
 
     result.push({
-      mes: cycle.shortLabel,
-      key: cycle.key,
-      label: cycle.shortLabel,
-      rangeLabel: cycle.rangeLabel,
-      cycleStart: cycle.startKey,
-      cycleEnd: cycle.endKey,
-      cycleClose: cycle.closeDate,
+      mes: monthShortNameFromKey(monthStart),
+      key: monthKey,
+      label: monthLongNameFromKey(monthStart),
       ingresos: round(row?.ingresos || 0),
       gastos: round(row?.gastos || 0),
     });

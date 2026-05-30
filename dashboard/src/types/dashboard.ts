@@ -304,8 +304,10 @@ export interface DashboardData {
   movimientosMes?: number;
   mes: string;
   mesKey?: string;
+  cycleKey?: string;
   cycleStart?: string;
   cycleEnd?: string;
+  cycleRange?: string;
   transacciones: Transaction[];
   categorias: CategoryTotal[];
   budgetRules?: BudgetRule[];
