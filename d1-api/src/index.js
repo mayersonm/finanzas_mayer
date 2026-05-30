@@ -781,6 +781,15 @@ async function dashboard(env, params) {
     WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
   `).bind(usdRate, usdRate, chatId, calendarMonth.startKey, calendarMonth.endKey).first();
 
+  const cycleTotals = await env.DB.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresosCierre,
+      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastosCierre,
+      COUNT(*) AS movimientosCierre
+    FROM transactions
+    WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
+  `).bind(usdRate, usdRate, chatId, cycle.startKey, cycle.endKey).first();
+
   const latest = await env.DB.prepare(`
     SELECT
       t.id,
@@ -824,11 +833,39 @@ async function dashboard(env, params) {
   const gastos = Number(totals?.gastos || 0);
   const ingresosMes = Number(monthTotals?.ingresosMes || 0);
   const gastosMes = Number(monthTotals?.gastosMes || 0);
+  const ingresosCierre = Number(cycleTotals?.ingresosCierre || 0);
+  const gastosCierre = Number(cycleTotals?.gastosCierre || 0);
   const gastosConFijosPagados = round(gastos + fixedSummary.paid);
   const gastosMesConFijosPagados = round(gastosMes + fixedSummary.paid);
   const balanceCaja = round(ingresos - gastosConFijosPagados);
   const balanceMesCaja = round(ingresosMes - gastosMesConFijosPagados);
   const patrimonioDisponible = round(balanceCaja - deudaPendiente - fixedSummary.pending);
+  const budget = budgetSummary(budgets);
+  const gastosCierreConFijos = round(gastosCierre + fixedSummary.paid);
+  const balanceCierre = round(ingresosCierre - gastosCierreConFijos);
+  const pendienteComprometido = round(deudaPendiente + fixedSummary.pending + budget.remaining);
+  const cierre = {
+    label: 'Cierre 23',
+    range: cycle.rangeLabel,
+    start: cycle.startKey,
+    end: cycle.endKey,
+    closeDate: cycle.closeDate,
+    ingresos: round(ingresosCierre),
+    gastos: gastosCierreConFijos,
+    gastosMovimientos: round(gastosCierre),
+    balance: balanceCierre,
+    movimientos: Number(cycleTotals?.movimientosCierre || 0),
+    fijosPagados: fixedSummary.paid,
+    fijosPendientes: fixedSummary.pending,
+    deudasPendientes: deudaPendiente,
+    presupuestoLimite: budget.limit,
+    presupuestoUsado: budget.spent,
+    presupuestoRestante: budget.remaining,
+    presupuestoExcedido: budget.over,
+    pendienteComprometido,
+    queQueda: round(balanceCierre - pendienteComprometido),
+    patrimonioDisponible,
+  };
 
   const alerts = smartAlerts({
     now,
@@ -872,6 +909,7 @@ async function dashboard(env, params) {
     cycleClose: cycle.closeDate,
     cycleRange: cycle.rangeLabel,
     movimientosMes: Number(monthTotals?.movimientosMes || 0),
+    cierre,
     transacciones: (latest.results || []).map(txShape),
     categorias: categories,
     budgetRules: budgetRulesForDashboard(budgetRules),
@@ -3230,6 +3268,25 @@ function realExpenses(fixedExpenses, budgets, usdRate = 3.85) {
     totalPresupuesto: round(totalPresupuesto),
     total: round(fixedSummary.pending + totalPresupuesto),
     regla: 'pending_fixed_plus_budget_spent_or_limit',
+  };
+}
+
+function budgetSummary(budgets) {
+  const summary = (budgets || []).reduce((acc, item) => {
+    const spent = Number(item.gasto || 0);
+    const limit = Number(item.limite || 0);
+    acc.limit += limit;
+    acc.spent += spent;
+    acc.remaining += Math.max(limit - spent, 0);
+    acc.over += Math.max(spent - limit, 0);
+    return acc;
+  }, { limit: 0, spent: 0, remaining: 0, over: 0 });
+
+  return {
+    limit: round(summary.limit),
+    spent: round(summary.spent),
+    remaining: round(summary.remaining),
+    over: round(summary.over),
   };
 }
 
