@@ -132,6 +132,35 @@ function dashDashboardData_(params) {
   const presupuestos = dashReadBudgets_(params, categoriasCiclo);
   const fijos = dashReadFixedExpenses_(params, cycleTxs, cycleKey);
   const deudas = dashReadDebts_(params);
+  const fijosResumen = dashFixedSummary_(fijos);
+  const presupuestoResumen = dashBudgetSummary_(presupuestos);
+  const deudaPendiente = dashDebtPending_(deudas);
+  const ingresosCierre = dashSum_(cycleTxs, 'ingreso');
+  const gastosCierre = dashSum_(cycleTxs, 'gasto');
+  const balanceCierre = ingresosCierre - gastosCierre;
+  const pendienteComprometido = deudaPendiente + fijosResumen.pending + presupuestoResumen.remaining;
+  const cierre = {
+    label: 'Cierre 23',
+    range: periodo.rangeLabel,
+    start: periodo.startKey,
+    end: periodo.endKey,
+    closeDate: periodo.closeKey,
+    ingresos: dashRound_(ingresosCierre),
+    gastos: dashRound_(gastosCierre),
+    gastosMovimientos: dashRound_(gastosCierre),
+    balance: dashRound_(balanceCierre),
+    movimientos: cycleTxs.length,
+    fijosPagados: fijosResumen.paid,
+    fijosPendientes: fijosResumen.pending,
+    deudasPendientes: deudaPendiente,
+    presupuestoLimite: presupuestoResumen.limit,
+    presupuestoUsado: presupuestoResumen.spent,
+    presupuestoRestante: presupuestoResumen.remaining,
+    presupuestoExcedido: presupuestoResumen.over,
+    pendienteComprometido: dashRound_(pendienteComprometido),
+    queQueda: dashRound_(balanceCierre - pendienteComprometido),
+    patrimonioDisponible: dashRound_(ingresos - gastos - deudaPendiente - fijosResumen.pending),
+  };
   const meses = dashLastMonths_(allTxs, now);
   const alertas = dashSmartAlerts_(allTxs, presupuestos, fijos, deudas, monthKey);
   const insights = dashSmartInsights_(monthTxs, categorias, presupuestos, deudas, meses);
@@ -158,6 +187,10 @@ function dashDashboardData_(params) {
     presupuestos: presupuestos,
     fijos: fijos,
     deudas: deudas,
+    deudaPendiente: deudaPendiente,
+    fijosPendientes: fijosResumen.pending,
+    fijosPagadosMes: fijosResumen.paid,
+    cierre: cierre,
     gastosReales: dashRealExpenses_(fijos, presupuestos),
     metas: dashReadGoals_(params),
     alertas: alertas,
@@ -597,6 +630,49 @@ function dashRealExpenses_(fijos, presupuestos) {
     total: dashRound_(totalFijos + totalPresupuesto),
     regla: 'budget_spent_or_limit',
   };
+}
+
+function dashFixedSummary_(fijos) {
+  const summary = (fijos || []).reduce(function (acc, item) {
+    const value = Number(item.monto || 0);
+    if (item.estado === 'pagado') acc.paid += value;
+    else if (item.estado === 'saltado') acc.skipped += value;
+    else acc.pending += value;
+    return acc;
+  }, { pending: 0, paid: 0, skipped: 0 });
+
+  return {
+    pending: dashRound_(summary.pending),
+    paid: dashRound_(summary.paid),
+    skipped: dashRound_(summary.skipped),
+  };
+}
+
+function dashBudgetSummary_(presupuestos) {
+  const summary = (presupuestos || []).reduce(function (acc, item) {
+    const spent = Number(item.gasto || 0);
+    const limit = Number(item.limite || 0);
+    acc.limit += limit;
+    acc.spent += spent;
+    acc.remaining += Math.max(limit - spent, 0);
+    acc.over += Math.max(spent - limit, 0);
+    return acc;
+  }, { limit: 0, spent: 0, remaining: 0, over: 0 });
+
+  return {
+    limit: dashRound_(summary.limit),
+    spent: dashRound_(summary.spent),
+    remaining: dashRound_(summary.remaining),
+    over: dashRound_(summary.over),
+  };
+}
+
+function dashDebtPending_(deudas) {
+  return dashRound_((deudas || [])
+    .filter(function (item) { return item.estado !== 'pagada'; })
+    .reduce(function (total, item) {
+      return total + Number(item.pendiente || 0);
+    }, 0));
 }
 
 function dashEmailConfig_() {

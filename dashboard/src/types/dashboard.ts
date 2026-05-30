@@ -228,6 +228,29 @@ export interface RealExpenses {
   regla?: string;
 }
 
+export interface ClosureSummary {
+  label: string;
+  range?: string;
+  start?: string;
+  end?: string;
+  closeDate?: string;
+  ingresos: number;
+  gastos: number;
+  gastosMovimientos?: number;
+  balance: number;
+  movimientos?: number;
+  fijosPagados: number;
+  fijosPendientes: number;
+  deudasPendientes: number;
+  presupuestoLimite: number;
+  presupuestoUsado: number;
+  presupuestoRestante: number;
+  presupuestoExcedido?: number;
+  pendienteComprometido: number;
+  queQueda: number;
+  patrimonioDisponible?: number;
+}
+
 export interface EmailConfig {
   configured: boolean;
   daily?: string;
@@ -318,6 +341,7 @@ export interface DashboardData {
   deudaPendiente?: number;
   fijosPendientes?: number;
   fijosPagadosMes?: number;
+  cierre?: ClosureSummary;
   gastosReales?: RealExpenses;
   metas: Goal[];
   alertas?: SmartAlert[];
