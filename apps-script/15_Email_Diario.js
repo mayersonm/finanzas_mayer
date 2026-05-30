@@ -433,16 +433,21 @@ function periodoPagoEmail_(date) {
     ? new Date(base.getFullYear(), base.getMonth(), 23)
     : new Date(base.getFullYear(), base.getMonth() - 1, 23);
   const end = new Date(start.getFullYear(), start.getMonth() + 1, 22);
+  const close = new Date(start.getFullYear(), start.getMonth() + 1, 23);
   const startKey = Utilities.formatDate(start, 'America/Lima', 'yyyy-MM-dd');
   const endKey = Utilities.formatDate(end, 'America/Lima', 'yyyy-MM-dd');
+  const closeKey = Utilities.formatDate(close, 'America/Lima', 'yyyy-MM-dd');
 
   return {
     start: start,
     end: end,
+    close: close,
     startKey: startKey,
     endKey: endKey,
+    closeKey: closeKey,
     key: Utilities.formatDate(start, 'America/Lima', 'yyyy-MM'),
-    label: Utilities.formatDate(start, 'America/Lima', 'dd/MM/yyyy') + ' - ' + Utilities.formatDate(end, 'America/Lima', 'dd/MM/yyyy'),
+    label: 'Cierre ' + Utilities.formatDate(close, 'America/Lima', 'dd/MM/yyyy'),
+    rangeLabel: Utilities.formatDate(start, 'America/Lima', 'dd/MM/yyyy') + ' - ' + Utilities.formatDate(end, 'America/Lima', 'dd/MM/yyyy'),
   };
 }
 
