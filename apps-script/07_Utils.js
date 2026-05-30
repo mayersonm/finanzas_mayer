@@ -1,12 +1,15 @@
 
 function normalizarCat(cat, desc, chatId) {
+  const basica = normalizarCatBasica_(cat);
+  if (basica && basica !== 'otro') return basica;
+
   const remote = clasificarCategoriaD1_(cat, desc, chatId);
   if (remote) return normalizarCatBasica_(remote);
 
   const semantica = normalizarCatPorTexto_(cat, desc);
   if (semantica) return semantica;
 
-  return normalizarCatBasica_(cat);
+  return basica || 'otro';
 }
 
 function normalizarCatBasica_(cat) {

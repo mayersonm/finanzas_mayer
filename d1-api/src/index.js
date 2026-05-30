@@ -4177,6 +4177,15 @@ function daysBetween(fromDateKey, toDateKey) {
 }
 
 async function classifyCategory(env, chatId, value, description = '') {
+  const explicitCategory = normalizeExplicitCategory(value);
+  if (explicitCategory) {
+    return {
+      category: explicitCategory,
+      source: 'explicit',
+      keyword: '',
+    };
+  }
+
   const rules = await loadCategoryRules(env, chatId);
   const match = matchCategoryRule(rules, value, description);
   if (match) {
@@ -4232,6 +4241,9 @@ function matchCategoryRule(rules, value, description = '') {
 }
 
 function classifyCategoryFromLoadedRules(rules, value, description = '') {
+  const explicitCategory = normalizeExplicitCategory(value);
+  if (explicitCategory) return explicitCategory;
+
   const match = matchCategoryRule(rules, value, description);
   return match ? normalizeCategory(match.category) : (semanticCategoryFromText(value, description) || normalizeCategory(value));
 }
@@ -4282,6 +4294,11 @@ function budgetRulesForDashboard(rules) {
 
 function normalizeCategory(value) {
   return normalizeBaseCategory(value) || 'otro';
+}
+
+function normalizeExplicitCategory(value) {
+  const category = normalizeBaseCategory(value);
+  return category && category !== 'otro' ? category : '';
 }
 
 function normalizeBaseCategory(value) {
