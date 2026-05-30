@@ -2600,7 +2600,6 @@ async function insertDebtPaymentTransaction(env, { chatId, paymentId, debtName, 
 
 async function lastMonths(env, chatId, now, usdRate = 3.85) {
   const result = [];
-  const shortNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const currentCycle = payCycleFromDate(now);
 
   for (let i = 5; i >= 0; i--) {
@@ -2614,9 +2613,11 @@ async function lastMonths(env, chatId, now, usdRate = 3.85) {
     `).bind(usdRate, usdRate, chatId, cycle.startKey, cycle.endKey).first();
 
     result.push({
-      mes: shortNames[parseDateKeyParts(cycle.startKey).monthIndex],
+      mes: cycle.shortLabel,
       key: cycle.key,
       label: cycle.shortLabel,
+      cycleStart: cycle.startKey,
+      cycleEnd: cycle.endKey,
       ingresos: round(row?.ingresos || 0),
       gastos: round(row?.gastos || 0),
     });
