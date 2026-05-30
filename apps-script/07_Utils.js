@@ -73,6 +73,46 @@ function capitalizar(str) {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
+function fechaLocalDesdeValor_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  const text = String(value || '').slice(0, 10);
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+
+  const parsed = new Date(value);
+  if (!isNaN(parsed.getTime())) return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+
+  return new Date();
+}
+
+function fechaKey_(value) {
+  return Utilities.formatDate(fechaLocalDesdeValor_(value), 'America/Lima', 'yyyy-MM-dd');
+}
+
+function mesKey_(value) {
+  return Utilities.formatDate(fechaLocalDesdeValor_(value), 'America/Lima', 'yyyy-MM');
+}
+
+function fechaCorta_(value) {
+  return Utilities.formatDate(fechaLocalDesdeValor_(value), 'America/Lima', 'dd/MM/yyyy');
+}
+
+function horaLocalDesdeValor_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    return new Date(2000, 0, 1, value.getHours(), value.getMinutes());
+  }
+
+  const match = String(value || '00:00').match(/^(\d{1,2}):(\d{2})/);
+  return new Date(2000, 0, 1, match ? Number(match[1]) : 0, match ? Number(match[2]) : 0);
+}
+
+function horaKey_(value) {
+  return Utilities.formatDate(horaLocalDesdeValor_(value), 'America/Lima', 'HH:mm');
+}
+
 // ---- NUEVA: barra de progreso visual --------------
 function buildBar(pct) {
   const filled = Math.round(Math.min(pct, 100) / 10);

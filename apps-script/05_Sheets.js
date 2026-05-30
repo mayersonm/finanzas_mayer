@@ -85,7 +85,7 @@ function obtenerGastosPorMesCat(chatId, mes = null) {
     if (String(r[6]).trim() !== String(chatId).trim()) return;
     if (r[2] !== 'gasto') return;
 
-    const fechaMes = Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM');
+    const fechaMes = mesKey_(r[0]);
     if (mes && fechaMes !== mes) return;
 
     const cat   = normalizarCat(r[4], r[3], chatId);
