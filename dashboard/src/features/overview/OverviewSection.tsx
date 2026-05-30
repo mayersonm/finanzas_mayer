@@ -1,4 +1,7 @@
+import { useState } from 'react';
+import { RiSave3Line } from '@remixicon/react';
 import { Badge, BarChart, Card, DonutChart, Metric, ProgressBar, Text, Title } from '@tremor/react';
+import { apiEndpoint } from '../../app/api';
 import { KpiCard } from '../../components/dashboard/KpiCard';
 import { EmptyState } from '../../components/common/EmptyState';
 import { percent } from '../../lib/finance';
@@ -9,12 +12,22 @@ import type { ClosureSummary, DashboardData, RealExpenses } from '../../types/da
 export function OverviewSection({
   data,
   realExpenses,
+  authToken,
+  chatId,
+  onChanged,
 }: {
   data: DashboardData;
   realExpenses: RealExpenses;
+  authToken?: string | null;
+  chatId?: string;
+  onChanged?: () => void;
 }) {
+  const [closing, setClosing] = useState(false);
+  const [closeMessage, setCloseMessage] = useState('');
+  const [closeError, setCloseError] = useState('');
   const totalCategorias = data.categorias.reduce((total, item) => total + item.monto, 0);
   const topCategory = data.categorias[0];
+  const topFugas = data.topFugas || [];
   const monthIncome = data.ingresosMes ?? data.ingresos;
   const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
   const debtPending = data.deudaPendiente ?? 0;
@@ -36,6 +49,39 @@ export function OverviewSection({
     monthBalance,
   });
   const closureBudgetPct = percent(closure.presupuestoUsado, closure.presupuestoLimite);
+
+  async function saveClosure() {
+    if (!authToken) return;
+
+    setClosing(true);
+    setCloseMessage('');
+    setCloseError('');
+    try {
+      const url = new URL(apiEndpoint('closures'));
+      if (chatId) url.searchParams.set('chat_id', chatId);
+
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string; closure?: ClosureSummary };
+
+      if (!response.ok || result.ok === false) {
+        throw new Error(result.error || 'No se pudo guardar el cierre');
+      }
+
+      setCloseMessage(`Cierre guardado: ${result.closure?.label || closure.label}`);
+      onChanged?.();
+    } catch (error) {
+      setCloseError(error instanceof Error ? error.message : 'No se pudo guardar el cierre');
+    } finally {
+      setClosing(false);
+    }
+  }
 
   return (
     <>
@@ -74,15 +120,39 @@ export function OverviewSection({
 
       <section className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Title>{closure.label || 'Cierre 23'}</Title>
               <Text>{data.mes} - cierre mensual {formatDateLabel(closure.closeDate)}</Text>
+              {closure.savedAt ? <Text>Guardado {formatSavedAt(closure.savedAt)}</Text> : null}
             </div>
-            <Badge color={closure.queQueda >= 0 ? 'emerald' : 'rose'}>
-              {closure.movimientos ?? data.movimientosMes ?? 0} movimientos
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge color={closure.queQueda >= 0 ? 'emerald' : 'rose'}>
+                {closure.movimientos ?? data.movimientosMes ?? 0} movimientos
+              </Badge>
+              <button
+                type="button"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60"
+                disabled={!authToken || closing}
+                onClick={() => void saveClosure()}
+              >
+                <RiSave3Line className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{closing ? 'Guardando' : closure.saved ? 'Actualizar cierre' : 'Cerrar mes'}</span>
+              </button>
+            </div>
           </div>
+
+          {closeMessage ? (
+            <div className="mt-4 rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100">
+              {closeMessage}
+            </div>
+          ) : null}
+
+          {closeError ? (
+            <div className="mt-4 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-100">
+              {closeError}
+            </div>
+          ) : null}
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <ClosureMetric label="Entro" value={formatMoney(closure.ingresos)} tone="text-emerald-300" />
@@ -120,6 +190,39 @@ export function OverviewSection({
               <ClosureLine label="Excedido" value={closure.presupuestoExcedido} danger />
             ) : null}
           </div>
+        </Card>
+      </section>
+
+      <section className="mt-4 sm:mt-5">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <Title>Top fugas</Title>
+              <Text>Los 5 gastos variables que mas pesan este mes.</Text>
+            </div>
+            <Badge color={topFugas.length ? 'amber' : 'emerald'}>{topFugas.length ? `${topFugas.length} alertas` : 'Sin fugas'}</Badge>
+          </div>
+
+          {topFugas.length ? (
+            <div className="mt-4 grid gap-3 lg:grid-cols-5">
+              {topFugas.map((item, index) => (
+                <div key={`${item.label}-${item.category}`} className="min-w-0 border-t border-slate-800 pt-3 lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-200">#{index + 1}</span>
+                    <span className="shrink-0 font-mono text-sm font-semibold text-slate-100">{formatMoney(item.amount)}</span>
+                  </div>
+                  <p className="truncate text-sm font-semibold text-slate-100">{item.label}</p>
+                  <Text className="mt-1 truncate">{item.category}</Text>
+                  <ProgressBar className="mt-3" value={item.sharePct} color={item.sharePct >= 35 ? 'rose' : item.sharePct >= 20 ? 'amber' : 'cyan'} />
+                  <p className="mt-2 text-xs text-slate-400">{item.reason}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5">
+              <EmptyState>Sin fugas fuertes este mes.</EmptyState>
+            </div>
+          )}
         </Card>
       </section>
 
@@ -269,4 +372,15 @@ function formatDateLabel(value?: string) {
   const [year, month, day] = value.split('-');
   if (!year || !month || !day) return value;
   return `${day}/${month}/${year}`;
+}
+
+function formatSavedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('es-PE', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

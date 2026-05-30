@@ -8,6 +8,10 @@ Sincronizar respaldo Sheets -> D1:
 $headers = @{ "x-admin-key" = "TU_D1_ADMIN_KEY" }
 Invoke-WebRequest -UseBasicParsing -Method POST -Headers $headers -Uri "https://finanzas-d1-api.mayersonm.workers.dev/api/sync/gas?chat_id=TU_CHAT_ID&limit=500" | Select-Object -ExpandProperty Content
 
+Dashboard Inicio:
+- Cerrar mes guarda el corte actual en D1.
+- Top fugas muestra los 5 gastos variables principales del mes.
+
 cd dashboard
 npm ci
 $env:VITE_GAS_API_URL="https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard"

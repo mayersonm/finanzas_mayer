@@ -664,6 +664,8 @@ Tambien puedes abrir `Inversiones` para registrar posiciones con monto invertido
 
 La pestaña `Patrimonio` usa movimientos, deudas, inversiones y metas para calcular activos, pasivos y patrimonio. `Patrimonio disponible` es lo que queda despues de deudas activas y fijos pendientes; `Patrimonio total` suma inversiones y metas. Si pulsas `Guardar corte`, el snapshot queda en D1 en `net_worth_snapshots` para comparar la evolucion con el tiempo.
 
+En `Inicio`, el boton `Cerrar mes` guarda el corte del mes actual en D1, en `financial_closures`. El cierre se etiqueta con el dia 23, por ejemplo `Cierre 23/05`, pero las transacciones conservan sus fechas reales dentro del mes calendario. El bloque `Top fugas` muestra los 5 gastos variables que mas pesan en el mes.
+
 Luego envia una foto clara de un recibo.
 
 El flujo correcto es:
@@ -682,6 +684,8 @@ Entra al dashboard y revisa:
 
 ```text
 Inicio
+Cerrar mes
+Top fugas
 Movimientos
 Compromisos
 Analisis
@@ -699,7 +703,7 @@ En movimientos, Google Sheets manda. Si Sheets tiene 24 movimientos, D1 debe que
 
 El Worker no debe traer Sheets automaticamente cada 15 minutos. Ese cron queda desactivado para que la sincronizacion la controles desde el dashboard.
 
-Los correos usan D1 como fuente principal. El diario compara el dia contra el ciclo de pago vigente, el mensual cierra ciclos del dia 23 al 22 y el automatico se envia cada dia 23. El dashboard, las alertas, insights, proyecciones y comparativos tambien usan ese ciclo 23-22. Si D1 no responde, Apps Script usa Sheets como respaldo.
+Los correos usan D1 como fuente principal y el automatico mensual se envia cada dia 23. El dashboard conserva las fechas reales de las transacciones y etiqueta el cierre mensual con el dia 23. Si D1 no responde, Apps Script usa Sheets como respaldo.
 
 Si estas en local, el dashboard tambien usa la data real siempre que `.env.local` apunte a:
 
