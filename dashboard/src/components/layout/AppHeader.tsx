@@ -45,16 +45,18 @@ export function AppHeader({
             <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass}`}>
               {status === 'live' ? `En vivo${data.source ? ` - ${data.source}` : ''}` : status === 'error' ? 'Error API' : 'Demo'}
             </span>
-            <span className="rounded-full bg-cyan-500/15 px-2.5 py-1 text-xs font-semibold text-cyan-200">{data.mes}</span>
+            <span className="inline-flex h-7 items-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-2.5 text-xs font-semibold text-slate-300">
+              Mes: {data.mes}
+            </span>
           </div>
           <h1 className="text-xl font-semibold text-slate-100 sm:text-3xl">Mayeson Finanzas</h1>
           <p className="mt-1 text-xs text-slate-400 sm:text-sm">Ultima actualizacion: {loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)}</p>
         </div>
 
-        <div className="flex flex-col gap-2 min-[420px]:flex-row min-[420px]:flex-wrap">
+        <div className="flex flex-col gap-2 min-[420px]:flex-row min-[420px]:flex-wrap min-[420px]:items-center">
           {users.length > 1 ? (
             <select
-              className="h-10 rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-200 min-[420px]:min-w-44"
+              className="h-10 w-full rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-200 shadow-sm transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-400/30 min-[420px]:w-auto min-[420px]:min-w-44"
               value={selectedChatId}
               onChange={(event) => onSelectedChatIdChange(event.target.value)}
               aria-label="Usuario"
@@ -107,15 +109,15 @@ function HeaderButton({
   tone?: 'primary' | 'secondary' | 'danger';
 }) {
   const className = tone === 'primary'
-    ? 'border-emerald-400/40 bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400/60 hover:bg-emerald-500/15'
     : tone === 'danger'
-      ? 'border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
-      : 'border-slate-700 bg-slate-900/70 text-slate-200 hover:bg-slate-800';
+      ? 'border-rose-500/30 bg-rose-500/10 text-rose-200 hover:border-rose-400/50 hover:bg-rose-500/15'
+      : 'border-slate-700 bg-slate-900/70 text-slate-200 hover:border-slate-600 hover:bg-slate-800/90';
 
   return (
     <button
       type="button"
-      className={`inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-tremor-default border px-3 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60 ${className}`}
+      className={`inline-flex h-10 w-full min-w-[9.5rem] items-center justify-center gap-2 rounded-tremor-default border px-3 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-wait disabled:opacity-55 min-[420px]:w-auto ${className}`}
       onClick={onClick}
       disabled={disabled}
     >
