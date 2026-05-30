@@ -125,7 +125,7 @@ function construirHtmlAnualEmail_(data) {
     const color = m.balance >= 0 ? '#16a34a' : '#dc2626';
     return [
       '<tr>',
-      '<td>' + escEmail_(m.nombre) + '</td>',
+      '<td>' + escEmail_(m.periodo || m.nombre) + '</td>',
       '<td align="right">' + fmtEmail_(m.ingresos) + '</td>',
       '<td align="right">' + fmtEmail_(m.gastos) + '</td>',
       '<td align="right" style="color:' + color + '"><strong>' + fmtSignedEmail_(m.balance) + '</strong></td>',
@@ -247,7 +247,7 @@ function llenarHojaResumenAnualEmail_(sheet, data) {
 
 function llenarHojaMesesAnualEmail_(sheet, data) {
   const rows = data.months.map(function (m) {
-    return [m.key, m.nombre, m.ingresos, m.gastos, m.balance, m.movimientos, m.categoriaPrincipal, m.montoCategoriaPrincipal];
+    return [m.key, m.periodo || m.nombre, m.ingresos, m.gastos, m.balance, m.movimientos, m.categoriaPrincipal, m.montoCategoriaPrincipal];
   });
 
   sheet.getRange(1, 1, 1, 8).setValues([['Ciclo', 'Nombre', 'Ingresos', 'Gastos', 'Balance', 'Movimientos', 'Categoria principal', 'Monto categoria']]);
@@ -310,7 +310,7 @@ function generarSugerenciaAnualIA_(data) {
   }
 
   const months = data.months.map(function (m) {
-    return '- ' + m.nombre + ': ingresos ' + fmtEmail_(m.ingresos) + ', gastos ' + fmtEmail_(m.gastos) + ', balance ' + fmtSignedEmail_(m.balance);
+    return '- ' + (m.periodo || m.nombre) + ': ingresos ' + fmtEmail_(m.ingresos) + ', gastos ' + fmtEmail_(m.gastos) + ', balance ' + fmtSignedEmail_(m.balance);
   }).join('\n');
 
   const categories = data.categoryComparison.slice(0, 8).map(function (c) {
