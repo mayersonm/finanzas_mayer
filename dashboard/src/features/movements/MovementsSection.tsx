@@ -108,12 +108,12 @@ export function MovementsSection({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-tremor-default border border-cyan-500/30 bg-cyan-500/10 px-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400/60 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default border border-emerald-400/50 bg-emerald-500 px-3.5 text-sm font-semibold text-slate-950 shadow-sm shadow-emerald-950/30 transition hover:-translate-y-0.5 hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300/50 disabled:translate-y-0 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
             disabled={!transactions.length || loading}
             onClick={exportFiltered}
           >
             <RiDownloadLine className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Exportar filtrado
+            Exportar Movimiento
           </button>
           <Badge color="emerald">{data.mes}</Badge>
         </div>
