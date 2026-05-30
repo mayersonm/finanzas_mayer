@@ -84,10 +84,14 @@ function handleDashboardApi(e) {
       return dashJson_(dashSendDailyEmail_());
     }
 
+    if (action === 'send_daily_telegram' || action === 'telegram_daily') {
+      return dashJson_(dashSendDailyTelegram_(params));
+    }
+
     return dashJson_({
       ok: false,
       error: 'Accion no valida',
-      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email'],
+      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email', 'send_daily_telegram'],
     });
   } catch (err) {
     Logger.log('Dashboard API error: ' + (err && err.stack ? err.stack : err));
@@ -281,6 +285,21 @@ function dashSendDailyEmail_() {
     ok: true,
     result: result || 'Resumen diario enviado',
     type: 'daily',
+    sentAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
+  };
+}
+
+function dashSendDailyTelegram_(params) {
+  const props = PropertiesService.getScriptProperties();
+  const chatId = String(params.chat_id || params.chatId || props.getProperty('dashboard_chat_id') || '').trim();
+  if (!chatId) throw new Error('Falta chat_id o dashboard_chat_id');
+
+  const result = sendResumenDiario(chatId);
+
+  return {
+    ok: true,
+    result: result || 'Resumen diario Telegram enviado',
+    chatId: chatId,
     sentAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
   };
 }

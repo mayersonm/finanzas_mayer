@@ -277,7 +277,7 @@ function contextoInsightsIA_(chatId) {
 
   const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
   const txs = obtenerTransacciones(chatId).filter(r =>
-    Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes
+    mesKey_(r[0]) === mes
   );
   const gastosCat = (obtenerGastosPorMesCat(chatId, mes)[mes]) || {};
   const deudas = leerDeudas_(chatId).filter(d => d.estado !== 'pagada' && d.pendiente > 0);
@@ -309,7 +309,7 @@ function calcularAlertasInteligentes_(chatId) {
   const fijos = leerFijos_(chatId);
   const deudas = leerDeudas_(chatId).filter(d => d.estado !== 'pagada' && d.pendiente > 0);
   const txsMes = obtenerTransacciones(chatId).filter(r =>
-    Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes
+    mesKey_(r[0]) === mes
   );
   const ingresosMes = txsMes.filter(r => r[2] === 'ingreso').reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
   const gastosMes = txsMes.filter(r => r[2] === 'gasto').reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
@@ -367,7 +367,7 @@ function resumenFinancieroParaIA_(chatId) {
 
   const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
   const txs = obtenerTransacciones(chatId).filter(r =>
-    Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes
+    mesKey_(r[0]) === mes
   );
   const ingresos = txs.filter(r => r[2] === 'ingreso').reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
   const gastos = txs.filter(r => r[2] === 'gasto').reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);

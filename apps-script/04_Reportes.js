@@ -75,7 +75,7 @@ function sendResumen(chatId) {
   const mesActual = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM');
 
   const data = obtenerTransacciones(chatId)
-    .filter(row => Utilities.formatDate(new Date(row[0]), 'America/Lima', 'yyyy-MM') === mesActual);
+    .filter(row => mesKey_(row[0]) === mesActual);
 
   if (data.length === 0) {
     return sendMessage(chatId, '📭 No hay movimientos este mes todavía.');
@@ -126,7 +126,7 @@ function sendUltimos(chatId) {
     const monto = formatoMoneda_(parseFloat(row[5]), row[10] || 'PEN');
     const fecha = row[0];
     const emoji = tipo === 'gasto' ? '🔴' : '🟢';
-    return `#${index + 1} ${emoji} ${desc} — ${monto} · ${capitalizar(cat)} _(${Utilities.formatDate(new Date(fecha), Session.getScriptTimeZone(), 'dd/MM/yyyy')})_`;
+    return `#${index + 1} ${emoji} ${desc} — ${monto} · ${capitalizar(cat)} _(${fechaCorta_(fecha)})_`;
   }).join('\n');
 
   sendMessage(
@@ -149,8 +149,8 @@ function cmdExportar(chatId) {
   const bom    = '\uFEFF';
   const header = 'Fecha,Hora,Tipo,Descripción,Categoría,Monto\n';
   const rows   = data.map(r => {
-    const fecha = Utilities.formatDate(new Date(r[0]), 'America/Lima', 'dd/MM/yyyy');
-    const hora  = Utilities.formatDate(new Date(r[1]), 'America/Lima', 'HH:mm');
+    const fecha = fechaCorta_(r[0]);
+    const hora  = horaKey_(r[1]);
     const tipo  = r[2];
     const desc  = String(r[3]).replace(/"/g, '""'); // escapa comillas en descripción
     const cat   = r[4];
@@ -175,13 +175,7 @@ function cmdExportar(chatId) {
 // para crear el trigger que corre cada lunes a las 8AM Lima
 
 function reporteSemanal() {
-  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
-  if (!sheet) return;
-
-  // Obtén todos los chatIds únicos
-  const chatIds = [...new Set(
-    sheet.getDataRange().getValues().slice(1).map(r => String(r[6])).filter(Boolean)
-  )];
+  const chatIds = obtenerChatIdsReportes_();
 
   chatIds.forEach(chatId => enviarReporteSemanal(chatId));
 }
@@ -195,7 +189,7 @@ function enviarReporteSemanal(chatId) {
   const domingoFmt = Utilities.formatDate(domingo,  'America/Lima', 'yyyy-MM-dd');
 
   const txs = obtenerTransacciones(chatId).filter(r => {
-    const f = Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM-dd');
+    const f = fechaKey_(r[0]);
     return f >= lunesFmt && f <= domingoFmt;
   });
 
@@ -245,7 +239,7 @@ function testUltimos() {
 function sendResumenDiario(chatId) {
   const hoy     = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
   const txsHoy  = obtenerTransacciones(chatId).filter(r =>
-    Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM-dd') === hoy
+    fechaKey_(r[0]) === hoy
   );
 
   if (!txsHoy.length) {
@@ -282,16 +276,14 @@ function sendResumenDiario(chatId) {
     `_${txsHoy.length} movimiento${txsHoy.length !== 1 ? 's' : ''} hoy_`,
     true
   );
+
+  return `Resumen diario Telegram enviado: ${txsHoy.length} movimientos`;
 }
 
 // Llamada automáticamente por el trigger cada noche
 function resumenDiarioAutomatico() {
-  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
-  if (!sheet) return;
-
-  const chatIds = [...new Set(
-    sheet.getDataRange().getValues().slice(1).map(r => String(r[6])).filter(Boolean)
-  )];
+  const chatIds = obtenerChatIdsReportes_();
+  if (!chatIds.length) return 'No hay chatIds configurados para reportes';
 
   chatIds.forEach(chatId => sendResumenDiario(chatId));
   enviarResumenDiarioEmail();
@@ -307,6 +299,27 @@ function resumenDiarioAutomatico() {
   } catch (e) {
     Logger.log('Error resumen anual desde diario: ' + e.toString());
   }
+}
+
+function obtenerChatIdsReportes_() {
+  const ids = {};
+  const props = PropertiesService.getScriptProperties();
+  const principal = props.getProperty('dashboard_chat_id');
+  if (principal) ids[String(principal).trim()] = true;
+
+  try {
+    const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
+    if (sheet) {
+      sheet.getDataRange().getValues().slice(1).forEach(function (r) {
+        const chatId = String(r[6] || '').trim();
+        if (chatId) ids[chatId] = true;
+      });
+    }
+  } catch (err) {
+    Logger.log('No se pudieron leer chatIds de Sheets: ' + err);
+  }
+
+  return Object.keys(ids).filter(Boolean);
 }
 
 // ---- BÚSQUEDA DE TRANSACCIONES -----------------------------
@@ -334,7 +347,7 @@ function cmdBuscar(chatId, text) {
 
   const lineas = resultados.map(r => {
     const emoji = r[2] === 'gasto' ? '🔴' : '🟢';
-    const fecha = Utilities.formatDate(new Date(r[0]), 'America/Lima', 'dd/MM/yyyy');
+    const fecha = fechaCorta_(r[0]);
     const monto = parseFloat(r[5]).toFixed(2);
     return `${emoji} ${r[3]} — S/ ${monto} _(${fecha})_`;
   }).join('\n');
@@ -357,7 +370,7 @@ function cmdProyeccion(chatId) {
   const diasRest  = diasMes - diaHoy;
 
   const data = obtenerTransacciones(chatId).filter(r =>
-    Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mesActual
+    mesKey_(r[0]) === mesActual
   );
 
   if (!data.length) {
@@ -418,7 +431,7 @@ function cmdAnalisisIA(chatId) {
  
   // Datos del mes
   const data = obtenerTransacciones(chatId).filter(r =>
-    Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mesActual
+    mesKey_(r[0]) === mesActual
   );
  
   if (data.length < 3) {
@@ -588,7 +601,7 @@ function alertarFijosPendientes() {
   Object.entries(porChat).forEach(([chatId, fijosList]) => {
     // Transacciones registradas este mes
     const txsMes = obtenerTransacciones(chatId).filter(r =>
-      Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes
+      mesKey_(r[0]) === mes
     );
 
     // Filtra los que no están registrados y no fueron saltados
@@ -639,7 +652,7 @@ function cmdCompararMeses(chatId) {
 
   function calcular(mes) {
     const data = txs.filter(r =>
-      Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes
+      mesKey_(r[0]) === mes
     );
     let ing = 0, gas = 0;
     const cats = {};

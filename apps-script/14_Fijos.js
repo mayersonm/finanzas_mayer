@@ -287,7 +287,7 @@ function fijoYaRegistradoEnMes_(chatId, fijo, mes) {
   if (CacheService.getScriptCache().get(paidKey) === '1') return true;
 
   return obtenerTransacciones(chatId).some(r => {
-    const fechaMes = Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM');
+    const fechaMes = mesKey_(r[0]);
     return fechaMes === mes &&
       r[2] === 'gasto' &&
       String(r[3]).toLowerCase() === capitalizar(fijo.nombre).toLowerCase();

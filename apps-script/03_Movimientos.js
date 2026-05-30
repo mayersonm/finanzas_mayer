@@ -550,17 +550,13 @@ function mostrarMetas(chatId) {
 // ---- HELPERS -----------------------------------------------
 
 function gastosDelMesPorCat(chatId, mes) {
-    const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Transacciones');
-    if (!sheet) return {};
-    const data = sheet.getDataRange().getValues().slice(1);
+    const data = obtenerTransacciones(chatId);
     const map = {};
     data
         .filter(r => {
             if (String(r[6]) !== chatId) return false;
             if (r[2] !== 'gasto') return false;
-            // Formatea la fecha del objeto Date a "yyyy-MM" para comparar
-            const fechaStr = Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM');
-            return fechaStr === mes;
+            return mesKey_(r[0]) === mes;
         })
         .forEach(r => {
             const c = r[4].toLowerCase();

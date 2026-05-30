@@ -23,7 +23,7 @@ function sendHelp(chatId) {
                  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const nomMes = meses[new Date().getMonth()];
   const gastosMes = data
-    .filter(r => r[2] === 'gasto' && Utilities.formatDate(new Date(r[0]), 'America/Lima', 'yyyy-MM') === mes)
+    .filter(r => r[2] === 'gasto' && mesKey_(r[0]) === mes)
     .reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
   let deudasActivas = 0;
   let deudaPendientePen = 0;
