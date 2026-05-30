@@ -8,9 +8,9 @@ function sendBalance(chatId) {
     const deudaPendiente = Number(d1.deudaPendiente || 0);
     const fijosPendientes = Number(d1.fijosPendientes || (d1.gastosReales && d1.gastosReales.totalFijos) || 0);
     const fijosPagadosMes = Number(d1.fijosPagadosMes || (d1.gastosReales && d1.gastosReales.totalFijosPagados) || 0);
-    const balanceNeto = Number(d1.balanceGeneralNeto || d1.balanceNeto || (balance - deudaPendiente));
+    const patrimonioDisponible = Number(d1.patrimonioDisponible || d1.patrimonio || d1.balanceGeneralNeto || d1.balanceNeto || (balance - deudaPendiente - fijosPendientes));
     const emoji = balance >= 0 ? '🟢' : '🔴';
-    const emojiNeto = balanceNeto >= 0 ? '🟢' : '🔴';
+    const emojiPatrimonio = patrimonioDisponible >= 0 ? '🟢' : '🔴';
 
     return sendMessage(chatId,
       `💰 *Tu Balance*\n\n` +
@@ -21,7 +21,7 @@ function sendBalance(chatId) {
       `💳 Deudas pendientes: S/ ${deudaPendiente.toFixed(2)}\n` +
       `─────────────────\n` +
       `${emoji} Balance caja: S/ ${balance.toFixed(2)}\n` +
-      `${emojiNeto} Balance neto: S/ ${balanceNeto.toFixed(2)}\n\n` +
+      `${emojiPatrimonio} Patrimonio disponible: S/ ${patrimonioDisponible.toFixed(2)}\n\n` +
       `_Fuente: D1 · ${d1.movimientos || 0} movimiento${d1.movimientos !== 1 ? 's' : ''}_`,
       true
     );

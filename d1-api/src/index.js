@@ -814,6 +814,7 @@ async function dashboard(env, params) {
   const gastosMesConFijosPagados = round(gastosMes + fixedSummary.paid);
   const balanceCaja = round(ingresos - gastosConFijosPagados);
   const balanceMesCaja = round(ingresosMes - gastosMesConFijosPagados);
+  const patrimonioDisponible = round(balanceCaja - deudaPendiente - fixedSummary.pending);
 
   const alerts = smartAlerts({
     now,
@@ -838,8 +839,10 @@ async function dashboard(env, params) {
   return {
     ok: true,
     balance: balanceCaja,
-    balanceGeneralNeto: round(balanceCaja - deudaPendiente - fixedSummary.pending),
-    balanceNeto: round(balanceCaja - deudaPendiente - fixedSummary.pending),
+    patrimonio: patrimonioDisponible,
+    patrimonioDisponible,
+    balanceGeneralNeto: patrimonioDisponible,
+    balanceNeto: patrimonioDisponible,
     ingresos: round(ingresos),
     gastos: gastosConFijosPagados,
     ingresosMes: round(ingresosMes),
@@ -2967,6 +2970,7 @@ async function netWorth(env, params) {
     .filter((item) => item.estado !== 'pagada')
     .reduce((total, item) => total + currencyToPen(Number(item.pendiente || 0), item.currency || 'PEN', rate), 0));
   const fixedPending = fixedSummary.pending;
+  const availableBalance = round(cash - debtPending - fixedPending);
 
   const assets = {
     cash,
@@ -2994,6 +2998,8 @@ async function netWorth(env, params) {
     assets,
     liabilities,
     netWorth: net,
+    availableBalance,
+    patrimonioDisponible: availableBalance,
     investmentGain: round(investmentValue - investmentCost),
     ratios: {
       debtToAssetsPct,
@@ -3007,7 +3013,7 @@ async function netWorth(env, params) {
       { label: 'Deudas', value: liabilities.debts, type: 'liability' },
       { label: 'Fijos pendientes', value: liabilities.fixedExpenses, type: 'liability' },
     ],
-    insights: netWorthInsights({ assets, liabilities, net, debtToAssetsPct, investmentSharePct, liquiditySharePct }),
+    insights: netWorthInsights({ assets, liabilities, net, availableBalance, debtToAssetsPct, investmentSharePct, liquiditySharePct }),
     snapshots,
     updatedAt: localIso(new Date()),
   };
@@ -3021,6 +3027,8 @@ async function saveNetWorthSnapshot(env, params) {
   const details = JSON.stringify({
     assets: data.assets,
     liabilities: data.liabilities,
+    availableBalance: data.availableBalance,
+    patrimonioDisponible: data.patrimonioDisponible,
     ratios: data.ratios,
     composition: data.composition,
   });
@@ -3086,12 +3094,17 @@ function currencyToPen(value, currency, rate) {
   return normalized === 'USD' ? Number(value || 0) * Number(rate || 3.85) : Number(value || 0);
 }
 
-function netWorthInsights({ assets, liabilities, net, debtToAssetsPct, investmentSharePct, liquiditySharePct }) {
+function netWorthInsights({ assets, liabilities, net, availableBalance, debtToAssetsPct, investmentSharePct, liquiditySharePct }) {
   const insights = [];
+  if (availableBalance < 0) {
+    insights.push({ level: 'warning', title: 'Patrimonio disponible negativo', message: `Despues de deudas y fijos pendientes, quedas en ${formatCurrency(availableBalance, 'PEN')}.` });
+  } else {
+    insights.push({ level: 'success', title: 'Patrimonio disponible', message: `Despues de deudas y fijos pendientes, te queda ${formatCurrency(availableBalance, 'PEN')}.` });
+  }
   if (net < 0) {
     insights.push({ level: 'danger', title: 'Patrimonio negativo', message: 'Tus deudas y fijos pendientes superan tus activos. Prioriza reducir compromisos o aumentar liquidez.' });
   } else {
-    insights.push({ level: 'success', title: 'Patrimonio positivo', message: `Tu patrimonio neto, considerando fijos pendientes, es ${formatCurrency(net, 'PEN')}.` });
+    insights.push({ level: 'success', title: 'Patrimonio total positivo', message: `Sumando inversiones y metas, tu patrimonio total es ${formatCurrency(net, 'PEN')}.` });
   }
   if (debtToAssetsPct >= 50) {
     insights.push({ level: 'warning', title: 'Pasivos altos frente a activos', message: `Tus deudas y fijos pendientes equivalen al ${debtToAssetsPct.toFixed(1)}% de tus activos.` });

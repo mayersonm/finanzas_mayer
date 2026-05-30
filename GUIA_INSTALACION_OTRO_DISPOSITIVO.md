@@ -662,7 +662,7 @@ En el dashboard, abre `Compromisos` para administrar deudas desde la interfaz: c
 
 Tambien puedes abrir `Inversiones` para registrar posiciones con monto invertido, valor actual, moneda `PEN` o `USD`, tipo y notas. Esta informacion vive en D1, en la tabla `investments`.
 
-La pestaña `Patrimonio` usa movimientos, deudas, inversiones y metas para calcular activos, pasivos y patrimonio neto. Si pulsas `Guardar corte`, el snapshot queda en D1 en `net_worth_snapshots` para comparar la evolucion con el tiempo.
+La pestaña `Patrimonio` usa movimientos, deudas, inversiones y metas para calcular activos, pasivos y patrimonio. `Patrimonio disponible` es lo que queda despues de deudas activas y fijos pendientes; `Patrimonio total` suma inversiones y metas. Si pulsas `Guardar corte`, el snapshot queda en D1 en `net_worth_snapshots` para comparar la evolucion con el tiempo.
 
 Luego envia una foto clara de un recibo.
 

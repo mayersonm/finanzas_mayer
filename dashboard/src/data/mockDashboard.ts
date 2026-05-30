@@ -2,6 +2,8 @@ import type { DashboardData } from '../types/dashboard';
 
 export const MOCK_DASHBOARD: DashboardData = {
   balance: 5350,
+  patrimonio: 2950,
+  patrimonioDisponible: 2950,
   balanceGeneralNeto: 2950,
   balanceNeto: 2950,
   ingresos: 6500,
