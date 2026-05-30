@@ -116,8 +116,11 @@ function dashDashboardData_(params) {
   const monthKey = Utilities.formatDate(now, DASH_TZ, 'yyyy-MM');
   const cycleKey = periodo.key;
   const allTxs = dashReadTransactions_(params);
-  const monthTxs = allTxs.filter(function (tx) {
+  const cycleTxs = allTxs.filter(function (tx) {
     return tx.fecha >= periodo.startKey && tx.fecha <= periodo.endKey;
+  });
+  const monthTxs = allTxs.filter(function (tx) {
+    return tx.fecha.indexOf(monthKey) === 0;
   });
 
   const ingresos = dashSum_(allTxs, 'ingreso');
@@ -125,8 +128,9 @@ function dashDashboardData_(params) {
   const ingresosMes = dashSum_(monthTxs, 'ingreso');
   const gastosMes = dashSum_(monthTxs, 'gasto');
   const categorias = dashCategories_(monthTxs);
-  const presupuestos = dashReadBudgets_(params, categorias);
-  const fijos = dashReadFixedExpenses_(params, monthTxs, cycleKey);
+  const categoriasCiclo = dashCategories_(cycleTxs);
+  const presupuestos = dashReadBudgets_(params, categoriasCiclo);
+  const fijos = dashReadFixedExpenses_(params, cycleTxs, cycleKey);
   const deudas = dashReadDebts_(params);
   const meses = dashLastMonths_(allTxs, now);
   const alertas = dashSmartAlerts_(allTxs, presupuestos, fijos, deudas, monthKey);

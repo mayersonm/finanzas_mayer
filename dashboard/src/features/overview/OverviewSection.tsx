@@ -19,9 +19,14 @@ export function OverviewSection({
   const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
   const debtPending = data.deudaPendiente ?? 0;
   const patrimonioDisponible = data.patrimonioDisponible ?? data.patrimonio ?? data.balanceGeneralNeto ?? data.balanceNeto ?? data.balance - debtPending;
-  const availableAfterCommitted = monthIncome - realExpenses.total;
+  const fixedPending = data.fijosPendientes ?? realExpenses.totalFijos ?? 0;
+  const budgetRemaining = data.presupuestos.reduce((total, item) => {
+    return total + Math.max(Number(item.limite || 0) - Number(item.gasto || 0), 0);
+  }, 0);
+  const committedRemaining = fixedPending + budgetRemaining + debtPending;
+  const projectedFree = monthBalance - committedRemaining;
   const spendingRate = monthIncome > 0 ? percent(data.gastosMes, monthIncome) : data.gastosMes > 0 ? 100 : 0;
-  const commitmentRate = monthIncome > 0 ? percent(realExpenses.total, monthIncome) : realExpenses.total > 0 ? 100 : 0;
+  const commitmentRate = monthIncome > 0 ? percent(data.gastosMes + committedRemaining, monthIncome) : committedRemaining > 0 ? 100 : 0;
 
   return (
     <>
@@ -45,15 +50,15 @@ export function OverviewSection({
           color={spendingRate >= 100 ? 'rose' : spendingRate >= 75 ? 'amber' : 'sky'}
         />
         <KpiCard
-          label="Libre estimado"
-          value={formatMoney(availableAfterCommitted)}
-          detail="Ingresos menos fijos y presupuesto"
-          color={availableAfterCommitted >= 0 ? 'emerald' : 'rose'}
+          label="Libre proyectado"
+          value={formatMoney(projectedFree)}
+          detail="Balance menos deudas y pendientes"
+          color={projectedFree >= 0 ? 'emerald' : 'rose'}
         />
         <KpiCard
-          label="Comprometido"
-          value={formatMoney(realExpenses.total)}
-          detail={`${commitmentRate}% de tus ingresos`}
+          label="Pendiente comprometido"
+          value={formatMoney(committedRemaining)}
+          detail={`${commitmentRate}% de ingresos usados o reservados`}
           color={commitmentRate >= 100 ? 'rose' : commitmentRate >= 80 ? 'amber' : 'violet'}
         />
       </section>
@@ -125,11 +130,11 @@ export function OverviewSection({
         </Card>
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <Text>Fijos pendientes</Text>
-          <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(realExpenses.totalFijos)}</Metric>
+          <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(fixedPending)}</Metric>
         </Card>
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <Text>Presupuesto considerado</Text>
-          <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(realExpenses.totalPresupuesto)}</Metric>
+          <Text>Presupuesto restante</Text>
+          <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(budgetRemaining)}</Metric>
         </Card>
       </section>
     </>
