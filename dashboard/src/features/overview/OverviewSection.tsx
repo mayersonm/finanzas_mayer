@@ -49,7 +49,7 @@ export function OverviewSection({
         <KpiCard
           label="Balance del mes"
           value={formatMoney(monthBalance)}
-          detail={`${data.mes} · corte interno 23-22 · ${data.movimientosMes ?? data.movimientos} movimientos`}
+          detail={`${data.mes} · ${data.movimientosMes ?? data.movimientos} movimientos`}
           color={monthBalance >= 0 ? 'emerald' : 'rose'}
         />
         <KpiCard
@@ -76,8 +76,8 @@ export function OverviewSection({
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <Title>Cierre 23</Title>
-              <Text>{closure.range || 'Periodo financiero interno'}</Text>
+              <Title>{closure.label || 'Cierre 23'}</Title>
+              <Text>{closure.range || 'Mes calendario del cierre'}</Text>
             </div>
             <Badge color={closure.queQueda >= 0 ? 'emerald' : 'rose'}>
               {closure.movimientos ?? data.movimientosMes ?? 0} movimientos
