@@ -2918,6 +2918,8 @@ async function topLeaks(env, chatId, period, usdRate = 3.85) {
 }
 
 function leakLabel(description, category) {
+  if (normalizeCategory(category) === 'supermercado') return 'Supermercado';
+
   const raw = normalizeKey(description || '');
   const cleaned = raw
     .replace(/^(compra|consumo|pago|gasto|recibo|boleta|factura)\s+(en|de|por)?\s*/i, '')
@@ -4185,6 +4187,15 @@ async function classifyCategory(env, chatId, value, description = '') {
     };
   }
 
+  const semanticCategory = semanticCategoryFromText(value, description);
+  if (semanticCategory) {
+    return {
+      category: semanticCategory,
+      source: 'fallback_keyword',
+      keyword: semanticCategory,
+    };
+  }
+
   return {
     category: normalizeCategory(value),
     source: 'fallback',
@@ -4222,7 +4233,7 @@ function matchCategoryRule(rules, value, description = '') {
 
 function classifyCategoryFromLoadedRules(rules, value, description = '') {
   const match = matchCategoryRule(rules, value, description);
-  return match ? normalizeCategory(match.category) : normalizeCategory(value);
+  return match ? normalizeCategory(match.category) : (semanticCategoryFromText(value, description) || normalizeCategory(value));
 }
 
 async function loadBudgetRules(env, chatId) {
@@ -4282,6 +4293,8 @@ function normalizeBaseCategory(value) {
     comida: 'supermercado',
     mercado: 'supermercado',
     supermercado: 'supermercado',
+    supermercados: 'supermercado',
+    abarrotes: 'supermercado',
     transporte: 'transporte',
     servicios: 'servicios',
     servicio: 'servicios',
@@ -4302,7 +4315,56 @@ function normalizeBaseCategory(value) {
     otros: 'otro',
   };
 
-  return aliases[key] || (VALID_CATEGORIES.includes(key) ? key : '');
+  return aliases[key] || (VALID_CATEGORIES.includes(key) ? key : semanticCategoryFromText(key, ''));
+}
+
+function semanticCategoryFromText(value, description = '') {
+  const text = normalizeRuleKeyword(`${value || ''} ${description || ''}`);
+  if (!text) return '';
+
+  const entertainmentKeywords = [
+    'comida rapida',
+    'fast food',
+    'kfc',
+    'popeyes',
+    'bembos',
+    'mcdonalds',
+    'mc donald',
+    'burger king',
+    'pizza hut',
+    'dominos',
+    'papa john',
+    'hamburguesa',
+    'salchipapa',
+  ];
+  if (entertainmentKeywords.some((keyword) => hasKeyword(text, keyword))) return 'entretenimiento';
+
+  const supermarketKeywords = [
+    'supermercado',
+    'supermercados',
+    'comida',
+    'alimentacion',
+    'alimento',
+    'alimentos',
+    'abarrotes',
+    'mercado',
+    'fruta',
+    'frutas',
+    'hortaliza',
+    'hortalizas',
+    'verdura',
+    'verduras',
+  ];
+  if (supermarketKeywords.some((keyword) => hasKeyword(text, keyword))) return 'supermercado';
+
+  return '';
+}
+
+function hasKeyword(text, keyword) {
+  const clean = normalizeRuleKeyword(keyword);
+  if (!clean) return false;
+  const pattern = clean.split(/\s+/).filter(Boolean).join('\\s+');
+  return new RegExp(`(^|\\s)${pattern}(\\s|$)`).test(text);
 }
 
 function normalizeRuleKeyword(value) {
