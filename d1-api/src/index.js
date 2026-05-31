@@ -3602,11 +3602,12 @@ function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendi
     : Math.max(0, freeAfterCommitments * 0.25);
   const suggestedSavingsGoal = configuredSavingsGoal > 0 ? configuredSavingsGoal : automaticSavingsGoal;
   const recommendedSavings = round(Math.min(Math.max(0, suggestedSavingsGoal), roomAfterPlannedSpend));
+  const extraAfterPlan = round(Math.max(0, freeAfterCommitments - availableToSpend - recommendedSavings));
   const dailyNormal = round(availableToSpend / daysLeft);
   const dailySafe = round(dailyNormal * 0.7);
   const dailyFlexible = round(Math.min(availableToSpend, dailyNormal * 1.35));
   const requiredDailySavings = round(recommendedSavings / daysLeft);
-  const investableNow = round(Math.max(0, freeAfterCommitments - variableReserve));
+  const investableNow = extraAfterPlan;
   const status = freeAfterCommitments < 0
     ? 'danger'
     : dailyNormal <= 0
@@ -3702,7 +3703,7 @@ function freeMoneyActions({ actualSavings, configuredSavingsGoal, recommendedSav
   if (!budgetLimit) actions.push('Agrega presupuestos por categoria para separar gasto permitido de excedente invertible.');
   if (freeAfterCommitments < 0) actions.push('Recorta gasto variable o pausa compras: el plan no cubre ahorro, fijos y deudas.');
   if (dailyNormal > 0 && dailyNormal < 25) actions.push('Mantente en modo seguro unos dias para proteger el cierre.');
-  if (investableNow > 0) actions.push('Hay excedente fuera del gasto planeado: revisa la ruta de inversion sugerida.');
+  if (investableNow > 0) actions.push('Hay margen extra despues de gasto y ahorro sugerido: revisa si conviene invertirlo o dejarlo liquido.');
   return actions.slice(0, 4);
 }
 

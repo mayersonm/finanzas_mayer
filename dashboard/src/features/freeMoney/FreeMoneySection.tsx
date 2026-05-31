@@ -7,11 +7,13 @@ import type { DashboardData, FreeMoneyPlan } from '../../types/dashboard';
 export function FreeMoneySection({ data }: { data: DashboardData }) {
   const plan = data.dineroLibre || fallbackFreeMoney(data);
   const actualSavings = plan.actualSavings ?? plan.savingsTarget;
+  const distributionBase = Math.max(plan.freeAfterCommitments, 0);
+  const extraMargin = Math.max(plan.investment.amount || 0, 0);
   const [purchaseAmount, setPurchaseAmount] = useState('');
   const [purchaseName, setPurchaseName] = useState('');
   const purchase = useMemo(() => purchaseVerdict(plan, Number(purchaseAmount || 0), purchaseName), [plan, purchaseAmount, purchaseName]);
   const tone = toneFor(plan.status);
-  const progressValue = plan.budgetLimit > 0 ? Math.min(Math.round((plan.availableToSpend / plan.budgetLimit) * 100), 100) : 100;
+  const progressValue = distributionBase > 0 ? Math.min(Math.round((plan.availableToSpend / distributionBase) * 100), 100) : 0;
 
   return (
     <div className="grid gap-4">
@@ -24,7 +26,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
               <Badge color="slate">{plan.daysLeft} dias</Badge>
             </div>
             <Title>Dinero Libre</Title>
-            <Text>{formatDate(plan.closeDate)} · ahorro real {formatMoney(actualSavings)} · sugerido {formatMoney(plan.recommendedSavings)}</Text>
+            <Text>{formatDate(plan.closeDate)} - ahorro real {formatMoney(actualSavings)} - sugerido {formatMoney(plan.recommendedSavings)}</Text>
           </div>
           <div className={`rounded-tremor-default border px-4 py-3 ${tone.panel}`}>
             <p className="text-xs font-semibold uppercase text-slate-400">Puedes gastar hoy</p>
@@ -34,24 +36,26 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Metric icon={RiShieldCheckLine} label="Modo seguro" value={formatMoney(plan.daily.safe)} sub="para cerrar mejor" tone="emerald" />
-          <Metric icon={RiShoppingBag3Line} label="Libre del ciclo" value={formatMoney(plan.availableToSpend)} sub={`${plan.daysLeft} dias restantes`} tone="cyan" />
+          <Metric icon={RiShieldCheckLine} label="Disponible real" value={formatMoney(distributionBase)} sub="despues de compromisos" tone="emerald" />
+          <Metric icon={RiShoppingBag3Line} label="Para gastar ciclo" value={formatMoney(plan.availableToSpend)} sub={`${plan.daysLeft} dias restantes`} tone="cyan" />
           <Metric icon={RiSparklingLine} label="Puedes ahorrar" value={formatMoney(plan.recommendedSavings)} sub="sugerencia del ciclo" tone="emerald" />
-          <Metric icon={RiBankLine} label="Listo para invertir" value={formatMoney(plan.investment.amount)} sub={plan.investment.profile} tone="amber" />
+          <Metric icon={RiBankLine} label="Margen extra" value={formatMoney(extraMargin)} sub="despues de gastar y ahorrar" tone="amber" />
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-slate-100">Reserva variable</p>
-                <p className="text-sm text-slate-400">{formatMoney(plan.availableToSpend)} disponible de {formatMoney(plan.budgetLimit || plan.availableToSpend)}</p>
+                <p className="text-sm font-semibold text-slate-100">Distribucion de lo que queda</p>
+                <p className="text-sm text-slate-400">
+                  {formatMoney(distributionBase)} = {formatMoney(plan.availableToSpend)} gasto + {formatMoney(plan.recommendedSavings)} ahorro sugerido + {formatMoney(extraMargin)} margen extra
+                </p>
               </div>
-              <p className="text-sm font-semibold text-cyan-200">{progressValue}%</p>
+              <p className="text-sm font-semibold text-cyan-200">{progressValue}% gasto</p>
             </div>
             <ProgressBar className="mt-3" value={progressValue} color={tone.progress} />
             <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-              <Mini label="Balance base" value={formatMoney(plan.baseBalance)} />
+              <Mini label="Balance ciclo" value={formatMoney(plan.baseBalance)} />
               <Mini label="Ahorro real" value={formatMoney(actualSavings)} />
               <Mini label="Sugerencia" value={formatMoney(plan.recommendedSavings)} />
               <Mini label="Fijos y deudas" value={formatMoney(plan.fixedPending + plan.debtPending)} />
