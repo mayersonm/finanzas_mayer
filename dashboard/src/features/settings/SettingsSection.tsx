@@ -32,6 +32,10 @@ const EMPTY_CONFIG: AppSettingsConfig = {
   dailyEmailTo: '',
   monthlyEmailTo: '',
   yearlyEmailTo: '',
+  savingsTargetAmount: 0,
+  emergencyBufferAmount: 0,
+  investorProfile: 'conservador',
+  investmentHorizon: 'corto',
 };
 
 const EMPTY_HEALTH: SystemHealthData = {
@@ -276,6 +280,32 @@ export function SettingsSection({ authToken, chatId }: { authToken?: string | nu
                   <select className="form-input" value={config.defaultPaymentMethod || 'debito'} onChange={(event) => updateField('defaultPaymentMethod', event.target.value as AppSettingsConfig['defaultPaymentMethod'])}>
                     <option value="debito">Debito</option>
                     <option value="credito">Credito</option>
+                  </select>
+                </Field>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-sm font-semibold text-slate-100">Dinero libre</h2>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label="Ahorro del ciclo">
+                  <input className="form-input" type="number" min={0} step="0.01" value={config.savingsTargetAmount} onChange={(event) => updateField('savingsTargetAmount', Number(event.target.value))} />
+                </Field>
+                <Field label="Colchon minimo">
+                  <input className="form-input" type="number" min={0} step="0.01" value={config.emergencyBufferAmount} onChange={(event) => updateField('emergencyBufferAmount', Number(event.target.value))} />
+                </Field>
+                <Field label="Perfil inversionista">
+                  <select className="form-input" value={config.investorProfile || 'conservador'} onChange={(event) => updateField('investorProfile', event.target.value as AppSettingsConfig['investorProfile'])}>
+                    <option value="conservador">Conservador</option>
+                    <option value="moderado">Moderado</option>
+                    <option value="agresivo">Agresivo</option>
+                  </select>
+                </Field>
+                <Field label="Horizonte">
+                  <select className="form-input" value={config.investmentHorizon || 'corto'} onChange={(event) => updateField('investmentHorizon', event.target.value as AppSettingsConfig['investmentHorizon'])}>
+                    <option value="corto">Corto</option>
+                    <option value="medio">Medio</option>
+                    <option value="largo">Largo</option>
                   </select>
                 </Field>
               </div>

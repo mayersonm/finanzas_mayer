@@ -737,6 +737,9 @@ async function gasConfigRequest(env, action, extraParams = new URLSearchParams()
 }
 
 function normalizeSettingsConfig(value) {
+  const profile = normalizeInvestorProfile(value.investorProfile || value.investor_profile);
+  const horizon = normalizeInvestmentHorizon(value.investmentHorizon || value.investment_horizon);
+
   return {
     creditCutoffDay: clamp(Number(value.creditCutoffDay || 25), 1, 31),
     creditDueDay: clamp(Number(value.creditDueDay || 10), 1, 31),
@@ -750,6 +753,10 @@ function normalizeSettingsConfig(value) {
     dailyEmailTo: String(value.dailyEmailTo || '').slice(0, 180),
     monthlyEmailTo: String(value.monthlyEmailTo || '').slice(0, 180),
     yearlyEmailTo: String(value.yearlyEmailTo || '').slice(0, 180),
+    savingsTargetAmount: round(Math.max(0, parseAmount(value.savingsTargetAmount ?? value.savings_target_amount ?? 0))),
+    emergencyBufferAmount: round(Math.max(0, parseAmount(value.emergencyBufferAmount ?? value.emergency_buffer_amount ?? 0))),
+    investorProfile: profile,
+    investmentHorizon: horizon,
   };
 }
 
@@ -773,6 +780,8 @@ async function dashboard(env, params) {
   const cycleKey = monthKey;
   const monthName = monthLongNameFromKey(`${monthKey}-01`);
   const usdRate = Number((await exchangeRate(env)).rate || 3.85);
+  const user = await ensureUserForChat(env, chatId);
+  const settings = normalizeSettingsConfig(userSettingsToConfig(await getUserSettings(env, user.id)));
 
   const totals = await env.DB.prepare(`
     SELECT
@@ -869,6 +878,16 @@ async function dashboard(env, params) {
     queQueda: round(balanceCierre - pendienteComprometido),
     patrimonioDisponible,
   };
+  const dineroLibre = freeMoneyPlan({
+    now,
+    settings,
+    cierre,
+    budget,
+    fixedSummary,
+    deudaPendiente,
+    ingresosMes,
+    gastosMes: gastosMesConFijosPagados,
+  });
   const savedClosure = await currentFinancialClosure(env, chatId, monthKey);
   if (savedClosure) {
     cierre.saved = true;
@@ -919,6 +938,7 @@ async function dashboard(env, params) {
     cycleRange: calendarMonth.rangeLabel,
     movimientosMes: Number(monthTotals?.movimientosMes || 0),
     cierre,
+    dineroLibre,
     topFugas,
     transacciones: (latest.results || []).map(txShape),
     categorias: categories,
@@ -1351,9 +1371,11 @@ async function upsertUserSettings(env, userId, config) {
     INSERT INTO user_settings (
       user_id, credit_cutoff_day, credit_due_day, credit_card_name,
       default_currency, default_payment_method, receipt_image_max_bytes,
-      email_daily, email_monthly, email_yearly, updated_at
+      email_daily, email_monthly, email_yearly,
+      savings_target_amount, emergency_buffer_amount, investor_profile, investment_horizon,
+      updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id) DO UPDATE SET
       credit_cutoff_day = excluded.credit_cutoff_day,
       credit_due_day = excluded.credit_due_day,
@@ -1364,6 +1386,10 @@ async function upsertUserSettings(env, userId, config) {
       email_daily = excluded.email_daily,
       email_monthly = excluded.email_monthly,
       email_yearly = excluded.email_yearly,
+      savings_target_amount = excluded.savings_target_amount,
+      emergency_buffer_amount = excluded.emergency_buffer_amount,
+      investor_profile = excluded.investor_profile,
+      investment_horizon = excluded.investment_horizon,
       updated_at = CURRENT_TIMESTAMP
   `).bind(
     userId,
@@ -1376,6 +1402,10 @@ async function upsertUserSettings(env, userId, config) {
     config.dailyEmailTo,
     config.monthlyEmailTo,
     config.yearlyEmailTo,
+    config.savingsTargetAmount,
+    config.emergencyBufferAmount,
+    config.investorProfile,
+    config.investmentHorizon,
   ).run();
 }
 
@@ -1391,6 +1421,10 @@ function userSettingsToConfig(settings) {
     dailyEmailTo: settings.email_daily || '',
     monthlyEmailTo: settings.email_monthly || '',
     yearlyEmailTo: settings.email_yearly || '',
+    savingsTargetAmount: Number(settings.savings_target_amount || 0),
+    emergencyBufferAmount: Number(settings.emergency_buffer_amount || 0),
+    investorProfile: settings.investor_profile || 'conservador',
+    investmentHorizon: settings.investment_horizon || 'corto',
   };
 }
 
@@ -3542,6 +3576,223 @@ function fixedExpensesSummary(fixedExpenses, usdRate = 3.85) {
   };
 }
 
+function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendiente, ingresosMes, gastosMes }) {
+  const close = nextFinancialClose(now);
+  const daysLeft = close.daysLeft;
+  const income = round(ingresosMes || 0);
+  const spent = round(gastosMes || 0);
+  const baseBalance = round(cierre?.balance || 0);
+  const configuredSavings = round(Math.max(0, Number(settings.savingsTargetAmount || 0)));
+  const recommendedSavings = round(Math.max(0, Math.min(income * 0.1, Math.max(baseBalance, 0))));
+  const savingsTarget = configuredSavings > 0 ? configuredSavings : recommendedSavings;
+  const emergencyBuffer = round(Math.max(0, Number(settings.emergencyBufferAmount || 0)));
+  const fixedPending = round(fixedSummary?.pending || 0);
+  const debtPending = round(deudaPendiente || 0);
+  const budgetLimit = round(budget?.limit || 0);
+  const budgetRemaining = round(Math.max(0, budget?.remaining || 0));
+  const hasBudget = budgetLimit > 0;
+  const commitments = round(fixedPending + debtPending + savingsTarget + emergencyBuffer);
+  const freeAfterCommitments = round(baseBalance - commitments);
+  const variableReserve = hasBudget ? budgetRemaining : Math.max(0, freeAfterCommitments);
+  const availableToSpend = round(Math.max(0, hasBudget ? Math.min(freeAfterCommitments, variableReserve) : freeAfterCommitments));
+  const dailyNormal = round(availableToSpend / daysLeft);
+  const dailySafe = round(dailyNormal * 0.7);
+  const dailyFlexible = round(Math.min(availableToSpend, dailyNormal * 1.35));
+  const requiredDailySavings = round(savingsTarget / daysLeft);
+  const investableNow = round(Math.max(0, freeAfterCommitments - variableReserve));
+  const status = freeAfterCommitments < 0
+    ? 'danger'
+    : dailyNormal <= 0
+      ? 'warning'
+      : dailyNormal < 25
+        ? 'tight'
+        : 'healthy';
+  const statusLabel = {
+    danger: 'Plan en rojo',
+    warning: 'Sin margen libre',
+    tight: 'Margen ajustado',
+    healthy: 'Plan sano',
+  }[status];
+  const actions = freeMoneyActions({
+    configuredSavings,
+    emergencyBuffer,
+    freeAfterCommitments,
+    dailyNormal,
+    budgetLimit,
+    investableNow,
+  });
+
+  return {
+    status,
+    statusLabel,
+    closeDate: close.closeDate,
+    closeLabel: `Cierre ${close.closeDate.slice(8, 10)}/${close.closeDate.slice(5, 7)}`,
+    daysLeft,
+    income,
+    spent,
+    baseBalance,
+    commitments,
+    fixedPending,
+    debtPending,
+    savingsTarget,
+    savingsConfigured: configuredSavings > 0,
+    recommendedSavings,
+    emergencyBuffer,
+    budgetLimit,
+    budgetRemaining,
+    variableReserve,
+    freeAfterCommitments,
+    availableToSpend,
+    daily: {
+      safe: dailySafe,
+      normal: dailyNormal,
+      flexible: dailyFlexible,
+      requiredSavings: requiredDailySavings,
+    },
+    purchaseLimits: {
+      green: dailyNormal,
+      amber: dailyFlexible,
+      hard: availableToSpend,
+    },
+    investment: investmentSuggestion({
+      amount: investableNow,
+      profile: settings.investorProfile,
+      horizon: settings.investmentHorizon,
+      emergencyBuffer,
+      freeAfterCommitments,
+      debtPending,
+      savingsConfigured: configuredSavings > 0,
+    }),
+    actions,
+  };
+}
+
+function nextFinancialClose(date) {
+  const today = localDateKey(date || new Date());
+  const parts = parseDateKeyParts(today);
+  const thisMonthClose = dateKeyFromParts(parts.year, parts.monthIndex, 23);
+  const closeDate = today <= thisMonthClose
+    ? thisMonthClose
+    : dateKeyFromParts(parts.year, parts.monthIndex + 1, 23);
+
+  return {
+    closeDate,
+    daysLeft: Math.max(1, daysBetween(today, closeDate) + 1),
+  };
+}
+
+function freeMoneyActions({ configuredSavings, emergencyBuffer, freeAfterCommitments, dailyNormal, budgetLimit, investableNow }) {
+  const actions = [];
+  if (!configuredSavings) actions.push('Define un ahorro objetivo del ciclo para que el plan deje de usar el 10% recomendado.');
+  if (!emergencyBuffer) actions.push('Configura un colchon minimo para que el dinero libre no se coma tu seguridad.');
+  if (!budgetLimit) actions.push('Agrega presupuestos por categoria para separar gasto permitido de excedente invertible.');
+  if (freeAfterCommitments < 0) actions.push('Recorta gasto variable o pausa compras: el plan no cubre ahorro, fijos y deudas.');
+  if (dailyNormal > 0 && dailyNormal < 25) actions.push('Mantente en modo seguro unos dias para proteger el cierre.');
+  if (investableNow > 0) actions.push('Hay excedente fuera del gasto planeado: revisa la ruta de inversion sugerida.');
+  return actions.slice(0, 4);
+}
+
+function investmentSuggestion({ amount, profile, horizon, emergencyBuffer, freeAfterCommitments, debtPending, savingsConfigured }) {
+  const cleanProfile = normalizeInvestorProfile(profile);
+  const cleanHorizon = normalizeInvestmentHorizon(horizon);
+  const base = {
+    amount: round(amount),
+    profile: cleanProfile,
+    horizon: cleanHorizon,
+    title: '',
+    message: '',
+    allocation: [],
+    nextStep: '',
+    riskNote: 'Referencia educativa, no recomendacion personalizada. Verifica costos, liquidez, impuestos y que la entidad este supervisada por SBS o SMV.',
+  };
+
+  if (!savingsConfigured) {
+    return {
+      ...base,
+      title: 'Primero fija el ahorro',
+      message: 'El sistema esta usando un ahorro recomendado. Configura tu meta real antes de decidir inversiones.',
+      allocation: [{ label: 'Ahorro objetivo', pct: 100 }],
+      nextStep: 'Configura el ahorro del ciclo en Config.',
+    };
+  }
+
+  if (freeAfterCommitments <= 0 || amount <= 0) {
+    return {
+      ...base,
+      title: 'Todavia no hay excedente',
+      message: 'Despues de ahorro, fijos, deudas y gasto planeado no queda dinero listo para invertir.',
+      allocation: [{ label: 'Liquidez', pct: 100 }],
+      nextStep: 'Protege caja y espera nuevo ingreso o cierre de compromisos.',
+    };
+  }
+
+  if (debtPending > 0 && cleanProfile !== 'agresivo') {
+    return {
+      ...base,
+      title: 'Prioriza deuda y liquidez',
+      message: `Hay ${formatCurrency(debtPending, 'PEN')} pendiente. Si esa deuda tiene costo alto, suele ganar mas reducirla que invertir con riesgo.`,
+      allocation: [
+        { label: 'Prepago deuda cara', pct: 60 },
+        { label: 'Liquidez regulada', pct: 40 },
+      ],
+      nextStep: 'Identifica la deuda con mayor tasa antes de mover excedentes.',
+    };
+  }
+
+  if (emergencyBuffer > 0 && freeAfterCommitments < emergencyBuffer * 1.5) {
+    return {
+      ...base,
+      title: 'Refuerza colchon',
+      message: 'Tu excedente existe, pero aun esta cerca del colchon configurado.',
+      allocation: [
+        { label: 'Cuenta remunerada o deposito', pct: 80 },
+        { label: 'Fondo conservador', pct: 20 },
+      ],
+      nextStep: 'Mantén disponibilidad antes de tomar riesgo de mercado.',
+    };
+  }
+
+  if (cleanProfile === 'agresivo' && cleanHorizon === 'largo') {
+    return {
+      ...base,
+      title: 'Excedente para crecimiento',
+      message: 'Por perfil agresivo y horizonte largo, puedes evaluar aportes periodicos diversificados.',
+      allocation: [
+        { label: 'ETF/fondo diversificado', pct: 70 },
+        { label: 'Liquidez oportunidad', pct: 20 },
+        { label: 'Renta fija corta', pct: 10 },
+      ],
+      nextStep: 'Invierte por tramos y compara comisiones antes de elegir plataforma.',
+    };
+  }
+
+  if (cleanProfile === 'moderado' || cleanHorizon === 'medio') {
+    return {
+      ...base,
+      title: 'Ruta balanceada',
+      message: 'El excedente puede dividirse entre liquidez y crecimiento sin comprometer el cierre.',
+      allocation: [
+        { label: 'Liquidez regulada', pct: 50 },
+        { label: 'Fondo deuda/mixto', pct: 30 },
+        { label: 'ETF/fondo diversificado', pct: 20 },
+      ],
+      nextStep: 'Define si ese dinero se usara en menos de 12 meses antes de tomar volatilidad.',
+    };
+  }
+
+  return {
+    ...base,
+    title: 'Ruta conservadora',
+    message: 'Para perfil conservador o plazo corto, manda liquidez y baja volatilidad.',
+    allocation: [
+      { label: 'Cuenta remunerada o deposito', pct: 70 },
+      { label: 'Fondo mutuo conservador', pct: 20 },
+      { label: 'USD solo si tienes gasto en USD', pct: 10 },
+    ],
+    nextStep: 'Compara tasa efectiva, plazo, penalidad de retiro y cobertura antes de mover dinero.',
+  };
+}
+
 async function goalsList(env, chatId) {
   const rows = await env.DB.prepare(`
     SELECT name AS nombre, target_amount AS objetivo, saved_amount AS ahorrado
@@ -4092,6 +4343,20 @@ function normalizeCurrency(value) {
   if (currency === 'USD') return 'USD';
   if (currency === 'PEN') return 'PEN';
   throw httpError(400, 'Moneda invalida. Solo se acepta PEN o USD.');
+}
+
+function normalizeInvestorProfile(value) {
+  const key = normalizeKey(value || 'conservador');
+  if (key === 'agresivo') return 'agresivo';
+  if (key === 'moderado') return 'moderado';
+  return 'conservador';
+}
+
+function normalizeInvestmentHorizon(value) {
+  const key = normalizeKey(value || 'corto');
+  if (key === 'largo') return 'largo';
+  if (key === 'medio' || key === 'mediano') return 'medio';
+  return 'corto';
 }
 
 function formatCurrency(value, currency = 'PEN') {

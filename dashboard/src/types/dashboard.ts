@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'patrimonio' | 'inversiones' | 'analisis' | 'metas' | 'configuracion';
+export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'dinero' | 'patrimonio' | 'inversiones' | 'analisis' | 'metas' | 'configuracion';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {
@@ -263,6 +263,58 @@ export interface ClosureSummary {
   patrimonioDisponible?: number;
 }
 
+export interface FreeMoneyAllocation {
+  label: string;
+  pct: number;
+}
+
+export interface FreeMoneyInvestment {
+  amount: number;
+  profile: 'conservador' | 'moderado' | 'agresivo' | string;
+  horizon: 'corto' | 'medio' | 'largo' | string;
+  title: string;
+  message: string;
+  allocation: FreeMoneyAllocation[];
+  nextStep: string;
+  riskNote: string;
+}
+
+export interface FreeMoneyPlan {
+  status: 'healthy' | 'tight' | 'warning' | 'danger' | string;
+  statusLabel: string;
+  closeDate: string;
+  closeLabel: string;
+  daysLeft: number;
+  income: number;
+  spent: number;
+  baseBalance: number;
+  commitments: number;
+  fixedPending: number;
+  debtPending: number;
+  savingsTarget: number;
+  savingsConfigured: boolean;
+  recommendedSavings: number;
+  emergencyBuffer: number;
+  budgetLimit: number;
+  budgetRemaining: number;
+  variableReserve: number;
+  freeAfterCommitments: number;
+  availableToSpend: number;
+  daily: {
+    safe: number;
+    normal: number;
+    flexible: number;
+    requiredSavings: number;
+  };
+  purchaseLimits: {
+    green: number;
+    amber: number;
+    hard: number;
+  };
+  investment: FreeMoneyInvestment;
+  actions: string[];
+}
+
 export interface EmailConfig {
   configured: boolean;
   daily?: string;
@@ -283,6 +335,10 @@ export interface AppSettingsConfig {
   dailyEmailTo: string;
   monthlyEmailTo: string;
   yearlyEmailTo: string;
+  savingsTargetAmount: number;
+  emergencyBufferAmount: number;
+  investorProfile: 'conservador' | 'moderado' | 'agresivo' | string;
+  investmentHorizon: 'corto' | 'medio' | 'largo' | string;
 }
 
 export interface AppSettingsData {
@@ -354,6 +410,7 @@ export interface DashboardData {
   fijosPendientes?: number;
   fijosPagadosMes?: number;
   cierre?: ClosureSummary;
+  dineroLibre?: FreeMoneyPlan;
   topFugas?: TopLeak[];
   gastosReales?: RealExpenses;
   metas: Goal[];
