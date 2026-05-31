@@ -292,6 +292,8 @@ export interface FreeMoneyPlan {
   fixedPending: number;
   debtPending: number;
   savingsTarget: number;
+  actualSavings?: number;
+  configuredSavingsGoal?: number;
   savingsConfigured: boolean;
   recommendedSavings: number;
   emergencyBuffer: number;

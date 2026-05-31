@@ -885,6 +885,7 @@ async function dashboard(env, params) {
     budget,
     fixedSummary,
     deudaPendiente,
+    goals,
     ingresosMes,
     gastosMes: gastosMesConFijosPagados,
   });
@@ -3576,29 +3577,35 @@ function fixedExpensesSummary(fixedExpenses, usdRate = 3.85) {
   };
 }
 
-function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendiente, ingresosMes, gastosMes }) {
+function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendiente, goals = [], ingresosMes, gastosMes }) {
   const close = nextFinancialClose(now);
   const daysLeft = close.daysLeft;
   const income = round(ingresosMes || 0);
   const spent = round(gastosMes || 0);
   const baseBalance = round(cierre?.balance || 0);
-  const configuredSavings = round(Math.max(0, Number(settings.savingsTargetAmount || 0)));
-  const recommendedSavings = round(Math.max(0, Math.min(income * 0.1, Math.max(baseBalance, 0))));
-  const savingsTarget = configuredSavings > 0 ? configuredSavings : recommendedSavings;
+  const configuredSavingsGoal = round(Math.max(0, Number(settings.savingsTargetAmount || 0)));
+  const actualSavings = round((goals || []).reduce((total, item) => total + Number(item.ahorrado || 0), 0));
+  const automaticSavingsGoal = round(Math.max(0, income * 0.1));
   const emergencyBuffer = round(Math.max(0, Number(settings.emergencyBufferAmount || 0)));
   const fixedPending = round(fixedSummary?.pending || 0);
   const debtPending = round(deudaPendiente || 0);
   const budgetLimit = round(budget?.limit || 0);
   const budgetRemaining = round(Math.max(0, budget?.remaining || 0));
   const hasBudget = budgetLimit > 0;
+  const savingsTarget = actualSavings;
   const commitments = round(fixedPending + debtPending + savingsTarget + emergencyBuffer);
   const freeAfterCommitments = round(baseBalance - commitments);
   const variableReserve = hasBudget ? budgetRemaining : Math.max(0, freeAfterCommitments);
   const availableToSpend = round(Math.max(0, hasBudget ? Math.min(freeAfterCommitments, variableReserve) : freeAfterCommitments));
+  const roomAfterPlannedSpend = hasBudget
+    ? Math.max(0, freeAfterCommitments - budgetRemaining)
+    : Math.max(0, freeAfterCommitments * 0.25);
+  const suggestedSavingsGoal = configuredSavingsGoal > 0 ? configuredSavingsGoal : automaticSavingsGoal;
+  const recommendedSavings = round(Math.min(Math.max(0, suggestedSavingsGoal), roomAfterPlannedSpend));
   const dailyNormal = round(availableToSpend / daysLeft);
   const dailySafe = round(dailyNormal * 0.7);
   const dailyFlexible = round(Math.min(availableToSpend, dailyNormal * 1.35));
-  const requiredDailySavings = round(savingsTarget / daysLeft);
+  const requiredDailySavings = round(recommendedSavings / daysLeft);
   const investableNow = round(Math.max(0, freeAfterCommitments - variableReserve));
   const status = freeAfterCommitments < 0
     ? 'danger'
@@ -3614,7 +3621,9 @@ function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendi
     healthy: 'Plan sano',
   }[status];
   const actions = freeMoneyActions({
-    configuredSavings,
+    actualSavings,
+    configuredSavingsGoal,
+    recommendedSavings,
     emergencyBuffer,
     freeAfterCommitments,
     dailyNormal,
@@ -3635,7 +3644,9 @@ function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendi
     fixedPending,
     debtPending,
     savingsTarget,
-    savingsConfigured: configuredSavings > 0,
+    actualSavings,
+    configuredSavingsGoal,
+    savingsConfigured: actualSavings > 0,
     recommendedSavings,
     emergencyBuffer,
     budgetLimit,
@@ -3661,7 +3672,8 @@ function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendi
       emergencyBuffer,
       freeAfterCommitments,
       debtPending,
-      savingsConfigured: configuredSavings > 0,
+      actualSavings,
+      recommendedSavings,
     }),
     actions,
   };
@@ -3681,9 +3693,11 @@ function nextFinancialClose(date) {
   };
 }
 
-function freeMoneyActions({ configuredSavings, emergencyBuffer, freeAfterCommitments, dailyNormal, budgetLimit, investableNow }) {
+function freeMoneyActions({ actualSavings, configuredSavingsGoal, recommendedSavings, emergencyBuffer, freeAfterCommitments, dailyNormal, budgetLimit, investableNow }) {
   const actions = [];
-  if (!configuredSavings) actions.push('Define un ahorro objetivo del ciclo para que el plan deje de usar el 10% recomendado.');
+  if (!actualSavings) actions.push('Aun no hay ahorro real registrado; el ahorro sugerido no reduce tu dinero libre.');
+  if (recommendedSavings > 0) actions.push(`Puedes separar ${formatCurrency(recommendedSavings, 'PEN')} como ahorro sugerido este ciclo.`);
+  if (!configuredSavingsGoal) actions.push('Si quieres una meta mas exacta, configura un ahorro sugerido del ciclo.');
   if (!emergencyBuffer) actions.push('Configura un colchon minimo para que el dinero libre no se coma tu seguridad.');
   if (!budgetLimit) actions.push('Agrega presupuestos por categoria para separar gasto permitido de excedente invertible.');
   if (freeAfterCommitments < 0) actions.push('Recorta gasto variable o pausa compras: el plan no cubre ahorro, fijos y deudas.');
@@ -3692,7 +3706,7 @@ function freeMoneyActions({ configuredSavings, emergencyBuffer, freeAfterCommitm
   return actions.slice(0, 4);
 }
 
-function investmentSuggestion({ amount, profile, horizon, emergencyBuffer, freeAfterCommitments, debtPending, savingsConfigured }) {
+function investmentSuggestion({ amount, profile, horizon, emergencyBuffer, freeAfterCommitments, debtPending, actualSavings, recommendedSavings }) {
   const cleanProfile = normalizeInvestorProfile(profile);
   const cleanHorizon = normalizeInvestmentHorizon(horizon);
   const base = {
@@ -3706,13 +3720,13 @@ function investmentSuggestion({ amount, profile, horizon, emergencyBuffer, freeA
     riskNote: 'Referencia educativa, no recomendacion personalizada. Verifica costos, liquidez, impuestos y que la entidad este supervisada por SBS o SMV.',
   };
 
-  if (!savingsConfigured) {
+  if (!actualSavings && recommendedSavings > 0) {
     return {
       ...base,
-      title: 'Primero fija el ahorro',
-      message: 'El sistema esta usando un ahorro recomendado. Configura tu meta real antes de decidir inversiones.',
-      allocation: [{ label: 'Ahorro objetivo', pct: 100 }],
-      nextStep: 'Configura el ahorro del ciclo en Config.',
+      title: 'Primero separa ahorro real',
+      message: `Puedes ahorrar aproximadamente ${formatCurrency(recommendedSavings, 'PEN')} este ciclo. Separalo primero; despues evalua inversion.`,
+      allocation: [{ label: 'Ahorro sugerido', pct: 100 }],
+      nextStep: 'Registra el ahorro en una meta cuando lo separes de verdad.',
     };
   }
 

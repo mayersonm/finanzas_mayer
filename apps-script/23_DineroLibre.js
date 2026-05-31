@@ -10,6 +10,8 @@ function cmdDineroLibre(chatId, text) {
 
   const inv = plan.investment || {};
   const daily = plan.daily || {};
+  const actualSavings = Number((plan.actualSavings ?? plan.savingsTarget) || 0);
+  const suggestedSavings = Number(plan.recommendedSavings || 0);
 
   return sendMessage(chatId,
     `🧠 *Dinero Libre*\n\n` +
@@ -18,7 +20,8 @@ function cmdDineroLibre(chatId, text) {
     `🟢 Seguro: *S/ ${Number(daily.safe || 0).toFixed(2)}* hoy\n` +
     `✅ Normal: *S/ ${Number(daily.normal || 0).toFixed(2)}* hoy\n` +
     `🟡 Flexible: *S/ ${Number(daily.flexible || 0).toFixed(2)}* hoy\n\n` +
-    `🎯 Ahorro protegido: S/ ${Number(plan.savingsTarget || 0).toFixed(2)}\n` +
+    `🎯 Ahorro real protegido: S/ ${actualSavings.toFixed(2)}\n` +
+    `💡 Ahorro sugerido: S/ ${suggestedSavings.toFixed(2)}\n` +
     `🛡️ Colchon: S/ ${Number(plan.emergencyBuffer || 0).toFixed(2)}\n` +
     `🧾 Fijos + deudas: S/ ${Number((plan.fixedPending || 0) + (plan.debtPending || 0)).toFixed(2)}\n` +
     `💵 Libre del ciclo: *S/ ${Number(plan.availableToSpend || 0).toFixed(2)}*\n\n` +
@@ -47,10 +50,11 @@ function responderCompraDineroLibre_(chatId, plan, compra) {
   const rate = 3.85;
   const amountPen = compra.currency === 'USD' ? compra.amount * rate : compra.amount;
   const limits = plan.purchaseLimits || {};
+  const actualSavings = Number((plan.actualSavings ?? plan.savingsTarget) || 0);
   const disponible = Number(plan.availableToSpend || 0);
   const restante = Math.max(disponible - amountPen, 0);
   let estado = '🔴 No conviene';
-  let detalle = 'Supera tu dinero libre sin tocar ahorro o compromisos.';
+  let detalle = 'Supera tu dinero libre sin tocar ahorro real o compromisos.';
 
   if (amountPen <= Number(limits.green || 0)) {
     estado = '🟢 Compra sana';
@@ -70,7 +74,7 @@ function responderCompraDineroLibre_(chatId, plan, compra) {
     `${detalle}\n` +
     `💵 Libre restante del ciclo: *S/ ${restante.toFixed(2)}*\n` +
     `✅ Gasto normal diario: S/ ${Number((plan.daily || {}).normal || 0).toFixed(2)}\n` +
-    `🎯 Ahorro protegido: S/ ${Number(plan.savingsTarget || 0).toFixed(2)}`,
+    `🎯 Ahorro real protegido: S/ ${actualSavings.toFixed(2)}`,
     true
   );
 }
