@@ -6,6 +6,7 @@ import type { DashboardData, FreeMoneyPlan } from '../../types/dashboard';
 
 export function FreeMoneySection({ data }: { data: DashboardData }) {
   const plan = data.dineroLibre || fallbackFreeMoney(data);
+  const actualSavings = plan.actualSavings ?? plan.savingsTarget;
   const [purchaseAmount, setPurchaseAmount] = useState('');
   const [purchaseName, setPurchaseName] = useState('');
   const purchase = useMemo(() => purchaseVerdict(plan, Number(purchaseAmount || 0), purchaseName), [plan, purchaseAmount, purchaseName]);
@@ -23,7 +24,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
               <Badge color="slate">{plan.daysLeft} dias</Badge>
             </div>
             <Title>Dinero Libre</Title>
-            <Text>{formatDate(plan.closeDate)} · ahorro protegido {formatMoney(plan.savingsTarget)}</Text>
+            <Text>{formatDate(plan.closeDate)} · ahorro real {formatMoney(actualSavings)} · sugerido {formatMoney(plan.recommendedSavings)}</Text>
           </div>
           <div className={`rounded-tremor-default border px-4 py-3 ${tone.panel}`}>
             <p className="text-xs font-semibold uppercase text-slate-400">Puedes gastar hoy</p>
@@ -32,9 +33,10 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Metric icon={RiShieldCheckLine} label="Modo seguro" value={formatMoney(plan.daily.safe)} sub="para cerrar mejor" tone="emerald" />
           <Metric icon={RiShoppingBag3Line} label="Libre del ciclo" value={formatMoney(plan.availableToSpend)} sub={`${plan.daysLeft} dias restantes`} tone="cyan" />
+          <Metric icon={RiSparklingLine} label="Puedes ahorrar" value={formatMoney(plan.recommendedSavings)} sub="sugerencia del ciclo" tone="emerald" />
           <Metric icon={RiBankLine} label="Listo para invertir" value={formatMoney(plan.investment.amount)} sub={plan.investment.profile} tone="amber" />
         </div>
 
@@ -48,9 +50,10 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
               <p className="text-sm font-semibold text-cyan-200">{progressValue}%</p>
             </div>
             <ProgressBar className="mt-3" value={progressValue} color={tone.progress} />
-            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
               <Mini label="Balance base" value={formatMoney(plan.baseBalance)} />
-              <Mini label="Ahorro" value={formatMoney(plan.savingsTarget)} />
+              <Mini label="Ahorro real" value={formatMoney(actualSavings)} />
+              <Mini label="Sugerencia" value={formatMoney(plan.recommendedSavings)} />
               <Mini label="Fijos y deudas" value={formatMoney(plan.fixedPending + plan.debtPending)} />
               <Mini label="Colchon" value={formatMoney(plan.emergencyBuffer)} />
             </div>
@@ -187,7 +190,7 @@ function purchaseVerdict(plan: FreeMoneyPlan, amount: number, name: string) {
   }
   return {
     title: 'No conviene',
-    message: `${label} supera tu dinero libre sin tocar ahorro o compromisos.`,
+    message: `${label} supera tu dinero libre sin tocar ahorro real o compromisos.`,
     panel: 'border-rose-500/30 bg-rose-500/10',
     text: 'text-rose-300',
   };
@@ -209,6 +212,8 @@ function fallbackFreeMoney(data: DashboardData): FreeMoneyPlan {
     fixedPending: data.fijosPendientes || 0,
     debtPending: data.deudaPendiente || 0,
     savingsTarget: 0,
+    actualSavings: 0,
+    configuredSavingsGoal: 0,
     savingsConfigured: false,
     recommendedSavings: 0,
     emergencyBuffer: 0,

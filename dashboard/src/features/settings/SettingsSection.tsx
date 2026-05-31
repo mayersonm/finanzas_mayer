@@ -288,7 +288,7 @@ export function SettingsSection({ authToken, chatId }: { authToken?: string | nu
             <section>
               <h2 className="text-sm font-semibold text-slate-100">Dinero libre</h2>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <Field label="Ahorro del ciclo">
+                <Field label="Ahorro sugerido del ciclo">
                   <input className="form-input" type="number" min={0} step="0.01" value={config.savingsTargetAmount} onChange={(event) => updateField('savingsTargetAmount', Number(event.target.value))} />
                 </Field>
                 <Field label="Colchon minimo">
