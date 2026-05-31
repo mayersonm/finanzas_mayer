@@ -650,6 +650,8 @@ deuda viaje 800 USD vence 2026-08-15
 deudas
 alertas
 insights
+libre
+puedo gastar 120 zapatillas
 reglas
 regla kfc entretenimiento
 regla presupuesto entretenimiento incluye otro
@@ -692,6 +694,7 @@ Cerrar mes
 Top fugas
 Movimientos
 Compromisos
+Dinero Libre
 Analisis
 Metas
 Config

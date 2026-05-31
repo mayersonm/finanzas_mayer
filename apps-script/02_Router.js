@@ -58,6 +58,11 @@ function handleMessage(chatId, text) {
     case 'gastos reales':
     case 'comprometido': return cmdGastosReales(chatId);
 
+    case '/libre':
+    case 'libre':
+    case 'dinero libre':
+    case 'plan diario': return cmdDineroLibre(chatId, text.trim());
+
     case '/anual':
     case 'anual':
     case 'resumen anual': return cmdResumenAnualEmail(chatId);
@@ -118,6 +123,8 @@ function handleMessage(chatId, text) {
   if (lower.startsWith('regla '))         return cmdReglas(chatId, text.trim());
   if (lower.startsWith('perfil '))        return cmdPerfil(chatId, text.trim());
   if (lower.startsWith('vincular '))      return cmdPerfil(chatId, text.trim().replace(/^vincular/i, 'perfil'));
+  if (lower.startsWith('puedo '))         return cmdDineroLibre(chatId, text.trim());
+  if (lower.startsWith('libre '))         return cmdDineroLibre(chatId, text.trim());
   
 
   // ── REGISTRAR MOVIMIENTO (siempre al final) ──────────────

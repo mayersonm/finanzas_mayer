@@ -18,6 +18,11 @@ Telegram movimientos:
 - gasto 25 supermercado almuerzo
 - gasto 25 arroz conserva "arroz" como descripcion aunque la categoria sea otro.
 
+Dinero Libre:
+- libre
+- puedo gastar 120 zapatillas
+- Configura ahorro del ciclo, colchon, perfil y horizonte desde Dashboard > Config.
+
 cd dashboard
 npm ci
 $env:VITE_GAS_API_URL="https://finanzas-d1-api.mayersonm.workers.dev/api/dashboard"

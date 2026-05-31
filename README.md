@@ -55,12 +55,15 @@ El dashboard usa login normal con usuario y clave. El usuario inicial queda en D
 La pestana `Config` guarda las preferencias en D1 y concentra:
 
 - configuracion de credito, moneda, recibos y correos;
+- ahorro del ciclo, colchon minimo, perfil inversionista y horizonte;
 - estado operativo de Worker, D1, R2 y Apps Script;
 - administrador de categorias, reglas IA y reglas de presupuesto.
 
 El boton `Actualizar` solo vuelve a leer D1. El boton `Sync manual` importa el respaldo de Google Sheets hacia D1 y muestra cuantos movimientos, presupuestos, fijos, deudas y metas se revisaron. Para movimientos, Google Sheets manda: si Sheets tiene 24 movimientos, D1 debe quedar con esos mismos 24 para ese `chat_id`; cualquier movimiento extra que exista solo en D1 se elimina durante la sincronizacion manual. No existe sincronizacion D1 -> Sheets.
 
 En `Inicio`, el boton `Cerrar mes` guarda el corte actual en D1 (`financial_closures`). El cierre se etiqueta con el dia 23, por ejemplo `Cierre 23/05`, pero los movimientos mantienen sus fechas reales dentro del mes calendario. El bloque `Top fugas` muestra los 5 gastos variables que mas pesan en el mes.
+
+La pestana `Dinero Libre` calcula cuanto puedes gastar hoy sin tocar ahorro, fijos, deudas ni colchon. Usa tres rangos: seguro, normal y flexible. Tambien simula compras y muestra una ruta educativa para invertir el excedente segun perfil y horizonte.
 
 Los correos diario, mensual y anual leen movimientos, presupuestos y metas desde D1; Sheets queda como respaldo si D1 no responde. El cierre mensual automatico se envia todos los dias 23, pero los movimientos se reportan con sus fechas reales.
 
@@ -121,6 +124,8 @@ gasto supermercado arroz plaza vea 25
 gasto 120 supermercado metro credito
 pago ultimo credito
 pago 1 debito
+libre
+puedo gastar 120 zapatillas
 ```
 
 Si escribes una palabra que no es categoria, el bot la conserva como descripcion y deja la categoria como `otro` o la reclasifica por reglas si aplica.

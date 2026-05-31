@@ -83,6 +83,8 @@ function sendHelp(chatId) {
     '• 🌙 `hoy`         - resumen del dia',
     '• 📆 `resumen`     - resumen del mes',
     '• 💼 `balance`     - saldo total',
+    '• 🧠 `libre`       - dinero libre y gasto diario',
+    '• 🛍️ `puedo gastar 120 zapatillas` - simular compra',
     '• 🧮 `reales`      - fijos + presupuesto',
     '• 📋 `ultimos`     - ultimos movimientos',
     '• 🗑️ `eliminar 1`  - borrar un movimiento de `ultimos`',
