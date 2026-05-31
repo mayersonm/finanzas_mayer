@@ -104,7 +104,7 @@ export const MOCK_DASHBOARD: DashboardData = {
     daily: { safe: 5.83, normal: 8.33, flexible: 11.25, requiredSavings: 16.67 },
     purchaseLimits: { green: 8.33, amber: 11.25, hard: 200 },
     investment: {
-      amount: 730,
+      amount: 330,
       profile: 'conservador',
       horizon: 'corto',
       title: 'Ruta conservadora',

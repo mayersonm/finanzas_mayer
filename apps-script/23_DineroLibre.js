@@ -12,11 +12,14 @@ function cmdDineroLibre(chatId, text) {
   const daily = plan.daily || {};
   const actualSavings = Number((plan.actualSavings ?? plan.savingsTarget) || 0);
   const suggestedSavings = Number(plan.recommendedSavings || 0);
+  const distributionBase = Math.max(Number(plan.freeAfterCommitments || 0), 0);
+  const extraMargin = Math.max(Number((plan.investment || {}).amount || 0), 0);
 
   return sendMessage(chatId,
     `🧠 *Dinero Libre*\n\n` +
     `🚦 Estado: *${plan.statusLabel || 'Plan'}*\n` +
     `📅 ${plan.closeLabel || 'Cierre'} · ${plan.daysLeft || 1} dia(s)\n\n` +
+    `💰 Disponible real: *S/ ${distributionBase.toFixed(2)}*\n` +
     `🟢 Seguro: *S/ ${Number(daily.safe || 0).toFixed(2)}* hoy\n` +
     `✅ Normal: *S/ ${Number(daily.normal || 0).toFixed(2)}* hoy\n` +
     `🟡 Flexible: *S/ ${Number(daily.flexible || 0).toFixed(2)}* hoy\n\n` +
@@ -24,9 +27,9 @@ function cmdDineroLibre(chatId, text) {
     `💡 Ahorro sugerido: S/ ${suggestedSavings.toFixed(2)}\n` +
     `🛡️ Colchon: S/ ${Number(plan.emergencyBuffer || 0).toFixed(2)}\n` +
     `🧾 Fijos + deudas: S/ ${Number((plan.fixedPending || 0) + (plan.debtPending || 0)).toFixed(2)}\n` +
-    `💵 Libre del ciclo: *S/ ${Number(plan.availableToSpend || 0).toFixed(2)}*\n\n` +
-    `📈 *Inversion:* ${inv.title || 'Sin excedente'}\n` +
-    `Monto listo: S/ ${Number(inv.amount || 0).toFixed(2)}\n` +
+    `💵 Para gastar ciclo: *S/ ${Number(plan.availableToSpend || 0).toFixed(2)}*\n` +
+    `🟠 Margen extra: S/ ${extraMargin.toFixed(2)}\n\n` +
+    `📈 *Ruta:* ${inv.title || 'Sin excedente'}\n` +
     `${inv.nextStep || ''}\n\n` +
     `_Prueba una compra: \`puedo gastar 120 zapatillas\`_`,
     true
