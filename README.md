@@ -6,6 +6,12 @@ Monorepo del sistema de finanzas personales:
 - `d1-api/`: API en Cloudflare Worker + D1.
 - `dashboard/`: dashboard web React + TypeScript + Vite.
 
+## Documentacion
+
+- [Documento funcional](DOCUMENTO_FUNCIONAL.md): explica como usar Telegram, dashboard, gastos, deudas, fijos, presupuestos, reportes, sincronizacion y Dinero Libre.
+- [Documento tecnico](DOCUMENTO_TECNICO.md): explica arquitectura, componentes, D1, R2, Worker, Apps Script, migraciones, despliegue y mantenimiento.
+- [Guia de instalacion](GUIA_INSTALACION_OTRO_DISPOSITIVO.md): paso a paso para instalar el proyecto en otro dispositivo.
+
 ## Variables y secretos
 
 No se suben secretos al repo. Configura los valores reales en cada plataforma.
