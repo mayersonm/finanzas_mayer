@@ -30,8 +30,9 @@ export function OverviewSection({
   const topFugas = data.topFugas || [];
   const monthIncome = data.ingresosMes ?? data.ingresos;
   const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
+  const cashBalance = data.balance ?? 0;
   const debtPending = data.deudaPendiente ?? 0;
-  const patrimonioDisponible = data.patrimonioDisponible ?? data.patrimonio ?? data.balanceGeneralNeto ?? data.balanceNeto ?? data.balance - debtPending;
+  const patrimonioDisponible = data.patrimonioDisponible ?? data.patrimonio ?? data.balanceGeneralNeto ?? data.balanceNeto ?? cashBalance - debtPending;
   const fixedPending = data.fijosPendientes ?? realExpenses.totalFijos ?? 0;
   const budgetRemaining = data.presupuestos.reduce((total, item) => {
     return total + Math.max(Number(item.limite || 0) - Number(item.gasto || 0), 0);
@@ -47,8 +48,7 @@ export function OverviewSection({
   const periodLabel = data.cycleRange || closure.range || data.mes;
   const committedRemaining = closure.pendienteComprometido ?? fixedPending + budgetRemaining + debtPending;
   const projectedFree = closure.queQueda;
-  const spendingRate = monthIncome > 0 ? percent(data.gastosMes, monthIncome) : data.gastosMes > 0 ? 100 : 0;
-  const commitmentRate = percent(committedRemaining, Math.max(data.balance || 0, monthIncome));
+  const commitmentRate = percent(committedRemaining, Math.max(cashBalance, monthIncome));
   const closureBudgetPct = percent(closure.presupuestoUsado, closure.presupuestoLimite);
 
   async function saveClosure() {
@@ -88,34 +88,34 @@ export function OverviewSection({
     <>
       <section className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard
+          label="Caja actual"
+          value={formatMoney(cashBalance)}
+          detail="Saldo total registrado"
+          color={cashBalance >= 0 ? 'emerald' : 'rose'}
+        />
+        <KpiCard
           label="Patrimonio disponible"
           value={formatMoney(patrimonioDisponible)}
-          detail={`Lo que queda tras deudas y fijos`}
+          detail="Caja menos deudas y fijos"
           color={patrimonioDisponible >= 0 ? 'emerald' : 'rose'}
-        />
-        <KpiCard
-          label="Balance del ciclo"
-          value={formatMoney(monthBalance)}
-          detail={`${periodLabel} - ${data.movimientosMes ?? data.movimientos} movimientos`}
-          color={monthBalance >= 0 ? 'emerald' : 'rose'}
-        />
-        <KpiCard
-          label="Gastos del ciclo"
-          value={formatMoney(data.gastosMes)}
-          detail={`${spendingRate}% de ingresos usados`}
-          color={spendingRate >= 100 ? 'rose' : spendingRate >= 75 ? 'amber' : 'sky'}
         />
         <KpiCard
           label="Libre proyectado"
           value={formatMoney(projectedFree)}
-          detail="Caja menos deudas, fijos y presupuesto"
+          detail="Patrimonio menos presupuesto"
           color={projectedFree >= 0 ? 'emerald' : 'rose'}
         />
         <KpiCard
           label="Pendiente comprometido"
           value={formatMoney(committedRemaining)}
-          detail={`${commitmentRate}% de caja actual comprometida`}
+          detail={`${commitmentRate}% de caja actual`}
           color={commitmentRate >= 100 ? 'rose' : commitmentRate >= 80 ? 'amber' : 'violet'}
+        />
+        <KpiCard
+          label="Gastos del ciclo"
+          value={formatMoney(data.gastosMes)}
+          detail={`${periodLabel} - ${data.movimientosMes ?? data.movimientos} movimientos`}
+          color={data.gastosMes > cashBalance ? 'amber' : 'sky'}
         />
       </section>
 
@@ -155,11 +155,12 @@ export function OverviewSection({
             </div>
           ) : null}
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <ClosureMetric label="Entro" value={formatMoney(closure.ingresos)} tone="text-emerald-300" />
-            <ClosureMetric label="Salio" value={formatMoney(closure.gastos)} tone="text-rose-300" />
-            <ClosureMetric label="Balance" value={formatMoney(closure.balance)} tone={closure.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
-            <ClosureMetric label="Queda" value={formatMoney(closure.queQueda)} tone={closure.queQueda >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <ClosureMetric label="Caja actual" value={formatMoney(cashBalance)} tone={cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
+            <ClosureMetric label="Entro ciclo" value={formatMoney(closure.ingresos)} tone="text-emerald-300" />
+            <ClosureMetric label="Salio ciclo" value={formatMoney(closure.gastos)} tone="text-rose-300" />
+            <ClosureMetric label="Balance ciclo" value={formatMoney(closure.balance)} tone={closure.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
+            <ClosureMetric label="Libre actual" value={formatMoney(closure.queQueda)} tone={closure.queQueda >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
           </div>
 
           <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
