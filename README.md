@@ -69,9 +69,9 @@ El boton `Actualizar` solo vuelve a leer D1. El boton `Sync manual` importa el r
 
 En `Inicio`, el boton `Cerrar mes` guarda el corte actual en D1 (`financial_closures`). El cierre se etiqueta con el dia 23, por ejemplo `Cierre 23/05`, pero los movimientos mantienen sus fechas reales dentro del mes calendario. El bloque `Top fugas` muestra los 5 gastos variables que mas pesan en el mes.
 
-La pestana `Dinero Libre` calcula cuanto puedes gastar hoy sin tocar ahorro, fijos, deudas ni colchon. Usa tres rangos: seguro, normal y flexible. Tambien simula compras y muestra una ruta educativa para invertir el excedente segun perfil y horizonte.
+La pestana `Dinero Libre` proyecta el gasto desde `Caja actual`. Las deudas y fijos quedan visibles como referencia, pero no reducen el calculo diario porque se pueden mover o patear. Usa tres rangos: seguro, normal y flexible. Tambien simula compras y muestra una ruta educativa para invertir el excedente segun perfil y horizonte.
 
-La pestana `Calendario` muestra el mes calendario real con fijos, deudas, pagos de credito, alertas, objetivo semanal y cierre. La regla de cierre se activa cuando el ciclo esta cerca de terminar y el dia 23 sugiere: `Cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto`.
+La pestana `Calendario` muestra el mes calendario real con gasto diario por fecha, fijos, deudas, pagos de credito, alertas, objetivo semanal y cierre. La regla de cierre se activa cuando el ciclo esta cerca de terminar y el dia 23 sugiere: `Cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto`.
 
 El `Objetivo semanal` se calcula desde D1 con el dinero libre disponible del ciclo. Muestra cuanto se puede gastar en la semana, cuanto ya se uso, cuanto queda y cuanto conviene gastar por dia hasta el domingo o hasta el fin del ciclo.
 

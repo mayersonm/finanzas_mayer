@@ -36,7 +36,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Metric icon={RiShieldCheckLine} label="Disponible real" value={formatMoney(distributionBase)} sub="despues de compromisos" tone="emerald" />
+          <Metric icon={RiShieldCheckLine} label="Caja proyectada" value={formatMoney(distributionBase)} sub="base: caja actual" tone="emerald" />
           <Metric icon={RiShoppingBag3Line} label="Para gastar ciclo" value={formatMoney(plan.availableToSpend)} sub={`${plan.daysLeft} dias restantes`} tone="cyan" />
           <Metric icon={RiSparklingLine} label="Puedes ahorrar" value={formatMoney(plan.recommendedSavings)} sub="sugerencia del ciclo" tone="emerald" />
           <Metric icon={RiBankLine} label="Margen extra" value={formatMoney(extraMargin)} sub="despues de gastar y ahorrar" tone="amber" />
@@ -58,7 +58,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
               <Mini label="Caja actual" value={formatMoney(plan.baseBalance)} />
               <Mini label="Ahorro real" value={formatMoney(actualSavings)} />
               <Mini label="Sugerencia" value={formatMoney(plan.recommendedSavings)} />
-              <Mini label="Fijos y deudas" value={formatMoney(plan.fixedPending + plan.debtPending)} />
+              <Mini label="Fijos/deudas ref." value={formatMoney(plan.fixedPending + plan.debtPending)} />
               <Mini label="Colchon" value={formatMoney(plan.emergencyBuffer)} />
             </div>
           </div>

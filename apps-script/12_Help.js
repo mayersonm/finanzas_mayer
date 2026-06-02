@@ -140,7 +140,7 @@ function sendHelp(chatId) {
     '• 🔮 `proyeccion`  - estimado de cierre',
     '• 🔔 `alertas`     - presupuestos, fijos, deudas y credito',
     '• 🧠 `insights`    - lectura inteligente con IA',
-    '• 📅 Dashboard > Calendario - fijos, deudas, cierre, credito y alertas',
+    '• 📅 Dashboard > Calendario - gasto diario, fijos, deudas, cierre y credito',
     '• 🔁 Dia 23 - sugerir cerrar ciclo, separar ahorro y reiniciar presupuesto',
     '• 🤖 `analisis`    - consejos con IA',
     '• 🧭 `anual`       - resumen anual por correo',
