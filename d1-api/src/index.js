@@ -778,7 +778,7 @@ async function dashboard(env, params) {
   const monthKey = cycle.key;
   const calendarMonth = cycle;
   const cycleKey = monthKey;
-  const monthName = cycle.label;
+  const monthName = monthLongNameFromKey(localDateKey(now));
   const usdRate = Number((await exchangeRate(env)).rate || 3.85);
   const user = await ensureUserForChat(env, chatId);
   const settings = normalizeSettingsConfig(userSettingsToConfig(await getUserSettings(env, user.id)));
@@ -875,7 +875,7 @@ async function dashboard(env, params) {
     presupuestoRestante: budget.remaining,
     presupuestoExcedido: budget.over,
     pendienteComprometido,
-    queQueda: round(balanceCierre - pendienteComprometido),
+    queQueda: round(patrimonioDisponible - budget.remaining),
     patrimonioDisponible,
   };
   const dineroLibre = freeMoneyPlan({
@@ -933,6 +933,7 @@ async function dashboard(env, params) {
     mes: monthName,
     mesKey: monthKey,
     cycleKey,
+    cycleLabel: cycle.label,
     cycleStart: calendarMonth.startKey,
     cycleEnd: calendarMonth.endKey,
     cycleClose: calendarMonth.closeDate,

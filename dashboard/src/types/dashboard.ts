@@ -398,6 +398,7 @@ export interface DashboardData {
   mes: string;
   mesKey?: string;
   cycleKey?: string;
+  cycleLabel?: string;
   cycleStart?: string;
   cycleEnd?: string;
   cycleRange?: string;
