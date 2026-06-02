@@ -55,7 +55,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
             </div>
             <ProgressBar className="mt-3" value={progressValue} color={tone.progress} />
             <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-              <Mini label="Balance ciclo" value={formatMoney(plan.baseBalance)} />
+              <Mini label="Caja actual" value={formatMoney(plan.baseBalance)} />
               <Mini label="Ahorro real" value={formatMoney(actualSavings)} />
               <Mini label="Sugerencia" value={formatMoney(plan.recommendedSavings)} />
               <Mini label="Fijos y deudas" value={formatMoney(plan.fixedPending + plan.debtPending)} />
