@@ -25,7 +25,7 @@ function cmdDineroLibre(chatId, text) {
     `🧠 *Dinero Libre*\n\n` +
     `🚦 Estado: *${plan.statusLabel || 'Plan'}*\n` +
     `📅 ${plan.closeLabel || 'Cierre'} · ${plan.daysLeft || 1} dia(s)\n\n` +
-    `💰 Disponible real: *S/ ${distributionBase.toFixed(2)}*\n` +
+    `💰 Caja proyectada: *S/ ${distributionBase.toFixed(2)}*\n` +
     `🟢 Seguro: *S/ ${Number(daily.safe || 0).toFixed(2)}* hoy\n` +
     `✅ Normal: *S/ ${Number(daily.normal || 0).toFixed(2)}* hoy\n` +
     `🟡 Flexible: *S/ ${Number(daily.flexible || 0).toFixed(2)}* hoy\n\n` +

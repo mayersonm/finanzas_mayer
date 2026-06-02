@@ -167,7 +167,13 @@ export const MOCK_DASHBOARD: DashboardData = {
       { id: 'cierre:2026-06-23', date: '2026-06-23', type: 'cierre', title: 'Cierre 23/06', description: 'Cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto.', priority: 'high' },
       { id: 'deuda:2026-06-30', date: '2026-06-30', type: 'deuda', title: 'Deuda: Laptop', description: 'Vencimiento de deuda', amount: 1800, currency: 'PEN', priority: 'medium' },
     ],
-    summary: { fijos: 1, deudas: 1, credito: 1, alertas: 0 },
+    dailyTotals: [
+      { date: '2026-06-03', gastos: 60, ingresos: 0, movimientos: 1 },
+      { date: '2026-06-05', gastos: 45, ingresos: 0, movimientos: 1 },
+      { date: '2026-06-10', gastos: 135, ingresos: 0, movimientos: 1 },
+      { date: '2026-06-18', gastos: 80, ingresos: 0, movimientos: 2 },
+    ],
+    summary: { fijos: 1, deudas: 1, credito: 1, alertas: 0, gastos: 320 },
   },
   topFugas: [
     { label: 'Supermercado', category: 'Supermercado', amount: 420, count: 3, sharePct: 36.5, reason: '3 movimientos - 36.5% del gasto variable' },

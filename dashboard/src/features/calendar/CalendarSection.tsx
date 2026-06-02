@@ -11,10 +11,12 @@ export function CalendarSection({ data }: { data: DashboardData }) {
   const weekly = data.objetivoSemanal || fallbackWeeklyGoal(data);
   const closure = data.cierreAutomatico;
   const eventsByDate = groupEventsByDate(calendar.events);
+  const dailyTotalsByDate = groupDailyTotals(calendar.dailyTotals || []);
   const days = calendarDays(calendar);
   const nextEvents = calendar.events.slice(0, 8);
   const weeklyColor = weeklyTone(weekly.status);
   const closureColor = closureTone(closure?.status || 'waiting');
+  const monthSpend = calendar.summary.gastos ?? (calendar.dailyTotals || []).reduce((total, item) => total + Number(item.gastos || 0), 0);
 
   return (
     <section className="grid gap-4">
@@ -27,7 +29,8 @@ export function CalendarSection({ data }: { data: DashboardData }) {
             </div>
             <Badge color="cyan">{calendar.events.length} eventos</Badge>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+            <CalendarMini label="Gasto mes" value={formatMoney(monthSpend)} strong />
             <CalendarMini label="Fijos" value={calendar.summary.fijos} />
             <CalendarMini label="Deudas" value={calendar.summary.deudas} />
             <CalendarMini label="Credito" value={calendar.summary.credito} />
@@ -89,28 +92,30 @@ export function CalendarSection({ data }: { data: DashboardData }) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-3 sm:!p-5">
           <div className="overflow-x-auto">
-            <div className="min-w-[46rem]">
+            <div className="min-w-[56rem]">
               <div className="grid grid-cols-7 gap-2">
                 {WEEK_DAYS.map((day) => (
-                  <div key={day} className="px-2 py-1 text-center text-xs font-semibold uppercase text-slate-500">
+                  <div key={day} className="rounded-tremor-default border border-slate-800 bg-slate-900/40 px-2 py-2 text-center text-xs font-semibold uppercase text-slate-500">
                     {day}
                   </div>
                 ))}
                 {Array.from({ length: days.offset }).map((_, index) => (
-                  <div key={`empty-${index}`} className="min-h-[7rem] rounded-tremor-default border border-slate-800/60 bg-slate-900/20" />
+                  <div key={`empty-${index}`} className="min-h-[8.5rem] rounded-tremor-default border border-slate-800/60 bg-slate-900/20" />
                 ))}
                 {days.items.map((day) => {
                   const events = eventsByDate[day.date] || [];
+                  const daily = dailyTotalsByDate[day.date];
                   const isToday = day.date === calendar.today;
                   return (
-                    <div key={day.date} className={`min-h-[7rem] rounded-tremor-default border p-2 ${isToday ? 'border-emerald-400/70 bg-emerald-500/10' : 'border-slate-800 bg-slate-900/40'}`}>
+                    <div key={day.date} className={`min-h-[8.5rem] rounded-tremor-default border p-2 shadow-sm ${isToday ? 'border-emerald-400/70 bg-emerald-500/10' : 'border-slate-800 bg-slate-900/40'}`}>
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <span className={`text-sm font-semibold ${isToday ? 'text-emerald-200' : 'text-slate-200'}`}>{day.day}</span>
                         {events.length ? <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[0.65rem] font-semibold text-slate-300">{events.length}</span> : null}
                       </div>
+                      <DaySpend daily={daily} />
                       <div className="space-y-1">
-                        {events.slice(0, 3).map((event) => <EventPill key={event.id} event={event} />)}
-                        {events.length > 3 ? <p className="text-[0.68rem] text-slate-500">+{events.length - 3} mas</p> : null}
+                        {events.slice(0, 2).map((event) => <EventPill key={event.id} event={event} />)}
+                        {events.length > 2 ? <p className="text-[0.68rem] text-slate-500">+{events.length - 2} mas</p> : null}
                       </div>
                     </div>
                   );
@@ -141,11 +146,27 @@ export function CalendarSection({ data }: { data: DashboardData }) {
   );
 }
 
-function CalendarMini({ label, value }: { label: string; value: string | number }) {
+function CalendarMini({ label, value, strong }: { label: string; value: string | number; strong?: boolean }) {
   return (
     <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 truncate font-mono text-sm font-semibold text-slate-100">{value}</p>
+      <p className={`mt-1 truncate font-mono text-sm font-semibold ${strong ? 'text-emerald-200' : 'text-slate-100'}`}>{value}</p>
+    </div>
+  );
+}
+
+function DaySpend({ daily }: { daily?: { gastos: number; ingresos: number; movimientos: number } }) {
+  if (!daily || (!daily.gastos && !daily.ingresos)) {
+    return <div className="mb-2 h-7 rounded-tremor-default border border-dashed border-slate-800/70 bg-slate-900/20" />;
+  }
+
+  return (
+    <div className="mb-2 rounded-tremor-default border border-rose-500/25 bg-rose-500/10 px-2 py-1">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[0.68rem] font-semibold uppercase text-rose-200">Gasto</span>
+        <span className="font-mono text-[0.72rem] font-bold text-rose-200">{formatMoney(daily.gastos)}</span>
+      </div>
+      {daily.movimientos ? <p className="mt-0.5 truncate text-[0.65rem] text-slate-500">{daily.movimientos} mov.</p> : null}
     </div>
   );
 }
@@ -259,6 +280,17 @@ function groupEventsByDate(events: CalendarEvent[]) {
   }, {});
 }
 
+function groupDailyTotals(items: NonNullable<FinancialCalendar['dailyTotals']>) {
+  return items.reduce<Record<string, { gastos: number; ingresos: number; movimientos: number }>>((acc, item) => {
+    acc[item.date] = {
+      gastos: Number(item.gastos || 0),
+      ingresos: Number(item.ingresos || 0),
+      movimientos: Number(item.movimientos || 0),
+    };
+    return acc;
+  }, {});
+}
+
 function calendarDays(calendar: FinancialCalendar) {
   const start = parseDate(calendar.start);
   const end = parseDate(calendar.end);
@@ -295,7 +327,8 @@ function fallbackCalendar(data: DashboardData): FinancialCalendar {
     cycleClose: data.cierre?.closeDate || data.cycleEnd || `${monthKey}-23`,
     cycleRange: data.cycleRange || data.cierre?.range || monthKey,
     events: [],
-    summary: { fijos: 0, deudas: 0, credito: 0, alertas: 0 },
+    dailyTotals: [],
+    summary: { fijos: 0, deudas: 0, credito: 0, alertas: 0, gastos: 0 },
   };
 }
 

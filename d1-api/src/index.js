@@ -3605,7 +3605,7 @@ function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendi
   const fixedPending = round(fixedSummary?.pending || 0);
   const debtPending = round(deudaPendiente || 0);
   const cash = round(Number.isFinite(Number(cashBalance)) ? Number(cashBalance) : Number(cierre?.balance || 0));
-  const availableBase = round(Number.isFinite(Number(patrimonioDisponible)) ? Number(patrimonioDisponible) : cash - fixedPending - debtPending);
+  const availableBase = cash;
   const baseBalance = cash;
   const configuredSavingsGoal = round(Math.max(0, Number(settings.savingsTargetAmount || 0)));
   const actualSavings = round((goals || []).reduce((total, item) => total + Number(item.ahorrado || 0), 0));
@@ -3614,7 +3614,7 @@ function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendi
   const budgetRemaining = round(Math.max(0, budget?.remaining || 0));
   const hasBudget = budgetLimit > 0;
   const savingsTarget = actualSavings;
-  const commitments = round(fixedPending + debtPending + savingsTarget + emergencyBuffer);
+  const commitments = round(savingsTarget + emergencyBuffer);
   const freeAfterCommitments = round(availableBase - savingsTarget - emergencyBuffer);
   const variableReserve = hasBudget ? budgetRemaining : Math.max(0, freeAfterCommitments);
   const availableToSpend = round(Math.max(0, hasBudget ? Math.min(freeAfterCommitments, variableReserve) : freeAfterCommitments));
@@ -3647,6 +3647,8 @@ function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendi
     configuredSavingsGoal,
     recommendedSavings,
     emergencyBuffer,
+    fixedPending,
+    debtPending,
     freeAfterCommitments,
     dailyNormal,
     budgetLimit,
@@ -3899,6 +3901,25 @@ async function monthlyCalendar(env, chatId, now, cycle, fixedExpenses, debts, al
     }));
   }
 
+  const dailyRows = await env.DB.prepare(`
+    SELECT
+      tx_date AS date,
+      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos,
+      COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
+      COUNT(*) AS movimientos
+    FROM transactions
+    WHERE chat_id = ?
+      AND tx_date BETWEEN ? AND ?
+    GROUP BY tx_date
+    ORDER BY tx_date ASC
+  `).bind(usdRate, usdRate, chatId, month.startKey, month.endKey).all();
+  const dailyTotals = (dailyRows.results || []).map((row) => ({
+    date: row.date,
+    gastos: round(row.gastos || 0),
+    ingresos: round(row.ingresos || 0),
+    movimientos: Number(row.movimientos || 0),
+  }));
+
   const sortedEvents = events.sort((a, b) => {
     return a.date.localeCompare(b.date) || priorityRank(b.priority) - priorityRank(a.priority) || a.title.localeCompare(b.title);
   });
@@ -3914,11 +3935,13 @@ async function monthlyCalendar(env, chatId, now, cycle, fixedExpenses, debts, al
     cycleClose: cycle.closeDate,
     cycleRange: cycle.rangeLabel,
     events: sortedEvents,
+    dailyTotals,
     summary: {
       fijos: sortedEvents.filter((item) => item.type === 'fijo').length,
       deudas: sortedEvents.filter((item) => item.type === 'deuda').length,
       credito: sortedEvents.filter((item) => item.type === 'credito').length,
       alertas: sortedEvents.filter((item) => item.type === 'alerta').length,
+      gastos: round(dailyTotals.reduce((total, item) => total + Number(item.gastos || 0), 0)),
     },
   };
 }
@@ -3975,14 +3998,15 @@ function nextFinancialClose(date) {
   };
 }
 
-function freeMoneyActions({ actualSavings, configuredSavingsGoal, recommendedSavings, emergencyBuffer, freeAfterCommitments, dailyNormal, budgetLimit, investableNow }) {
+function freeMoneyActions({ actualSavings, configuredSavingsGoal, recommendedSavings, emergencyBuffer, fixedPending = 0, debtPending = 0, freeAfterCommitments, dailyNormal, budgetLimit, investableNow }) {
   const actions = [];
   if (!actualSavings) actions.push('Aun no hay ahorro real registrado; el ahorro sugerido no reduce tu dinero libre.');
   if (recommendedSavings > 0) actions.push(`Puedes separar ${formatCurrency(recommendedSavings, 'PEN')} como ahorro sugerido este ciclo.`);
   if (!configuredSavingsGoal) actions.push('Si quieres una meta mas exacta, configura un ahorro sugerido del ciclo.');
   if (!emergencyBuffer) actions.push('Configura un colchon minimo para que el dinero libre no se coma tu seguridad.');
   if (!budgetLimit) actions.push('Agrega presupuestos por categoria para separar gasto permitido de excedente invertible.');
-  if (freeAfterCommitments < 0) actions.push('Recorta gasto variable o pausa compras: el plan no cubre ahorro, fijos y deudas.');
+  if (fixedPending + debtPending > 0) actions.push('Fijos y deudas quedan como referencia; la proyeccion de gasto usa caja actual.');
+  if (freeAfterCommitments < 0) actions.push('Recorta gasto variable o pausa compras: la caja no cubre ahorro real y colchon.');
   if (dailyNormal > 0 && dailyNormal < 25) actions.push('Mantente en modo seguro unos dias para proteger el cierre.');
   if (investableNow > 0) actions.push('Hay margen extra despues de gasto y ahorro sugerido: revisa si conviene invertirlo o dejarlo liquido.');
   return actions.slice(0, 4);

@@ -374,11 +374,18 @@ export interface FinancialCalendar {
   cycleClose: string;
   cycleRange: string;
   events: CalendarEvent[];
+  dailyTotals?: Array<{
+    date: string;
+    gastos: number;
+    ingresos: number;
+    movimientos: number;
+  }>;
   summary: {
     fijos: number;
     deudas: number;
     credito: number;
     alertas: number;
+    gastos?: number;
   };
 }
 

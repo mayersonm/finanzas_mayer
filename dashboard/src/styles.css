@@ -79,7 +79,9 @@ button {
 :root[data-theme="light"] .bg-slate-900\/70,
 :root[data-theme="light"] .bg-slate-900\/80,
 :root[data-theme="light"] .bg-slate-900\/60,
+:root[data-theme="light"] .bg-slate-900\/50,
 :root[data-theme="light"] .bg-slate-900\/40,
+:root[data-theme="light"] .bg-slate-900\/20,
 :root[data-theme="light"] .bg-slate-900,
 :root[data-theme="light"] .bg-slate-800,
 :root[data-theme="light"] .bg-slate-800\/70 {
@@ -87,6 +89,8 @@ button {
 }
 
 :root[data-theme="light"] .border-slate-800,
+:root[data-theme="light"] .border-slate-800\/60,
+:root[data-theme="light"] .border-slate-800\/70,
 :root[data-theme="light"] .border-slate-700 {
   border-color: rgb(203, 213, 225) !important;
 }
@@ -116,6 +120,18 @@ button {
 :root[data-theme="light"] .text-cyan-200,
 :root[data-theme="light"] .text-cyan-300 {
   color: rgb(14, 116, 144) !important;
+}
+
+:root[data-theme="light"] .text-sky-100,
+:root[data-theme="light"] .text-sky-200,
+:root[data-theme="light"] .text-sky-300 {
+  color: rgb(3, 105, 161) !important;
+}
+
+:root[data-theme="light"] .text-violet-100,
+:root[data-theme="light"] .text-violet-200,
+:root[data-theme="light"] .text-violet-300 {
+  color: rgb(109, 40, 217) !important;
 }
 
 :root[data-theme="light"] .text-amber-100,
