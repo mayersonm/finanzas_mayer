@@ -1,5 +1,6 @@
 import {
   RiBankCardLine,
+  RiCalendarLine,
   RiCoinsLine,
   RiDashboardLine,
   RiFileList3Line,
@@ -16,6 +17,7 @@ export const tabs: DashboardTab[] = [
   { id: 'movimientos', label: 'Movimientos', icon: RiFileList3Line },
   { id: 'compromisos', label: 'Compromisos', icon: RiBankCardLine },
   { id: 'dinero', label: 'Dinero Libre', icon: RiCoinsLine },
+  { id: 'calendario', label: 'Calendario', icon: RiCalendarLine },
   { id: 'patrimonio', label: 'Patrimonio', icon: RiScales3Line },
   { id: 'inversiones', label: 'Inversiones', icon: RiLineChartLine },
   { id: 'analisis', label: 'Analisis', icon: RiFundsBoxLine },

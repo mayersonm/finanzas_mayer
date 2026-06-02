@@ -67,7 +67,9 @@ export function OverviewSection({
           Authorization: `Bearer ${authToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify(data.cierreAutomatico?.active && !data.cierreAutomatico.saved
+          ? { cycle_start: data.cierreAutomatico.targetCycleStart }
+          : {}),
       });
       const result = await response.json() as { ok?: boolean; error?: string; closure?: ClosureSummary };
 
@@ -152,6 +154,16 @@ export function OverviewSection({
           {closeError ? (
             <div className="mt-4 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-100">
               {closeError}
+            </div>
+          ) : null}
+
+          {data.cierreAutomatico?.active && !data.cierreAutomatico.saved ? (
+            <div className="mt-4 rounded-tremor-default border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+              <p className="font-semibold">{data.cierreAutomatico.title}</p>
+              <p className="mt-1">{data.cierreAutomatico.message}</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Ahorro sugerido: {formatMoney(data.cierreAutomatico.suggestedSavings)} - ciclo {data.cierreAutomatico.targetCycleRange}
+              </p>
             </div>
           ) : null}
 

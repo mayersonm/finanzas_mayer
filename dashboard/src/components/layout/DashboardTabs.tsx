@@ -10,7 +10,7 @@ export function DashboardTabs({
 }) {
   return (
     <nav className="mb-4 sm:mb-5" aria-label="Secciones del dashboard">
-      <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-8">
+      <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-10">
         {tabs.map((item) => (
           <button
             key={item.id}

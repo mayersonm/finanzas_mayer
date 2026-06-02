@@ -14,6 +14,12 @@ function cmdDineroLibre(chatId, text) {
   const suggestedSavings = Number(plan.recommendedSavings || 0);
   const distributionBase = Math.max(Number(plan.freeAfterCommitments || 0), 0);
   const extraMargin = Math.max(Number((plan.investment || {}).amount || 0), 0);
+  const weekly = d1.objetivoSemanal || {};
+  const weeklyText = weekly && weekly.label
+    ? `\nObjetivo semanal: ${weekly.range || ''}\n` +
+      `- Usado: S/ ${Number(weekly.spent || 0).toFixed(2)} de S/ ${Number(weekly.target || 0).toFixed(2)}\n` +
+      `- Queda: S/ ${Number(weekly.remaining || 0).toFixed(2)} - diario S/ ${Number(weekly.dailyRemaining || 0).toFixed(2)}\n`
+    : '';
 
   return sendMessage(chatId,
     `🧠 *Dinero Libre*\n\n` +
@@ -28,7 +34,8 @@ function cmdDineroLibre(chatId, text) {
     `🛡️ Colchon: S/ ${Number(plan.emergencyBuffer || 0).toFixed(2)}\n` +
     `🧾 Fijos + deudas: S/ ${Number((plan.fixedPending || 0) + (plan.debtPending || 0)).toFixed(2)}\n` +
     `💵 Para gastar ciclo: *S/ ${Number(plan.availableToSpend || 0).toFixed(2)}*\n` +
-    `🟠 Margen extra: S/ ${extraMargin.toFixed(2)}\n\n` +
+    `🟠 Margen extra: S/ ${extraMargin.toFixed(2)}\n` +
+    weeklyText + `\n` +
     `📈 *Ruta:* ${inv.title || 'Sin excedente'}\n` +
     `${inv.nextStep || ''}\n\n` +
     `_Prueba una compra: \`puedo gastar 120 zapatillas\`_`,

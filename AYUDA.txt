@@ -22,6 +22,9 @@ Dinero Libre:
 - libre
 - puedo gastar 120 zapatillas
 - Configura ahorro del ciclo, colchon, perfil y horizonte desde Dashboard > Config.
+- El comando libre muestra objetivo semanal si D1 lo devuelve.
+- Dashboard > Calendario muestra fijos, deudas, cierre, pagos de credito y alertas.
+- Dia 23: sugerir cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto.
 
 cd dashboard
 npm ci

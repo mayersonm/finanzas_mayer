@@ -10,6 +10,7 @@ import { getRealExpenses } from './lib/finance';
 import type { ApiStatus, DashboardData, DashboardUser, TabId } from './types/dashboard';
 
 const AnalysisSection = lazy(() => import('./features/analysis/AnalysisSection').then((mod) => ({ default: mod.AnalysisSection })));
+const CalendarSection = lazy(() => import('./features/calendar/CalendarSection').then((mod) => ({ default: mod.CalendarSection })));
 const CommitmentsSection = lazy(() => import('./features/commitments/CommitmentsSection').then((mod) => ({ default: mod.CommitmentsSection })));
 const FreeMoneySection = lazy(() => import('./features/freeMoney/FreeMoneySection').then((mod) => ({ default: mod.FreeMoneySection })));
 const GoalsSection = lazy(() => import('./features/goals/GoalsSection').then((mod) => ({ default: mod.GoalsSection })));
@@ -354,6 +355,7 @@ export default function App() {
           {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
           {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} exchangeRate={exchangeRate} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
           {tab === 'dinero' ? <FreeMoneySection data={data} /> : null}
+          {tab === 'calendario' ? <CalendarSection data={data} /> : null}
           {tab === 'patrimonio' ? <NetWorthSection authToken={token} chatId={selectedChatId} /> : null}
           {tab === 'inversiones' ? <InvestmentsSection authToken={token} chatId={selectedChatId} exchangeRate={exchangeRate} /> : null}
           {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
