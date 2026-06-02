@@ -886,6 +886,8 @@ async function dashboard(env, params) {
     fixedSummary,
     deudaPendiente,
     goals,
+    cashBalance: balanceCaja,
+    patrimonioDisponible,
     ingresosMes,
     gastosMes: gastosMesConFijosPagados,
   });
@@ -3578,30 +3580,31 @@ function fixedExpensesSummary(fixedExpenses, usdRate = 3.85) {
   };
 }
 
-function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendiente, goals = [], ingresosMes, gastosMes }) {
+function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendiente, goals = [], cashBalance, patrimonioDisponible, ingresosMes, gastosMes }) {
   const close = nextFinancialClose(now);
   const daysLeft = close.daysLeft;
   const income = round(ingresosMes || 0);
   const spent = round(gastosMes || 0);
-  const baseBalance = round(cierre?.balance || 0);
-  const configuredSavingsGoal = round(Math.max(0, Number(settings.savingsTargetAmount || 0)));
-  const actualSavings = round((goals || []).reduce((total, item) => total + Number(item.ahorrado || 0), 0));
-  const automaticSavingsGoal = round(Math.max(0, income * 0.1));
-  const emergencyBuffer = round(Math.max(0, Number(settings.emergencyBufferAmount || 0)));
   const fixedPending = round(fixedSummary?.pending || 0);
   const debtPending = round(deudaPendiente || 0);
+  const cash = round(Number.isFinite(Number(cashBalance)) ? Number(cashBalance) : Number(cierre?.balance || 0));
+  const availableBase = round(Number.isFinite(Number(patrimonioDisponible)) ? Number(patrimonioDisponible) : cash - fixedPending - debtPending);
+  const baseBalance = cash;
+  const configuredSavingsGoal = round(Math.max(0, Number(settings.savingsTargetAmount || 0)));
+  const actualSavings = round((goals || []).reduce((total, item) => total + Number(item.ahorrado || 0), 0));
+  const emergencyBuffer = round(Math.max(0, Number(settings.emergencyBufferAmount || 0)));
   const budgetLimit = round(budget?.limit || 0);
   const budgetRemaining = round(Math.max(0, budget?.remaining || 0));
   const hasBudget = budgetLimit > 0;
   const savingsTarget = actualSavings;
   const commitments = round(fixedPending + debtPending + savingsTarget + emergencyBuffer);
-  const freeAfterCommitments = round(baseBalance - commitments);
+  const freeAfterCommitments = round(availableBase - savingsTarget - emergencyBuffer);
   const variableReserve = hasBudget ? budgetRemaining : Math.max(0, freeAfterCommitments);
   const availableToSpend = round(Math.max(0, hasBudget ? Math.min(freeAfterCommitments, variableReserve) : freeAfterCommitments));
   const roomAfterPlannedSpend = hasBudget
     ? Math.max(0, freeAfterCommitments - budgetRemaining)
     : Math.max(0, freeAfterCommitments * 0.25);
-  const suggestedSavingsGoal = configuredSavingsGoal > 0 ? configuredSavingsGoal : automaticSavingsGoal;
+  const suggestedSavingsGoal = configuredSavingsGoal > 0 ? configuredSavingsGoal : roomAfterPlannedSpend;
   const recommendedSavings = round(Math.min(Math.max(0, suggestedSavingsGoal), roomAfterPlannedSpend));
   const extraAfterPlan = round(Math.max(0, freeAfterCommitments - availableToSpend - recommendedSavings));
   const dailyNormal = round(availableToSpend / daysLeft);
