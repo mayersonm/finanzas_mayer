@@ -191,7 +191,7 @@ function eliminarFijoD1(chatId, nombre) {
 function marcarEstadoFijoD1_(chatId, fijo, estado, mes) {
   try {
     const fixedId = fijo.id || ['fixed', String(chatId), normalizarClaveFijoD1_(fijo.nombre)].join(':').slice(0, 180);
-    const monthKey = mes || Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
+    const monthKey = mes || cicloPagoDesdeFecha_(new Date()).key;
     const fecha = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
 
     const result = d1ApiRequest_('/api/fixed-expenses/' + encodeURIComponent(fixedId) + '/status', {
