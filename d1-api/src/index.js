@@ -774,7 +774,8 @@ function serviceLabel(name) {
 async function dashboard(env, params) {
   const chatId = getChatId(env, params);
   const now = new Date();
-  const cycle = payCycleFromDate(now);
+  const requestedCycleStart = normalizeDateOnly(params.get('cycle_start') || params.get('cycleStart') || '');
+  const cycle = requestedCycleStart ? payCycleFromDate(dateFromKey(requestedCycleStart)) : payCycleFromDate(now);
   const monthKey = cycle.key;
   const calendarMonth = cycle;
   const cycleKey = monthKey;
@@ -897,6 +898,8 @@ async function dashboard(env, params) {
     cierre.savedAt = savedClosure.updated_at || '';
     cierre.snapshotId = savedClosure.id || '';
   }
+  const cierreAutomatico = await closureRuleSuggestion(env, chatId, now, calendarMonth, dineroLibre);
+  const objetivoSemanal = await weeklyGoalPlan(env, chatId, now, calendarMonth, dineroLibre, usdRate);
 
   const alerts = smartAlerts({
     now,
@@ -909,6 +912,13 @@ async function dashboard(env, params) {
     debts,
     latest: (latest.results || []).map(txShape),
   });
+  if (cierreAutomatico.active && !cierreAutomatico.saved) {
+    alerts.unshift({
+      level: cierreAutomatico.status === 'due' ? 'warning' : 'info',
+      title: cierreAutomatico.title,
+      message: cierreAutomatico.message,
+    });
+  }
   const insights = smartInsights({
     ingresosMes,
     gastosMes: gastosMesConFijosPagados,
@@ -918,6 +928,7 @@ async function dashboard(env, params) {
     debts,
     months,
   });
+  const calendario = await monthlyCalendar(env, chatId, now, calendarMonth, fixedExpenses, debts, alerts, objetivoSemanal, usdRate);
 
   return {
     ok: true,
@@ -942,7 +953,10 @@ async function dashboard(env, params) {
     cycleRange: calendarMonth.rangeLabel,
     movimientosMes: Number(monthTotals?.movimientosMes || 0),
     cierre,
+    cierreAutomatico,
     dineroLibre,
+    objetivoSemanal,
+    calendario,
     topFugas,
     transacciones: (latest.results || []).map(txShape),
     categorias: categories,
@@ -1052,7 +1066,10 @@ async function financialClosures(env, params) {
 
 async function saveFinancialClosure(env, params, payload = {}) {
   const chatId = getChatId(env, params);
-  const data = await dashboard(env, params);
+  const dashboardParams = new URLSearchParams(params);
+  const requestedCycleStart = normalizeDateOnly(payload?.cycle_start || payload?.cycleStart || '');
+  if (requestedCycleStart) dashboardParams.set('cycle_start', requestedCycleStart);
+  const data = await dashboard(env, dashboardParams);
   const closure = data.cierre;
   if (!closure) throw httpError(500, 'No se pudo calcular el cierre');
 
@@ -3682,6 +3699,266 @@ function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendi
     }),
     actions,
   };
+}
+
+async function closureRuleSuggestion(env, chatId, now, cycle, plan) {
+  const today = localDateKey(now || new Date());
+  const todayParts = parseDateKeyParts(today);
+  const isCloseDay = todayParts.day === 23;
+  const targetCycle = isCloseDay ? payCycleFromDate(dateFromKey(dateKeyFromParts(todayParts.year, todayParts.monthIndex, 22))) : cycle;
+  const daysToClose = isCloseDay ? 0 : daysBetween(today, targetCycle.closeDate);
+  const isSoon = !isCloseDay && daysToClose >= 0 && daysToClose <= 3;
+  const saved = await currentFinancialClosure(env, chatId, targetCycle.key);
+  const suggestedSavings = round(Math.max(0, Number(plan?.recommendedSavings || 0)));
+  const active = (isCloseDay || isSoon) && !saved;
+  const status = saved ? 'closed' : isCloseDay ? 'due' : isSoon ? 'soon' : 'waiting';
+  const titleText = saved
+    ? 'Ciclo ya cerrado'
+    : isCloseDay
+      ? 'Cierre de ciclo listo'
+      : isSoon
+        ? 'Cierre de ciclo cercano'
+        : 'Cierre programado';
+  const message = saved
+    ? `El ciclo ${targetCycle.rangeLabel} ya tiene cierre guardado.`
+    : active
+      ? 'Cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto.'
+      : `Faltan ${Math.max(daysToClose, 0)} dia${Math.max(daysToClose, 0) === 1 ? '' : 's'} para el cierre ${targetCycle.closeDate.slice(8, 10)}/${targetCycle.closeDate.slice(5, 7)}.`;
+
+  return {
+    status,
+    active,
+    title: titleText,
+    message,
+    closeDate: targetCycle.closeDate,
+    daysToClose: Math.max(daysToClose, 0),
+    targetCycleKey: targetCycle.key,
+    targetCycleStart: targetCycle.startKey,
+    targetCycleEnd: targetCycle.endKey,
+    targetCycleRange: targetCycle.rangeLabel,
+    suggestedSavings,
+    availableToSpend: round(plan?.availableToSpend || 0),
+    saved: Boolean(saved),
+    savedAt: saved?.updated_at || '',
+    action: active ? 'save_closure' : 'watch',
+  };
+}
+
+async function weeklyGoalPlan(env, chatId, now, cycle, plan, usdRate = 3.85) {
+  const today = localDateKey(now || new Date());
+  const range = weekRangeFromDate(today, cycle);
+  const row = await env.DB.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END), 0) AS spent
+    FROM transactions
+    WHERE chat_id = ?
+      AND type = 'gasto'
+      AND tx_date BETWEEN ? AND ?
+      AND COALESCE(source, '') <> 'debt_payment'
+      AND lower(description) NOT LIKE 'fijo pagado%'
+  `).bind(usdRate, chatId, range.startKey, range.endKey).first();
+
+  const spent = round(row?.spent || 0);
+  const daysInWeek = Math.max(1, daysBetween(range.startKey, range.endKey) + 1);
+  const daysLeft = Math.max(1, daysBetween(today, range.endKey) + 1);
+  const dailyNormal = round(Math.max(0, Number(plan?.daily?.normal || 0)));
+  const target = round(Math.max(0, dailyNormal * daysInWeek));
+  const remaining = round(Math.max(target - spent, 0));
+  const over = round(Math.max(spent - target, 0));
+  const dailyRemaining = round(remaining / daysLeft);
+  const progressPct = target > 0 ? clamp(Math.round((spent / target) * 100), 0, 150) : 0;
+  const status = target <= 0
+    ? 'empty'
+    : over > 0
+      ? 'over'
+      : progressPct >= 85
+        ? 'tight'
+        : 'ok';
+
+  return {
+    status,
+    label: 'Objetivo semanal',
+    range: `${range.startKey.slice(8, 10)}/${range.startKey.slice(5, 7)} - ${range.endKey.slice(8, 10)}/${range.endKey.slice(5, 7)}`,
+    start: range.startKey,
+    end: range.endKey,
+    daysLeft,
+    target,
+    spent,
+    remaining,
+    over,
+    dailyRemaining,
+    progressPct: Math.min(progressPct, 100),
+    message: weeklyGoalMessage(status, remaining, over, dailyRemaining),
+  };
+}
+
+function weeklyGoalMessage(status, remaining, over, dailyRemaining) {
+  if (status === 'empty') return 'Configura presupuestos o espera nuevo ingreso para calcular la semana.';
+  if (status === 'over') return `Esta semana ya excediste el objetivo por ${formatCurrency(over, 'PEN')}. Baja el ritmo hasta el cierre.`;
+  if (status === 'tight') return `Queda poco margen semanal: ${formatCurrency(remaining, 'PEN')} en total.`;
+  return `Puedes gastar hasta ${formatCurrency(dailyRemaining, 'PEN')} por dia esta semana.`;
+}
+
+function weekRangeFromDate(today, cycle) {
+  const parts = parseDateKeyParts(today);
+  const date = new Date(Date.UTC(parts.year, parts.monthIndex, parts.day));
+  const weekday = date.getUTCDay();
+  const mondayOffset = (weekday + 6) % 7;
+  const start = dateKeyFromParts(parts.year, parts.monthIndex, parts.day - mondayOffset);
+  const end = dateKeyFromParts(parts.year, parts.monthIndex, parts.day + (6 - mondayOffset));
+  return {
+    startKey: maxDateKey(start, cycle.startKey),
+    endKey: minDateKey(end, cycle.endKey),
+  };
+}
+
+async function monthlyCalendar(env, chatId, now, cycle, fixedExpenses, debts, alerts, weeklyGoal, usdRate = 3.85) {
+  const month = monthRangeFromKey(localDateKey(now).slice(0, 7));
+  const today = localDateKey(now);
+  const events = [];
+
+  if (dateInRange(cycle.closeDate, month.startKey, month.endKey)) {
+    events.push(calendarEvent({
+      date: cycle.closeDate,
+      type: 'cierre',
+      title: `Cierre ${cycle.closeDate.slice(8, 10)}/${cycle.closeDate.slice(5, 7)}`,
+      description: 'Cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto.',
+      priority: 'high',
+    }));
+  }
+
+  if (weeklyGoal?.end && dateInRange(weeklyGoal.end, month.startKey, month.endKey)) {
+    events.push(calendarEvent({
+      date: weeklyGoal.end,
+      type: 'objetivo',
+      title: 'Objetivo semanal',
+      description: weeklyGoal.message,
+      amount: weeklyGoal.remaining,
+      currency: 'PEN',
+      priority: weeklyGoal.status === 'over' ? 'high' : weeklyGoal.status === 'tight' ? 'medium' : 'normal',
+    }));
+  }
+
+  for (const item of fixedExpenses || []) {
+    const date = item.estado === 'pagado' && item.paidDate ? item.paidDate : cycle.closeDate;
+    if (!dateInRange(date, month.startKey, month.endKey)) continue;
+    events.push(calendarEvent({
+      date,
+      type: 'fijo',
+      title: `${item.estado === 'pagado' ? 'Fijo pagado' : 'Fijo pendiente'}: ${item.nombre}`,
+      description: item.cat || 'Gasto fijo',
+      amount: item.monto,
+      currency: item.currency || 'PEN',
+      priority: item.estado === 'pendiente' ? 'medium' : 'normal',
+    }));
+  }
+
+  for (const item of debts || []) {
+    if (item.estado === 'pagada' || !item.vencimiento) continue;
+    if (!dateInRange(item.vencimiento, month.startKey, month.endKey)) continue;
+    events.push(calendarEvent({
+      date: item.vencimiento,
+      type: 'deuda',
+      title: `Deuda: ${item.nombre}`,
+      description: 'Vencimiento de deuda',
+      amount: item.pendiente,
+      currency: item.currency || 'PEN',
+      priority: daysBetween(today, item.vencimiento) <= 7 ? 'high' : 'medium',
+    }));
+  }
+
+  const creditRows = await env.DB.prepare(`
+    SELECT description, amount, currency, payment_due_date, card_name
+    FROM transactions
+    WHERE chat_id = ?
+      AND type = 'gasto'
+      AND payment_method = 'credito'
+      AND payment_due_date BETWEEN ? AND ?
+    ORDER BY payment_due_date ASC, amount DESC
+  `).bind(chatId, month.startKey, month.endKey).all();
+
+  for (const row of creditRows.results || []) {
+    events.push(calendarEvent({
+      date: row.payment_due_date,
+      type: 'credito',
+      title: `Credito: ${title(row.description)}`,
+      description: row.card_name ? `Tarjeta ${row.card_name}` : 'Pago de tarjeta',
+      amount: row.amount,
+      currency: row.currency || 'PEN',
+      priority: daysBetween(today, row.payment_due_date) <= 5 ? 'high' : 'normal',
+      amountPen: currencyToPen(Number(row.amount || 0), row.currency || 'PEN', usdRate),
+    }));
+  }
+
+  for (const alert of (alerts || []).slice(0, 4)) {
+    events.push(calendarEvent({
+      date: today,
+      type: 'alerta',
+      title: alert.title,
+      description: alert.message,
+      priority: alert.level === 'danger' || alert.level === 'warning' ? 'high' : 'normal',
+    }));
+  }
+
+  const sortedEvents = events.sort((a, b) => {
+    return a.date.localeCompare(b.date) || priorityRank(b.priority) - priorityRank(a.priority) || a.title.localeCompare(b.title);
+  });
+
+  return {
+    monthKey: month.key,
+    label: month.label,
+    start: month.startKey,
+    end: month.endKey,
+    today,
+    cycleStart: cycle.startKey,
+    cycleEnd: cycle.endKey,
+    cycleClose: cycle.closeDate,
+    cycleRange: cycle.rangeLabel,
+    events: sortedEvents,
+    summary: {
+      fijos: sortedEvents.filter((item) => item.type === 'fijo').length,
+      deudas: sortedEvents.filter((item) => item.type === 'deuda').length,
+      credito: sortedEvents.filter((item) => item.type === 'credito').length,
+      alertas: sortedEvents.filter((item) => item.type === 'alerta').length,
+    },
+  };
+}
+
+function calendarEvent({ date, type, title: eventTitle, description = '', amount = 0, currency = 'PEN', priority = 'normal', amountPen }) {
+  return {
+    id: `${type}:${date}:${normalizeKey(eventTitle)}`.slice(0, 180),
+    date,
+    type,
+    title: eventTitle,
+    description,
+    amount: round(amount || 0),
+    currency: normalizeCurrency(currency || 'PEN'),
+    amountPen: amountPen === undefined ? undefined : round(amountPen),
+    priority,
+  };
+}
+
+function dateFromKey(value) {
+  const parts = parseDateKeyParts(value);
+  return new Date(Date.UTC(parts.year, parts.monthIndex, parts.day, 12));
+}
+
+function dateInRange(value, start, end) {
+  const date = String(value || '').slice(0, 10);
+  return date && date >= start && date <= end;
+}
+
+function minDateKey(a, b) {
+  return String(a || '') <= String(b || '') ? a : b;
+}
+
+function maxDateKey(a, b) {
+  return String(a || '') >= String(b || '') ? a : b;
+}
+
+function priorityRank(value) {
+  if (value === 'high') return 3;
+  if (value === 'medium') return 2;
+  return 1;
 }
 
 function nextFinancialClose(date) {

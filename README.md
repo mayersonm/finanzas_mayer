@@ -71,6 +71,10 @@ En `Inicio`, el boton `Cerrar mes` guarda el corte actual en D1 (`financial_clos
 
 La pestana `Dinero Libre` calcula cuanto puedes gastar hoy sin tocar ahorro, fijos, deudas ni colchon. Usa tres rangos: seguro, normal y flexible. Tambien simula compras y muestra una ruta educativa para invertir el excedente segun perfil y horizonte.
 
+La pestana `Calendario` muestra el mes calendario real con fijos, deudas, pagos de credito, alertas, objetivo semanal y cierre. La regla de cierre se activa cuando el ciclo esta cerca de terminar y el dia 23 sugiere: `Cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto`.
+
+El `Objetivo semanal` se calcula desde D1 con el dinero libre disponible del ciclo. Muestra cuanto se puede gastar en la semana, cuanto ya se uso, cuanto queda y cuanto conviene gastar por dia hasta el domingo o hasta el fin del ciclo.
+
 Los correos diario, mensual y anual leen movimientos, presupuestos y metas desde D1; Sheets queda como respaldo si D1 no responde. El cierre mensual automatico se envia todos los dias 23, pero los movimientos se reportan con sus fechas reales.
 
 La sincronizacion automatica por cron del Worker esta desactivada para evitar que el respaldo de Sheets reimporte filas antiguas sin control. Si algun dia se necesita reactivarla, configura el secret `ENABLE_AUTO_GAS_SYNC=true` y vuelve a declarar el cron en `d1-api/wrangler.toml`.
@@ -132,6 +136,13 @@ pago ultimo credito
 pago 1 debito
 libre
 puedo gastar 120 zapatillas
+```
+
+En el dashboard:
+
+```text
+Calendario -> ver fijos, deudas, cierre, pagos de credito, alertas y objetivo semanal.
+Inicio -> ver aviso de cierre cuando toque cerrar ciclo.
 ```
 
 Si escribes una palabra que no es categoria, el bot la conserva como descripcion y deja la categoria como `otro` o la reclasifica por reglas si aplica.

@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'dinero' | 'patrimonio' | 'inversiones' | 'analisis' | 'metas' | 'configuracion';
+export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'dinero' | 'calendario' | 'patrimonio' | 'inversiones' | 'analisis' | 'metas' | 'configuracion';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {
@@ -317,6 +317,71 @@ export interface FreeMoneyPlan {
   actions: string[];
 }
 
+export interface ClosureRule {
+  status: 'waiting' | 'soon' | 'due' | 'closed' | string;
+  active: boolean;
+  title: string;
+  message: string;
+  closeDate: string;
+  daysToClose: number;
+  targetCycleKey: string;
+  targetCycleStart: string;
+  targetCycleEnd: string;
+  targetCycleRange: string;
+  suggestedSavings: number;
+  availableToSpend: number;
+  saved: boolean;
+  savedAt?: string;
+  action: 'save_closure' | 'watch' | string;
+}
+
+export interface WeeklyGoal {
+  status: 'ok' | 'tight' | 'over' | 'empty' | string;
+  label: string;
+  range: string;
+  start: string;
+  end: string;
+  daysLeft: number;
+  target: number;
+  spent: number;
+  remaining: number;
+  over: number;
+  dailyRemaining: number;
+  progressPct: number;
+  message: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  date: string;
+  type: 'fijo' | 'deuda' | 'credito' | 'cierre' | 'alerta' | 'objetivo' | string;
+  title: string;
+  description?: string;
+  amount?: number;
+  currency?: Currency | string;
+  amountPen?: number;
+  priority?: 'normal' | 'medium' | 'high' | string;
+}
+
+export interface FinancialCalendar {
+  monthKey: string;
+  label: string;
+  start: string;
+  end: string;
+  today: string;
+  cycleStart: string;
+  cycleEnd: string;
+  cycleClose: string;
+  cycleRange: string;
+  events: CalendarEvent[];
+  summary: {
+    fijos: number;
+    deudas: number;
+    credito: number;
+    alertas: number;
+  };
+}
+
 export interface EmailConfig {
   configured: boolean;
   daily?: string;
@@ -413,7 +478,10 @@ export interface DashboardData {
   fijosPendientes?: number;
   fijosPagadosMes?: number;
   cierre?: ClosureSummary;
+  cierreAutomatico?: ClosureRule;
   dineroLibre?: FreeMoneyPlan;
+  objetivoSemanal?: WeeklyGoal;
+  calendario?: FinancialCalendar;
   topFugas?: TopLeak[];
   gastosReales?: RealExpenses;
   metas: Goal[];
