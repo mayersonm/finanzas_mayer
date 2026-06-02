@@ -36,10 +36,6 @@ export function OverviewSection({
   const budgetRemaining = data.presupuestos.reduce((total, item) => {
     return total + Math.max(Number(item.limite || 0) - Number(item.gasto || 0), 0);
   }, 0);
-  const committedRemaining = fixedPending + budgetRemaining + debtPending;
-  const projectedFree = monthBalance - committedRemaining;
-  const spendingRate = monthIncome > 0 ? percent(data.gastosMes, monthIncome) : data.gastosMes > 0 ? 100 : 0;
-  const commitmentRate = monthIncome > 0 ? percent(data.gastosMes + committedRemaining, monthIncome) : committedRemaining > 0 ? 100 : 0;
   const closure = getClosureSummary(data, {
     patrimonioDisponible,
     debtPending,
@@ -48,6 +44,11 @@ export function OverviewSection({
     monthIncome,
     monthBalance,
   });
+  const periodLabel = data.cycleRange || closure.range || data.mes;
+  const committedRemaining = closure.pendienteComprometido ?? fixedPending + budgetRemaining + debtPending;
+  const projectedFree = closure.queQueda;
+  const spendingRate = monthIncome > 0 ? percent(data.gastosMes, monthIncome) : data.gastosMes > 0 ? 100 : 0;
+  const commitmentRate = percent(committedRemaining, Math.max(data.balance || 0, monthIncome));
   const closureBudgetPct = percent(closure.presupuestoUsado, closure.presupuestoLimite);
 
   async function saveClosure() {
@@ -93,13 +94,13 @@ export function OverviewSection({
           color={patrimonioDisponible >= 0 ? 'emerald' : 'rose'}
         />
         <KpiCard
-          label="Balance del mes"
+          label="Balance del ciclo"
           value={formatMoney(monthBalance)}
-          detail={`${data.mes} - ${data.movimientosMes ?? data.movimientos} movimientos`}
+          detail={`${periodLabel} - ${data.movimientosMes ?? data.movimientos} movimientos`}
           color={monthBalance >= 0 ? 'emerald' : 'rose'}
         />
         <KpiCard
-          label="Gastos del mes"
+          label="Gastos del ciclo"
           value={formatMoney(data.gastosMes)}
           detail={`${spendingRate}% de ingresos usados`}
           color={spendingRate >= 100 ? 'rose' : spendingRate >= 75 ? 'amber' : 'sky'}
@@ -107,13 +108,13 @@ export function OverviewSection({
         <KpiCard
           label="Libre proyectado"
           value={formatMoney(projectedFree)}
-          detail="Balance menos deudas y pendientes"
+          detail="Caja menos deudas, fijos y presupuesto"
           color={projectedFree >= 0 ? 'emerald' : 'rose'}
         />
         <KpiCard
           label="Pendiente comprometido"
           value={formatMoney(committedRemaining)}
-          detail={`${commitmentRate}% de ingresos usados o reservados`}
+          detail={`${commitmentRate}% de caja actual comprometida`}
           color={commitmentRate >= 100 ? 'rose' : commitmentRate >= 80 ? 'amber' : 'violet'}
         />
       </section>
@@ -123,7 +124,7 @@ export function OverviewSection({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Title>{closure.label || 'Cierre 23'}</Title>
-              <Text>{data.mes} - cierre mensual {formatDateLabel(closure.closeDate)}</Text>
+              <Text>{periodLabel} - cierre {formatDateLabel(closure.closeDate)}</Text>
               {closure.savedAt ? <Text>Guardado {formatSavedAt(closure.savedAt)}</Text> : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -198,7 +199,7 @@ export function OverviewSection({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Title>Top fugas</Title>
-              <Text>Los 5 gastos variables que mas pesan este mes.</Text>
+              <Text>Los 5 gastos variables que mas pesan este ciclo.</Text>
             </div>
             <Badge color={topFugas.length ? 'amber' : 'emerald'}>{topFugas.length ? `${topFugas.length} alertas` : 'Sin fugas'}</Badge>
           </div>
@@ -220,7 +221,7 @@ export function OverviewSection({
             </div>
           ) : (
             <div className="mt-5">
-              <EmptyState>Sin fugas fuertes este mes.</EmptyState>
+              <EmptyState>Sin fugas fuertes este ciclo.</EmptyState>
             </div>
           )}
         </Card>
@@ -251,7 +252,7 @@ export function OverviewSection({
           <div className="flex items-start justify-between gap-4">
             <div>
               <Title>Gastos por categoria</Title>
-              <Text>{topCategory ? `Principal: ${topCategory.cat}` : 'Sin gastos este mes'}</Text>
+              <Text>{topCategory ? `Principal: ${topCategory.cat}` : 'Sin gastos este ciclo'}</Text>
             </div>
             <Badge color="cyan">{data.categorias.length}</Badge>
           </div>
@@ -280,7 +281,7 @@ export function OverviewSection({
             </>
           ) : (
             <div className="mt-6">
-              <EmptyState>Sin gastos este mes.</EmptyState>
+              <EmptyState>Sin gastos este ciclo.</EmptyState>
             </div>
           )}
         </Card>
@@ -288,7 +289,7 @@ export function OverviewSection({
 
       <section className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 md:grid-cols-3">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <Text>Ingresos del mes</Text>
+          <Text>Ingresos del ciclo</Text>
           <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(monthIncome)}</Metric>
         </Card>
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
@@ -338,7 +339,7 @@ function getClosureSummary(
     presupuestoRestante: fallback.budgetRemaining,
     presupuestoExcedido: Math.max(presupuestoUsado - presupuestoLimite, 0),
     pendienteComprometido,
-    queQueda: fallback.monthBalance - pendienteComprometido,
+    queQueda: fallback.patrimonioDisponible - fallback.budgetRemaining,
     patrimonioDisponible: fallback.patrimonioDisponible,
   };
 }

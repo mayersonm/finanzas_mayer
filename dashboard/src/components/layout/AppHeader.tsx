@@ -1,5 +1,5 @@
 import { RiDatabase2Line, RiLockPasswordLine, RiLogoutBoxRLine, RiMoonLine, RiRefreshLine, RiSunLine } from '@remixicon/react';
-import { formatUpdatedAt } from '../../lib/formatters';
+import { formatDate, formatUpdatedAt } from '../../lib/formatters';
 import type { ApiStatus, DashboardData, DashboardUser } from '../../types/dashboard';
 
 export function AppHeader({
@@ -48,6 +48,9 @@ export function AppHeader({
             <span className="inline-flex h-7 items-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-2.5 text-xs font-semibold text-slate-300">
               Mes: {data.mes}
             </span>
+            <span className="inline-flex h-7 items-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-2.5 text-xs font-semibold text-slate-300">
+              Ciclo: {cycleLabel(data)}
+            </span>
           </div>
           <h1 className="text-xl font-semibold text-slate-100 sm:text-3xl">Mayeson Finanzas</h1>
           <p className="mt-1 text-xs text-slate-400 sm:text-sm">Ultima actualizacion: {loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)}</p>
@@ -93,6 +96,13 @@ export function AppHeader({
       </div>
     </section>
   );
+}
+
+function cycleLabel(data: DashboardData): string {
+  if (data.cycleStart && data.cycleEnd) {
+    return `${formatDate(data.cycleStart)} - ${formatDate(data.cycleEnd)}`;
+  }
+  return data.cycleRange || data.cycleLabel || data.mes;
 }
 
 function HeaderButton({
