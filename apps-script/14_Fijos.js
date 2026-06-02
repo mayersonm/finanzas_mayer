@@ -96,7 +96,7 @@ function mostrarFijos(chatId) {
       '📭 No tienes gastos fijos.\n\nAgrega uno:\n`fijo alquiler 1500 servicios`', true);
   }
 
-  const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
+  const mes = cicloPagoDesdeFecha_(new Date()).key;
   const total = resumenTotalFijos_(fijos);
   const lineas = fijos.map(item => {
     const estado = fijoEstadoTexto_(chatId, item, mes);
@@ -118,7 +118,7 @@ function pagarFijo(chatId, nombre) {
       `❌ No encontré el gasto fijo *${nombre}*.\nEscribe \`fijos\` para ver los activos.`, true);
   }
 
-  const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
+  const mes = cicloPagoDesdeFecha_(new Date()).key;
   if (fijoYaRegistradoEnMes_(chatId, fijo, mes)) {
     return sendMessage(chatId,
       `✅ *${capitalizar(fijo.nombre)}* ya figura como pagado en ${mes}.\nNo dupliqué el gasto.`, true);
@@ -146,7 +146,7 @@ function saltarFijo(chatId, nombre) {
       `❌ No encontré el gasto fijo *${nombre}*.\nEscribe \`fijos\` para ver los activos.`, true);
   }
 
-  const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
+  const mes = cicloPagoDesdeFecha_(new Date()).key;
   const marcadoD1 = marcarEstadoFijoD1_(chatId, fijo, 'saltado', mes);
   if (!marcadoD1) {
     CacheService.getScriptCache()
@@ -197,7 +197,7 @@ function registrarGastosFijos() {
   const fijosSheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Fijos');
   if (!fijosSheet || fijosSheet.getLastRow() < 2) return;
 
-  const mes = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM');
+  const mes = cicloPagoDesdeFecha_(new Date()).key;
   const porChat = {};
 
   leerTodosLosFijos_().forEach(fijo => {

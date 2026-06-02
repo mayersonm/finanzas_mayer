@@ -775,10 +775,10 @@ async function dashboard(env, params) {
   const chatId = getChatId(env, params);
   const now = new Date();
   const cycle = payCycleFromDate(now);
-  const monthKey = localDateKey(now).slice(0, 7);
-  const calendarMonth = monthRangeFromKey(monthKey);
+  const monthKey = cycle.key;
+  const calendarMonth = cycle;
   const cycleKey = monthKey;
-  const monthName = monthLongNameFromKey(`${monthKey}-01`);
+  const monthName = cycle.label;
   const usdRate = Number((await exchangeRate(env)).rate || 3.85);
   const user = await ensureUserForChat(env, chatId);
   const settings = normalizeSettingsConfig(userSettingsToConfig(await getUserSettings(env, user.id)));
@@ -2551,7 +2551,7 @@ async function deleteFixedExpense(env, id, params) {
 async function setFixedExpenseMonthStatus(env, id, payload, params) {
   const chatId = String(params.get('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
   const cleanId = String(id || '').trim();
-  const monthKey = String(payload.month_key || payload.monthKey || localDateKey(new Date()).slice(0, 7)).trim();
+  const monthKey = String(payload.month_key || payload.monthKey || payCycleFromDate(new Date()).key).trim();
   const status = normalizeKey(payload.status || payload.estado || 'pagado');
   const paidDate = normalizeDateOnly(payload.paid_date || payload.paidDate || payload.fecha || localDateKey(new Date())) || localDateKey(new Date());
   const notes = String(payload.notes || payload.notas || '').trim().slice(0, 240);
