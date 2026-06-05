@@ -1,6 +1,6 @@
 import { API_URL, SESSION_STORAGE_KEY } from './config';
 
-type ApiPath = 'dashboard' | 'login' | 'session' | 'logout' | 'password' | 'sync';
+type ApiPath = 'dashboard' | 'calendar' | 'login' | 'session' | 'logout' | 'password' | 'sync';
 
 export function apiEndpoint(path: ApiPath | string): string {
   const dashboardUrl = new URL(API_URL);

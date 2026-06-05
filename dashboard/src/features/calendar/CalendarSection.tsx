@@ -22,6 +22,7 @@ export function CalendarSection({ data, authToken, chatId }: { data: DashboardDa
   const baseCalendar = data.calendario || fallbackCalendar(data);
   const [selectedMonth, setSelectedMonth] = useState(baseCalendar.monthKey);
   const [historyCalendar, setHistoryCalendar] = useState<FinancialCalendar | null>(null);
+  const [calendarCache, setCalendarCache] = useState<Record<string, FinancialCalendar>>({});
   const [loadingMonth, setLoadingMonth] = useState(false);
   const [monthError, setMonthError] = useState('');
   const calendar = historyCalendar?.monthKey === selectedMonth ? historyCalendar : baseCalendar;
@@ -44,22 +45,32 @@ export function CalendarSection({ data, authToken, chatId }: { data: DashboardDa
 
     if (!authToken) return;
 
+    const cached = calendarCache[selectedMonth];
+    if (cached) {
+      setHistoryCalendar(cached);
+      setMonthError('');
+      return;
+    }
+
     let cancelled = false;
     async function loadMonth() {
       setLoadingMonth(true);
       setMonthError('');
       try {
-        const url = new URL(apiEndpoint('dashboard'));
+        const url = new URL(apiEndpoint('calendar'));
         url.searchParams.set('calendar_month', selectedMonth);
         if (chatId) url.searchParams.set('chat_id', chatId);
         const response = await fetch(url.toString(), {
           headers: { Authorization: `Bearer ${authToken}` },
         });
-        const result = await response.json() as DashboardData;
+        const result = await response.json() as { ok?: boolean; error?: string; calendario?: FinancialCalendar };
         if (!response.ok || result.ok === false || !result.calendario) {
           throw new Error(result.error || 'No se pudo cargar el calendario');
         }
-        if (!cancelled) setHistoryCalendar(result.calendario);
+        if (!cancelled) {
+          setHistoryCalendar(result.calendario);
+          setCalendarCache((current) => ({ ...current, [selectedMonth]: result.calendario as FinancialCalendar }));
+        }
       } catch (error) {
         if (!cancelled) setMonthError(error instanceof Error ? error.message : 'No se pudo cargar el calendario');
       } finally {
@@ -71,7 +82,7 @@ export function CalendarSection({ data, authToken, chatId }: { data: DashboardDa
     return () => {
       cancelled = true;
     };
-  }, [authToken, baseCalendar.monthKey, chatId, selectedMonth]);
+  }, [authToken, baseCalendar.monthKey, calendarCache, chatId, selectedMonth]);
 
   return (
     <section className="grid gap-4">
