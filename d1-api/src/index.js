@@ -775,6 +775,7 @@ async function dashboard(env, params) {
   const chatId = getChatId(env, params);
   const now = new Date();
   const requestedCycleStart = normalizeDateOnly(params.get('cycle_start') || params.get('cycleStart') || '');
+  const requestedCalendarMonth = normalizeMonthKey(params.get('calendar_month') || params.get('calendarMonth') || '');
   const cycle = requestedCycleStart ? payCycleFromDate(dateFromKey(requestedCycleStart)) : payCycleFromDate(now);
   const monthKey = cycle.key;
   const calendarMonth = cycle;
@@ -928,7 +929,7 @@ async function dashboard(env, params) {
     debts,
     months,
   });
-  const calendario = await monthlyCalendar(env, chatId, now, calendarMonth, fixedExpenses, debts, alerts, objetivoSemanal, usdRate);
+  const calendario = await monthlyCalendar(env, chatId, now, calendarMonth, fixedExpenses, debts, alerts, objetivoSemanal, usdRate, requestedCalendarMonth);
 
   return {
     ok: true,
@@ -3813,16 +3814,21 @@ function weekRangeFromDate(today, cycle) {
   };
 }
 
-async function monthlyCalendar(env, chatId, now, cycle, fixedExpenses, debts, alerts, weeklyGoal, usdRate = 3.85) {
-  const month = monthRangeFromKey(localDateKey(now).slice(0, 7));
+async function monthlyCalendar(env, chatId, now, cycle, fixedExpenses, debts, alerts, weeklyGoal, usdRate = 3.85, requestedMonthKey = '') {
+  const month = monthRangeFromKey(requestedMonthKey || localDateKey(now).slice(0, 7));
   const today = localDateKey(now);
   const events = [];
+  const monthCloseParts = parseDateKeyParts(month.closeDate);
+  const monthCycle = payCycleFromDate(dateFromKey(dateKeyFromParts(monthCloseParts.year, monthCloseParts.monthIndex, 22)));
+  const calendarFixedExpenses = month.key === cycle.closeKey
+    ? fixedExpenses
+    : await fixedExpensesList(env, chatId, monthCycle.key, usdRate, monthCycle);
 
-  if (dateInRange(cycle.closeDate, month.startKey, month.endKey)) {
+  if (dateInRange(monthCycle.closeDate, month.startKey, month.endKey)) {
     events.push(calendarEvent({
-      date: cycle.closeDate,
+      date: monthCycle.closeDate,
       type: 'cierre',
-      title: `Cierre ${cycle.closeDate.slice(8, 10)}/${cycle.closeDate.slice(5, 7)}`,
+      title: `Cierre ${monthCycle.closeDate.slice(8, 10)}/${monthCycle.closeDate.slice(5, 7)}`,
       description: 'Cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto.',
       priority: 'high',
     }));
@@ -3840,8 +3846,8 @@ async function monthlyCalendar(env, chatId, now, cycle, fixedExpenses, debts, al
     }));
   }
 
-  for (const item of fixedExpenses || []) {
-    const date = item.estado === 'pagado' && item.paidDate ? item.paidDate : cycle.closeDate;
+  for (const item of calendarFixedExpenses || []) {
+    const date = item.estado === 'pagado' && item.paidDate ? item.paidDate : monthCycle.closeDate;
     if (!dateInRange(date, month.startKey, month.endKey)) continue;
     events.push(calendarEvent({
       date,
@@ -3930,10 +3936,10 @@ async function monthlyCalendar(env, chatId, now, cycle, fixedExpenses, debts, al
     start: month.startKey,
     end: month.endKey,
     today,
-    cycleStart: cycle.startKey,
-    cycleEnd: cycle.endKey,
-    cycleClose: cycle.closeDate,
-    cycleRange: cycle.rangeLabel,
+    cycleStart: monthCycle.startKey,
+    cycleEnd: monthCycle.endKey,
+    cycleClose: monthCycle.closeDate,
+    cycleRange: monthCycle.rangeLabel,
     events: sortedEvents,
     dailyTotals,
     summary: {
@@ -4655,6 +4661,12 @@ function normalizePaymentMethod(value) {
 function normalizeDateOnly(value) {
   const text = String(value || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  return '';
+}
+
+function normalizeMonthKey(value) {
+  const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}$/.test(text)) return text;
   return '';
 }
 
