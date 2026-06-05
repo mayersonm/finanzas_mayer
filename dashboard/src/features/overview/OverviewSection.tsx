@@ -1,13 +1,15 @@
-import { useState } from 'react';
-import { RiSave3Line } from '@remixicon/react';
-import { Badge, BarChart, Card, DonutChart, Metric, ProgressBar, Text, Title } from '@tremor/react';
+import { useState, type ReactNode } from 'react';
 import { apiEndpoint } from '../../app/api';
 import { KpiCard } from '../../components/dashboard/KpiCard';
 import { EmptyState } from '../../components/common/EmptyState';
+import { SaveIcon } from '../../components/common/AppIcons';
 import { percent } from '../../lib/finance';
 import { formatMoney } from '../../lib/formatters';
-import { categoryColors } from '../../lib/tremorColors';
 import type { ClosureSummary, DashboardData, RealExpenses } from '../../types/dashboard';
+
+type Tone = 'emerald' | 'amber' | 'sky' | 'rose' | 'violet' | 'cyan' | 'orange' | 'teal';
+
+const categoryColors: Tone[] = ['emerald', 'amber', 'sky', 'rose', 'violet', 'cyan', 'orange', 'teal'];
 
 export function OverviewSection({
   data,
@@ -139,7 +141,7 @@ export function OverviewSection({
                 disabled={!authToken || closing}
                 onClick={() => void saveClosure()}
               >
-                <RiSave3Line className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <SaveIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span className="truncate">{closing ? 'Guardando' : closure.saved ? 'Actualizar cierre' : 'Cerrar mes'}</span>
               </button>
             </div>
@@ -317,6 +319,187 @@ export function OverviewSection({
     </>
   );
 }
+
+function Card({ className = '', children }: { className?: string; children: ReactNode }) {
+  return (
+    <div className={`rounded-tremor-default border border-slate-800 bg-slate-950/70 shadow-sm ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function Title({ children }: { children: ReactNode }) {
+  return <h2 className="text-lg font-semibold text-slate-100">{children}</h2>;
+}
+
+function Text({ className = '', children }: { className?: string; children: ReactNode }) {
+  return <p className={`text-sm text-slate-400 ${className}`}>{children}</p>;
+}
+
+function Metric({ className = '', children }: { className?: string; children: ReactNode }) {
+  return <p className={`font-mono font-semibold text-slate-100 ${className}`}>{children}</p>;
+}
+
+function Badge({ color = 'sky', children }: { color?: Tone | string; children: ReactNode }) {
+  const classes = badgeClasses[color] || badgeClasses.sky;
+  return (
+    <span className={`inline-flex min-h-6 shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${classes}`}>
+      {children}
+    </span>
+  );
+}
+
+function ProgressBar({ className = '', value, color = 'emerald' }: { className?: string; value: number; color?: Tone | string }) {
+  const pct = Math.max(0, Math.min(Number.isFinite(value) ? value : 0, 100));
+  const fillClass = progressClasses[color] || progressClasses.sky;
+
+  return (
+    <div className={`h-2 overflow-hidden rounded-full bg-slate-800 ${className}`} aria-hidden="true">
+      <span className={`block h-full rounded-full ${fillClass}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function BarChart({
+  className = '',
+  data,
+  index,
+  categories,
+  colors,
+  valueFormatter,
+}: {
+  className?: string;
+  data: object[];
+  index: string;
+  categories: string[];
+  colors: Tone[];
+  valueFormatter: (value: number) => string;
+  yAxisWidth?: number;
+  showLegend?: boolean;
+}) {
+  const maxValue = Math.max(1, ...data.flatMap((item) => categories.map((category) => getValue(item, category))));
+
+  return (
+    <figure className={`flex flex-col ${className}`} aria-label="Ingresos y gastos de los ultimos 6 meses">
+      <div className="mb-3 flex flex-wrap justify-end gap-3 text-xs text-slate-400">
+        {categories.map((category, indexColor) => (
+          <span key={category} className="inline-flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-full ${progressClasses[colors[indexColor] || 'sky']}`} aria-hidden="true" />
+            {category}
+          </span>
+        ))}
+      </div>
+      <div className="grid flex-1 items-end gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, minmax(0, 1fr))` }}>
+        {data.map((item) => (
+          <div key={getLabel(item, index)} className="flex min-w-0 flex-col justify-end gap-2">
+            <div className="flex min-h-36 items-end justify-center gap-1 border-b border-slate-800 px-1 pb-1">
+              {categories.map((category, indexColor) => {
+                const amount = getValue(item, category);
+                const barHeight = amount > 0 ? Math.max((amount / maxValue) * 100, 4) : 0;
+                return (
+                  <span
+                    key={category}
+                    className={`w-full max-w-5 rounded-t-sm ${progressClasses[colors[indexColor] || 'sky']}`}
+                    style={{ height: `${barHeight}%` }}
+                    title={`${category}: ${valueFormatter(amount)}`}
+                  />
+                );
+              })}
+            </div>
+            <span className="truncate text-center text-xs text-slate-400">{getLabel(item, index)}</span>
+          </div>
+        ))}
+      </div>
+    </figure>
+  );
+}
+
+function DonutChart({
+  className = '',
+  data,
+  category,
+  index,
+  colors,
+  valueFormatter,
+}: {
+  className?: string;
+  data: object[];
+  category: string;
+  index: string;
+  colors: Tone[];
+  valueFormatter: (value: number) => string;
+  showLabel?: boolean;
+}) {
+  const total = data.reduce((sum, item) => sum + getValue(item, category), 0);
+  let cursor = 0;
+  const segments = total > 0
+    ? data.map((item, idx) => {
+        const value = getValue(item, category);
+        const start = cursor;
+        const end = cursor + (value / total) * 100;
+        cursor = end;
+        return `${toneHex[colors[idx % colors.length] || 'sky']} ${start}% ${end}%`;
+      })
+    : [`${toneHex.sky} 0% 100%`];
+
+  return (
+    <figure className={`flex items-center justify-center ${className}`} aria-label={`Gastos por categoria: ${valueFormatter(total)}`}>
+      <div
+        className="relative aspect-square h-full max-h-56 rounded-full"
+        style={{ background: `conic-gradient(${segments.join(', ')})` }}
+      >
+        <div className="absolute inset-[22%] flex flex-col items-center justify-center rounded-full border border-slate-800 bg-slate-950 text-center">
+          <span className="text-xs text-slate-400">Total</span>
+          <span className="mt-1 max-w-[6.5rem] truncate font-mono text-sm font-semibold text-slate-100">{valueFormatter(total)}</span>
+          {data[0] ? <span className="mt-1 max-w-[6.5rem] truncate text-xs text-slate-400">{getLabel(data[0], index)}</span> : null}
+        </div>
+      </div>
+    </figure>
+  );
+}
+
+function getValue(item: object, key: string) {
+  const value = (item as Record<string, unknown>)[key];
+  return typeof value === 'number' ? value : Number(value || 0);
+}
+
+function getLabel(item: object, key: string) {
+  const value = (item as Record<string, unknown>)[key];
+  return value == null ? '' : String(value);
+}
+
+const badgeClasses: Record<string, string> = {
+  emerald: 'bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-400/30',
+  amber: 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/30',
+  sky: 'bg-sky-500/15 text-sky-200 ring-1 ring-sky-400/30',
+  rose: 'bg-rose-500/15 text-rose-200 ring-1 ring-rose-400/30',
+  violet: 'bg-violet-500/15 text-violet-200 ring-1 ring-violet-400/30',
+  cyan: 'bg-cyan-500/15 text-cyan-200 ring-1 ring-cyan-400/30',
+  orange: 'bg-orange-500/15 text-orange-200 ring-1 ring-orange-400/30',
+  teal: 'bg-teal-500/15 text-teal-200 ring-1 ring-teal-400/30',
+};
+
+const progressClasses: Record<string, string> = {
+  emerald: 'bg-emerald-400',
+  amber: 'bg-amber-400',
+  sky: 'bg-sky-400',
+  rose: 'bg-rose-400',
+  violet: 'bg-violet-400',
+  cyan: 'bg-cyan-400',
+  orange: 'bg-orange-400',
+  teal: 'bg-teal-400',
+};
+
+const toneHex: Record<string, string> = {
+  emerald: '#34d399',
+  amber: '#fbbf24',
+  sky: '#38bdf8',
+  rose: '#fb7185',
+  violet: '#a78bfa',
+  cyan: '#22d3ee',
+  orange: '#fb923c',
+  teal: '#2dd4bf',
+};
 
 function getClosureSummary(
   data: DashboardData,

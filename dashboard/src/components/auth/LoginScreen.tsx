@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react';
-import { RiShieldKeyholeLine } from '@remixicon/react';
+import { ShieldIcon } from '../common/AppIcons';
 
 export function LoginScreen({
   email,
@@ -32,7 +32,7 @@ export function LoginScreen({
         </div>
 
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-200">
-          <RiShieldKeyholeLine className="h-4 w-4" />
+          <ShieldIcon className="h-4 w-4" aria-hidden="true" />
           Acceso seguro
         </span>
         <h1 className="mt-4 text-xl font-semibold text-slate-100 sm:text-2xl">Mayeson Finanzas</h1>
