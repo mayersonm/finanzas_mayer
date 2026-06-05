@@ -4318,22 +4318,26 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets
     .filter((item) => normalizeCurrency(item.currency || 'PEN') === 'USD')
     .reduce((total, item) => total + Number(item.pendiente || 0), 0);
   const topCategory = [...categories].sort((a, b) => Number(b.monto || 0) - Number(a.monto || 0))[0];
+  const categorizedSpend = categories.reduce((total, item) => total + Number(item.monto || 0), 0);
   const prev = months.length >= 2 ? months[months.length - 2] : null;
   const current = months.length ? months[months.length - 1] : null;
 
-  if (topCategory && gastosMes > 0) {
-    const pct = Math.round((Number(topCategory.monto || 0) / gastosMes) * 100);
+  if (topCategory && categorizedSpend > 0) {
+    const topAmount = Number(topCategory.monto || 0);
+    const pct = Math.round((topAmount / categorizedSpend) * 100);
     insights.push({
       title: `Mayor fuga: ${title(topCategory.cat)}`,
-      message: `Representa ${pct}% del gasto del ciclo. Revisa si ese ritmo sigue siendo intencional.`,
+      message: `${formatCurrency(topAmount, 'PEN')} representa ${pct}% del gasto categorizado del ciclo. Revisa si ese ritmo sigue siendo intencional.`,
     });
   }
 
   if (prev && current && Number(prev.gastos || 0) > 0) {
-    const delta = Math.round(((Number(current.gastos || 0) - Number(prev.gastos || 0)) / Number(prev.gastos || 1)) * 100);
+    const currentSpend = Number(current.gastos || 0);
+    const prevSpend = Number(prev.gastos || 0);
+    const delta = Math.round(((currentSpend - prevSpend) / Number(prev.gastos || 1)) * 100);
     insights.push({
       title: delta >= 0 ? 'Gasto acelerado' : 'Gasto mas controlado',
-      message: `Vas ${Math.abs(delta)}% ${delta >= 0 ? 'por encima' : 'por debajo'} del ciclo anterior.`,
+      message: `En mes calendario vas ${Math.abs(delta)}% ${delta >= 0 ? 'por encima' : 'por debajo'} de ${prev.label || prev.mes}: ${formatCurrency(currentSpend, 'PEN')} vs ${formatCurrency(prevSpend, 'PEN')}.`,
     });
   }
 
@@ -4344,7 +4348,7 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets
   if (riskyBudget && riskyBudget.pct >= 70) {
     insights.push({
       title: `Presupuesto sensible: ${riskyBudget.cat}`,
-      message: `Esta categoria ya va en ${riskyBudget.pct}% del limite.`,
+      message: `Lleva ${formatCurrency(riskyBudget.gasto || 0, 'PEN')} de ${formatCurrency(riskyBudget.limite || 0, 'PEN')} (${riskyBudget.pct}% del limite).`,
     });
   }
 
@@ -4363,7 +4367,7 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets
     const savingsRate = Math.round((balanceMes / ingresosMes) * 100);
     insights.push({
       title: savingsRate >= 20 ? 'Buen margen de ahorro' : 'Margen ajustado',
-      message: `Tu margen del ciclo es ${savingsRate}%. ${savingsRate >= 20 ? 'Buen espacio para metas.' : 'Conviene proteger caja.'}`,
+      message: `Balance del ciclo: ${formatCurrency(balanceMes, 'PEN')} (${savingsRate}% de ingresos). ${savingsRate >= 20 ? 'Buen espacio para metas.' : 'Conviene proteger caja.'}`,
     });
   }
 

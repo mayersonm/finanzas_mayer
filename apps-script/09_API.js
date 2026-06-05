@@ -787,11 +787,14 @@ function dashSmartInsights_(monthTxs, categorias, presupuestos, deudas, meses) {
   const ingresosMes = dashSum_(monthTxs, 'ingreso');
   const insights = [];
   const top = categorias[0];
+  const gastoCategorizado = categorias.reduce(function (total, item) {
+    return total + Number(item.monto || 0);
+  }, 0);
 
-  if (top && gastosMes > 0) {
+  if (top && gastoCategorizado > 0) {
     insights.push({
       title: 'Mayor fuga: ' + top.cat,
-      message: 'Representa ' + Math.round((top.monto / gastosMes) * 100) + '% del gasto del mes.',
+      message: dashMoney_(top.monto, 'PEN') + ' representa ' + Math.round((top.monto / gastoCategorizado) * 100) + '% del gasto categorizado del mes.',
     });
   }
 
@@ -801,26 +804,42 @@ function dashSmartInsights_(monthTxs, categorias, presupuestos, deudas, meses) {
     const delta = Math.round(((curr.gastos - prev.gastos) / prev.gastos) * 100);
     insights.push({
       title: delta >= 0 ? 'Gasto acelerado' : 'Gasto mas controlado',
-      message: 'Vas ' + Math.abs(delta) + '% ' + (delta >= 0 ? 'por encima' : 'por debajo') + ' del mes anterior.',
+      message: 'En mes calendario vas ' + Math.abs(delta) + '% ' + (delta >= 0 ? 'por encima' : 'por debajo') + ': ' + dashMoney_(curr.gastos, 'PEN') + ' vs ' + dashMoney_(prev.gastos, 'PEN') + '.',
     });
   }
 
-  const deudaTotal = deudas
-    .filter(function (item) { return item.estado === 'activa'; })
-    .reduce(function (total, item) { return total + item.pendiente; }, 0);
-  if (deudaTotal > 0) {
-    insights.push({ title: 'Deuda pendiente', message: 'Tienes S/ ' + deudaTotal.toFixed(2) + ' pendiente. Prioriza lo que vence primero.' });
+  const deudaActiva = deudas.filter(function (item) { return item.estado === 'activa'; });
+  const deudaPen = deudaActiva
+    .filter(function (item) { return dashCurrency_(item.currency || item.moneda) !== 'USD'; })
+    .reduce(function (total, item) { return total + Number(item.pendiente || 0); }, 0);
+  const deudaUsd = deudaActiva
+    .filter(function (item) { return dashCurrency_(item.currency || item.moneda) === 'USD'; })
+    .reduce(function (total, item) { return total + Number(item.pendiente || 0); }, 0);
+  if (deudaPen > 0 || deudaUsd > 0) {
+    const partes = [];
+    if (deudaPen > 0) partes.push(dashMoney_(deudaPen, 'PEN'));
+    if (deudaUsd > 0) partes.push(dashMoney_(deudaUsd, 'USD'));
+    insights.push({ title: 'Deuda pendiente', message: 'Tienes ' + partes.join(' + ') + ' pendiente. Prioriza lo que vence primero.' });
   }
 
   if (ingresosMes > 0) {
-    const margen = Math.round(((ingresosMes - gastosMes) / ingresosMes) * 100);
+    const balance = ingresosMes - gastosMes;
+    const margen = Math.round((balance / ingresosMes) * 100);
     insights.push({
       title: margen >= 20 ? 'Buen margen de ahorro' : 'Margen ajustado',
-      message: 'Tu margen del mes es ' + margen + '%.',
+      message: 'Balance del mes: ' + dashMoney_(balance, 'PEN') + ' (' + margen + '% de ingresos).',
     });
   }
 
   return insights.slice(0, 6);
+}
+
+function dashCurrency_(currency) {
+  return String(currency || 'PEN').trim().toUpperCase() === 'USD' ? 'USD' : 'PEN';
+}
+
+function dashMoney_(amount, currency) {
+  return (dashCurrency_(currency) === 'USD' ? 'US$ ' : 'S/ ') + Number(amount || 0).toFixed(2);
 }
 
 function dashSum_(txs, type) {

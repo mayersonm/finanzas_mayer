@@ -115,7 +115,7 @@ export function AnalysisSection({ data }: { data: DashboardData }) {
 
       <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6 lg:col-span-2">
         <Title>Insights</Title>
-        <Text>Lecturas accionables sobre el mes actual</Text>
+        <Text>Lecturas accionables sobre el ciclo actual</Text>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {insights.length ? (
             insights.map((item) => (

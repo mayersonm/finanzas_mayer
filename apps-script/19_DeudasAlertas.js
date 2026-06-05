@@ -185,7 +185,7 @@ function cmdInsightsIA(chatId) {
     chatId,
     `*Preparando insights IA...*\n\n` +
     `Estoy leyendo:\n` +
-    `- ${contexto.movimientosMes} movimientos de este mes\n` +
+    `- ${contexto.movimientosMes} movimientos del ciclo\n` +
     `- ${contexto.categoriasCount} categorias con gasto\n` +
     `- ${contexto.deudasActivas} deudas activas\n` +
     `- ${contexto.alertasCount} alertas inteligentes\n\n` +
@@ -197,6 +197,8 @@ function cmdInsightsIA(chatId) {
   const prompt = [
     'Eres un asesor financiero personal para Mayeson en Peru.',
     'Da insights accionables, breves y concretos. No des teoria.',
+    'Usa solo los montos del resumen. No inventes importes, fechas ni categorias.',
+    'Si comparas ciclo y mes calendario, dilo explicitamente.',
     '',
     resumen,
     '',
@@ -350,20 +352,31 @@ function resumenFinancieroParaIA_(chatId) {
   const d1 = leerDashboardD1_(chatId);
   if (d1 && d1.ok) {
     const deudas = (d1.deudas || []).filter(d => d.estado !== 'pagada' && Number(d.pendiente || 0) > 0);
-    const deudaPen = deudas.filter(d => d.currency !== 'USD').reduce((a, d) => a + Number(d.pendiente || 0), 0);
-    const deudaUsd = deudas.filter(d => d.currency === 'USD').reduce((a, d) => a + Number(d.pendiente || 0), 0);
+    const deudaPen = deudas.filter(d => normalizarMoneda_(d.currency) !== 'USD').reduce((a, d) => a + Number(d.pendiente || 0), 0);
+    const deudaUsd = deudas.filter(d => normalizarMoneda_(d.currency) === 'USD').reduce((a, d) => a + Number(d.pendiente || 0), 0);
+    const ciclo = d1.cycleRange || d1.cycleLabel || (d1.cierre && d1.cierre.range) || d1.mesKey || d1.mes || '';
+    const totalCategorias = (d1.categorias || []).reduce((total, item) => total + Number(item.monto || 0), 0);
     const topCats = (d1.categorias || [])
       .slice(0, 5)
-      .map(item => `- ${item.cat}: S/ ${Number(item.monto || 0).toFixed(2)}`)
+      .map(item => {
+        const monto = Number(item.monto || 0);
+        const pct = totalCategorias > 0 ? Math.round((monto / totalCategorias) * 100) : 0;
+        return `- ${item.cat}: ${formatoMoneda_(monto, 'PEN')} (${pct}% del gasto categorizado)`;
+      })
       .join('\n');
 
     return [
-      `Ciclo: ${d1.mes || d1.mesKey || ''}`,
-      `Ingresos: S/ ${Number(d1.ingresosMes || 0).toFixed(2)}`,
-      `Gastos: S/ ${Number(d1.gastosMes || 0).toFixed(2)}`,
-      `Balance: S/ ${Number(d1.balanceMes || 0).toFixed(2)}`,
-      `Deuda pendiente PEN: S/ ${deudaPen.toFixed(2)}`,
-      `Deuda pendiente USD: US$ ${deudaUsd.toFixed(2)}`,
+      `Ciclo contable: ${ciclo}`,
+      `Mes visible: ${d1.mes || d1.mesKey || ''}`,
+      `Ingresos del ciclo: ${formatoMoneda_(d1.ingresosMes, 'PEN')}`,
+      `Gastos del ciclo: ${formatoMoneda_(d1.gastosMes, 'PEN')}`,
+      `Balance del ciclo: ${formatoMoneda_(d1.balanceMes, 'PEN')}`,
+      `Deuda pendiente PEN: ${formatoMoneda_(deudaPen, 'PEN')}`,
+      `Deuda pendiente USD: ${formatoMoneda_(deudaUsd, 'USD')}`,
+      'Reglas para interpretar:',
+      '- Usa solo estos montos; no inventes importes ni fechas.',
+      '- El ciclo contable es 23-22; las transacciones conservan su fecha real.',
+      '- Gastos del ciclo puede incluir fijos pagados; top categorias muestra gasto categorizado/variable.',
       'Top categorias:',
       topCats || '- sin gastos',
       'Alertas:',
@@ -383,21 +396,28 @@ function resumenFinancieroParaIA_(chatId) {
     gastosCat[cat] = (gastosCat[cat] || 0) + (parseFloat(r[5]) || 0);
   });
   const deudas = leerDeudas_(chatId).filter(d => d.estado !== 'pagada' && d.pendiente > 0);
-  const deudaPen = deudas.filter(d => d.currency !== 'USD').reduce((a, d) => a + d.pendiente, 0);
-  const deudaUsd = deudas.filter(d => d.currency === 'USD').reduce((a, d) => a + d.pendiente, 0);
+  const deudaPen = deudas.filter(d => normalizarMoneda_(d.currency) !== 'USD').reduce((a, d) => a + d.pendiente, 0);
+  const deudaUsd = deudas.filter(d => normalizarMoneda_(d.currency) === 'USD').reduce((a, d) => a + d.pendiente, 0);
+  const totalCategorias = Object.keys(gastosCat).reduce((total, cat) => total + Number(gastosCat[cat] || 0), 0);
   const topCats = Object.entries(gastosCat)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
-    .map(([cat, monto]) => `- ${cat}: S/ ${monto.toFixed(2)}`)
+    .map(([cat, monto]) => {
+      const pct = totalCategorias > 0 ? Math.round((monto / totalCategorias) * 100) : 0;
+      return `- ${cat}: ${formatoMoneda_(monto, 'PEN')} (${pct}% del gasto categorizado)`;
+    })
     .join('\n');
 
   return [
-    `Ciclo: ${periodo.label}`,
-    `Ingresos: S/ ${ingresos.toFixed(2)}`,
-    `Gastos: S/ ${gastos.toFixed(2)}`,
-    `Balance: S/ ${(ingresos - gastos).toFixed(2)}`,
-    `Deuda pendiente PEN: S/ ${deudaPen.toFixed(2)}`,
-    `Deuda pendiente USD: US$ ${deudaUsd.toFixed(2)}`,
+    `Ciclo contable: ${periodo.label}`,
+    `Ingresos del ciclo: ${formatoMoneda_(ingresos, 'PEN')}`,
+    `Gastos del ciclo: ${formatoMoneda_(gastos, 'PEN')}`,
+    `Balance del ciclo: ${formatoMoneda_(ingresos - gastos, 'PEN')}`,
+    `Deuda pendiente PEN: ${formatoMoneda_(deudaPen, 'PEN')}`,
+    `Deuda pendiente USD: ${formatoMoneda_(deudaUsd, 'USD')}`,
+    'Reglas para interpretar:',
+    '- Usa solo estos montos; no inventes importes ni fechas.',
+    '- El ciclo contable es 23-22; las transacciones conservan su fecha real.',
     'Top categorias:',
     topCats || '- sin gastos',
     'Alertas:',
