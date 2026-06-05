@@ -1,4 +1,12 @@
-import { RiAlarmWarningLine, RiBankCardLine, RiCalendarCheckLine, RiFlagLine, RiLoopLeftLine, RiMoneyDollarCircleLine, RiTargetLine } from '@remixicon/react';
+import {
+  RiAlarmWarningLine,
+  RiBankCardLine,
+  RiCalendarCheckLine,
+  RiFlagLine,
+  RiLoopLeftLine,
+  RiMoneyDollarCircleLine,
+  RiTargetLine,
+} from '@remixicon/react';
 import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatDate, formatMoney } from '../../lib/formatters';
@@ -13,174 +21,185 @@ export function CalendarSection({ data }: { data: DashboardData }) {
   const eventsByDate = groupEventsByDate(calendar.events);
   const dailyTotalsByDate = groupDailyTotals(calendar.dailyTotals || []);
   const days = calendarDays(calendar);
-  const nextEvents = calendar.events.slice(0, 8);
-  const weeklyColor = weeklyTone(weekly.status);
-  const closureColor = closureTone(closure?.status || 'waiting');
+  const agenda = calendar.events.slice(0, 10);
   const monthSpend = calendar.summary.gastos ?? (calendar.dailyTotals || []).reduce((total, item) => total + Number(item.gastos || 0), 0);
 
   return (
     <section className="grid gap-4">
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)_minmax(280px,0.8fr)]">
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <Title>Calendario financiero</Title>
-              <Text>{calendar.label} - ciclo {calendar.cycleRange}</Text>
-            </div>
-            <Badge color="cyan">{calendar.events.length} eventos</Badge>
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <Title>Calendario financiero</Title>
+            <Text>{calendar.label} - ciclo {calendar.cycleRange}</Text>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-            <CalendarMini label="Gasto mes" value={formatMoney(monthSpend)} strong />
-            <CalendarMini label="Fijos" value={calendar.summary.fijos} />
-            <CalendarMini label="Deudas" value={calendar.summary.deudas} />
-            <CalendarMini label="Credito" value={calendar.summary.credito} />
-            <CalendarMini label="Alertas" value={calendar.summary.alertas} />
+          <div className="grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap sm:justify-end">
+            <HeaderStat label="Gasto" value={formatMoney(monthSpend)} tone="rose" />
+            <HeaderStat label="Fijos" value={calendar.summary.fijos} />
+            <HeaderStat label="Deudas" value={calendar.summary.deudas} />
+            <HeaderStat label="Credito" value={calendar.summary.credito} />
+            <HeaderStat label="Alertas" value={calendar.summary.alertas} />
           </div>
-        </Card>
+        </div>
+      </Card>
 
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <div className="flex items-start gap-3">
-            <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-tremor-default ${weeklyColor.icon}`}>
-              <RiTargetLine className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Title>Objetivo semanal</Title>
-                <Badge color={weeklyColor.badge}>{weekly.status}</Badge>
-              </div>
-              <Text>{weekly.range}</Text>
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <span className="text-slate-400">Usado</span>
-              <span className="font-mono font-semibold text-slate-100">{formatMoney(weekly.spent)} / {formatMoney(weekly.target)}</span>
-            </div>
-            <ProgressBar className="mt-2" value={weekly.progressPct} color={weeklyColor.progress} />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-            <CalendarMini label="Queda" value={formatMoney(weekly.remaining)} />
-            <CalendarMini label="Diario" value={formatMoney(weekly.dailyRemaining)} />
-          </div>
-          <Text className="mt-3">{weekly.message}</Text>
-        </Card>
-
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-tremor-default bg-emerald-500/15 text-emerald-200">
-              <RiLoopLeftLine className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Title>Regla de cierre</Title>
-                <Badge color={closureColor}>{closure?.status || 'waiting'}</Badge>
-              </div>
-              <Text>{closure?.targetCycleRange || calendar.cycleRange}</Text>
-            </div>
-          </div>
-          <div className="mt-4 rounded-tremor-default border border-slate-800 bg-slate-900/50 p-3">
-            <p className="text-sm font-semibold text-slate-100">{closure?.title || 'Cierre programado'}</p>
-            <p className="mt-1 text-sm text-slate-400">{closure?.message || `Cierre ${formatDate(calendar.cycleClose)}.`}</p>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <CalendarMini label="Ahorro sugerido" value={formatMoney(closure?.suggestedSavings || 0)} />
-            <CalendarMini label="Para gastar" value={formatMoney(closure?.availableToSpend || data.dineroLibre?.availableToSpend || 0)} />
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-3 sm:!p-5">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-3 sm:!p-4">
           <div className="overflow-x-auto">
-            <div className="min-w-[56rem]">
-              <div className="grid grid-cols-7 gap-2">
+            <div className="min-w-[44rem]">
+              <div className="grid grid-cols-7 gap-1.5">
                 {WEEK_DAYS.map((day) => (
                   <div key={day} className="rounded-tremor-default border border-slate-800 bg-slate-900/40 px-2 py-2 text-center text-xs font-semibold uppercase text-slate-500">
                     {day}
                   </div>
                 ))}
                 {Array.from({ length: days.offset }).map((_, index) => (
-                  <div key={`empty-${index}`} className="min-h-[8.5rem] rounded-tremor-default border border-slate-800/60 bg-slate-900/20" />
+                  <div key={`empty-${index}`} className="min-h-[6.25rem] rounded-tremor-default border border-slate-800/60 bg-slate-900/20" />
                 ))}
-                {days.items.map((day) => {
-                  const events = eventsByDate[day.date] || [];
-                  const daily = dailyTotalsByDate[day.date];
-                  const isToday = day.date === calendar.today;
-                  return (
-                    <div key={day.date} className={`min-h-[8.5rem] rounded-tremor-default border p-2 shadow-sm ${isToday ? 'border-emerald-400/70 bg-emerald-500/10' : 'border-slate-800 bg-slate-900/40'}`}>
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className={`text-sm font-semibold ${isToday ? 'text-emerald-200' : 'text-slate-200'}`}>{day.day}</span>
-                        {events.length ? <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[0.65rem] font-semibold text-slate-300">{events.length}</span> : null}
-                      </div>
-                      <DaySpend daily={daily} />
-                      <div className="space-y-1">
-                        {events.slice(0, 2).map((event) => <EventPill key={event.id} event={event} />)}
-                        {events.length > 2 ? <p className="text-[0.68rem] text-slate-500">+{events.length - 2} mas</p> : null}
-                      </div>
-                    </div>
-                  );
-                })}
+                {days.items.map((day) => (
+                  <DayCell
+                    key={day.date}
+                    day={day}
+                    daily={dailyTotalsByDate[day.date]}
+                    events={eventsByDate[day.date] || []}
+                    isToday={day.date === calendar.today}
+                  />
+                ))}
               </div>
             </div>
           </div>
         </Card>
 
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <Title>Proximos eventos</Title>
-              <Text>Ordenado por fecha real</Text>
-            </div>
-            <Badge color={nextEvents.length ? 'cyan' : 'emerald'}>{nextEvents.length || 'OK'}</Badge>
-          </div>
-          <div className="mt-4 grid gap-2">
-            {nextEvents.length ? (
-              nextEvents.map((event) => <EventRow key={event.id} event={event} />)
-            ) : (
-              <EmptyState>Sin eventos este mes.</EmptyState>
-            )}
-          </div>
-        </Card>
+        <aside className="grid gap-4">
+          <WeeklyCard weekly={weekly} />
+          <ClosureCard closure={closure} calendar={calendar} data={data} />
+          <AgendaCard events={agenda} />
+        </aside>
       </div>
     </section>
   );
 }
 
-function CalendarMini({ label, value, strong }: { label: string; value: string | number; strong?: boolean }) {
+function HeaderStat({ label, value, tone = 'slate' }: { label: string; value: string | number; tone?: 'slate' | 'rose' }) {
+  const valueClass = tone === 'rose' ? 'text-rose-200' : 'text-slate-100';
   return (
-    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 truncate font-mono text-sm font-semibold ${strong ? 'text-emerald-200' : 'text-slate-100'}`}>{value}</p>
+    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 px-3 py-2">
+      <p className="text-[0.68rem] font-medium uppercase text-slate-500">{label}</p>
+      <p className={`mt-0.5 truncate font-mono text-sm font-semibold ${valueClass}`}>{value}</p>
     </div>
   );
 }
 
-function DaySpend({ daily }: { daily?: { gastos: number; ingresos: number; movimientos: number } }) {
-  if (!daily || (!daily.gastos && !daily.ingresos)) {
-    return <div className="mb-2 h-7 rounded-tremor-default border border-dashed border-slate-800/70 bg-slate-900/20" />;
-  }
+function DayCell({
+  day,
+  daily,
+  events,
+  isToday,
+}: {
+  day: { date: string; day: number };
+  daily?: { gastos: number; ingresos: number; movimientos: number };
+  events: CalendarEvent[];
+  isToday: boolean;
+}) {
+  const hasSpend = Boolean(daily?.gastos);
+  const hasIncome = Boolean(daily?.ingresos);
 
   return (
-    <div className="mb-2 rounded-tremor-default border border-rose-500/25 bg-rose-500/10 px-2 py-1">
+    <div className={`min-h-[6.25rem] rounded-tremor-default border p-2 transition ${isToday ? 'border-emerald-400/70 bg-emerald-500/10' : 'border-slate-800 bg-slate-900/40'}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[0.68rem] font-semibold uppercase text-rose-200">Gasto</span>
-        <span className="font-mono text-[0.72rem] font-bold text-rose-200">{formatMoney(daily.gastos)}</span>
+        <span className={`text-sm font-semibold ${isToday ? 'text-emerald-200' : 'text-slate-200'}`}>{day.day}</span>
+        {events.length ? <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[0.65rem] font-semibold text-slate-300">{events.length}</span> : null}
       </div>
-      {daily.movimientos ? <p className="mt-0.5 truncate text-[0.65rem] text-slate-500">{daily.movimientos} mov.</p> : null}
+
+      <div className="mt-2 min-h-[2.1rem]">
+        {hasSpend ? (
+          <div className="rounded-tremor-default border border-rose-500/25 bg-rose-500/10 px-2 py-1">
+            <p className="text-[0.64rem] font-semibold uppercase text-rose-200">Gasto</p>
+            <p className="truncate font-mono text-[0.78rem] font-bold text-rose-200">{formatMoney(daily?.gastos || 0)}</p>
+          </div>
+        ) : (
+          <p className="rounded-tremor-default border border-dashed border-slate-800/70 px-2 py-1.5 text-[0.68rem] text-slate-500">Sin gasto</p>
+        )}
+      </div>
+
+      <div className="mt-2 flex min-h-4 items-center gap-1">
+        {hasIncome ? <span className="h-2 w-2 rounded-full bg-emerald-400" title={`Ingreso ${formatMoney(daily?.ingresos || 0)}`} /> : null}
+        {events.slice(0, 5).map((event) => (
+          <span key={event.id} className={`h-2 w-2 rounded-full ${eventDot(event.type)}`} title={event.title} />
+        ))}
+      </div>
     </div>
   );
 }
 
-function EventPill({ event }: { event: CalendarEvent }) {
-  const tone = eventTone(event.type);
+function WeeklyCard({ weekly }: { weekly: WeeklyGoal }) {
+  const tone = weeklyTone(weekly.status);
   return (
-    <div className={`min-w-0 rounded border px-2 py-1 ${tone.pill}`}>
-      <div className="flex items-center gap-1.5">
-        <EventIcon event={event} className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate text-[0.68rem] font-semibold">{event.title}</span>
+    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <Title>Objetivo semanal</Title>
+          <Text>{weekly.range}</Text>
+        </div>
+        <Badge color={tone.badge}>{weekly.status}</Badge>
       </div>
-      {event.amount ? <p className="mt-0.5 truncate font-mono text-[0.68rem]">{formatMoney(event.amount, event.currency)}</p> : null}
-    </div>
+      <div className="mt-4">
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-slate-400">Usado</span>
+          <span className="font-mono font-semibold text-slate-100">{formatMoney(weekly.spent)} / {formatMoney(weekly.target)}</span>
+        </div>
+        <ProgressBar className="mt-2" value={weekly.progressPct} color={tone.progress} />
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <HeaderStat label="Queda" value={formatMoney(weekly.remaining)} />
+        <HeaderStat label="Diario" value={formatMoney(weekly.dailyRemaining)} />
+      </div>
+      <Text className="mt-3">{weekly.message}</Text>
+    </Card>
+  );
+}
+
+function ClosureCard({ closure, calendar, data }: { closure: DashboardData['cierreAutomatico']; calendar: FinancialCalendar; data: DashboardData }) {
+  const color = closureTone(closure?.status || 'waiting');
+  return (
+    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4">
+      <div className="flex items-start gap-3">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-tremor-default bg-emerald-500/15 text-emerald-200">
+          <RiLoopLeftLine className="h-4 w-4" aria-hidden="true" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <Title>Regla de cierre</Title>
+              <Text>{closure?.targetCycleRange || calendar.cycleRange}</Text>
+            </div>
+            <Badge color={color}>{closure?.status || 'waiting'}</Badge>
+          </div>
+          <p className="mt-3 text-sm font-semibold text-slate-100">{closure?.title || 'Cierre programado'}</p>
+          <p className="mt-1 text-sm text-slate-400">{closure?.message || `Cierre ${formatDate(calendar.cycleClose)}.`}</p>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <HeaderStat label="Ahorro" value={formatMoney(closure?.suggestedSavings || 0)} />
+        <HeaderStat label="Gasto" value={formatMoney(closure?.availableToSpend || data.dineroLibre?.availableToSpend || 0)} />
+      </div>
+    </Card>
+  );
+}
+
+function AgendaCard({ events }: { events: CalendarEvent[] }) {
+  return (
+    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <Title>Agenda</Title>
+          <Text>Eventos del mes</Text>
+        </div>
+        <Badge color={events.length ? 'cyan' : 'emerald'}>{events.length || 'OK'}</Badge>
+      </div>
+      <div className="mt-4 grid gap-2">
+        {events.length ? events.map((event) => <EventRow key={event.id} event={event} />) : <EmptyState>Sin eventos este mes.</EmptyState>}
+      </div>
+    </Card>
   );
 }
 
@@ -215,54 +234,29 @@ function EventIcon({ event, className }: { event: CalendarEvent; className: stri
   return <RiFlagLine className={className} aria-hidden="true" />;
 }
 
-function eventTone(type: string) {
-  if (type === 'deuda') {
-    return {
-      pill: 'border-rose-500/30 bg-rose-500/10 text-rose-200',
-      row: 'border-rose-500/25 bg-rose-500/10',
-      icon: 'bg-rose-500/15 text-rose-200',
-    };
-  }
-  if (type === 'credito') {
-    return {
-      pill: 'border-sky-500/30 bg-sky-500/10 text-sky-200',
-      row: 'border-sky-500/25 bg-sky-500/10',
-      icon: 'bg-sky-500/15 text-sky-200',
-    };
-  }
-  if (type === 'cierre') {
-    return {
-      pill: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
-      row: 'border-emerald-500/25 bg-emerald-500/10',
-      icon: 'bg-emerald-500/15 text-emerald-200',
-    };
-  }
-  if (type === 'alerta') {
-    return {
-      pill: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
-      row: 'border-amber-500/25 bg-amber-500/10',
-      icon: 'bg-amber-500/15 text-amber-200',
-    };
-  }
-  if (type === 'objetivo') {
-    return {
-      pill: 'border-violet-500/30 bg-violet-500/10 text-violet-200',
-      row: 'border-violet-500/25 bg-violet-500/10',
-      icon: 'bg-violet-500/15 text-violet-200',
-    };
-  }
-  return {
-    pill: 'border-slate-700 bg-slate-900/60 text-slate-200',
-    row: 'border-slate-800 bg-slate-900/40',
-    icon: 'bg-slate-800 text-slate-200',
-  };
+function eventDot(type: string) {
+  if (type === 'deuda') return 'bg-rose-400';
+  if (type === 'credito') return 'bg-sky-400';
+  if (type === 'cierre') return 'bg-emerald-400';
+  if (type === 'alerta') return 'bg-amber-400';
+  if (type === 'objetivo') return 'bg-violet-400';
+  return 'bg-slate-400';
 }
 
-function weeklyTone(status: string): { badge: Color; progress: Color; icon: string } {
-  if (status === 'over') return { badge: 'rose', progress: 'rose', icon: 'bg-rose-500/15 text-rose-200' };
-  if (status === 'tight') return { badge: 'amber', progress: 'amber', icon: 'bg-amber-500/15 text-amber-200' };
-  if (status === 'empty') return { badge: 'slate', progress: 'slate', icon: 'bg-slate-800 text-slate-200' };
-  return { badge: 'emerald', progress: 'emerald', icon: 'bg-emerald-500/15 text-emerald-200' };
+function eventTone(type: string) {
+  if (type === 'deuda') return { row: 'border-rose-500/25 bg-rose-500/10', icon: 'bg-rose-500/15 text-rose-200' };
+  if (type === 'credito') return { row: 'border-sky-500/25 bg-sky-500/10', icon: 'bg-sky-500/15 text-sky-200' };
+  if (type === 'cierre') return { row: 'border-emerald-500/25 bg-emerald-500/10', icon: 'bg-emerald-500/15 text-emerald-200' };
+  if (type === 'alerta') return { row: 'border-amber-500/25 bg-amber-500/10', icon: 'bg-amber-500/15 text-amber-200' };
+  if (type === 'objetivo') return { row: 'border-violet-500/25 bg-violet-500/10', icon: 'bg-violet-500/15 text-violet-200' };
+  return { row: 'border-slate-800 bg-slate-900/40', icon: 'bg-slate-800 text-slate-200' };
+}
+
+function weeklyTone(status: string): { badge: Color; progress: Color } {
+  if (status === 'over') return { badge: 'rose', progress: 'rose' };
+  if (status === 'tight') return { badge: 'amber', progress: 'amber' };
+  if (status === 'empty') return { badge: 'slate', progress: 'slate' };
+  return { badge: 'emerald', progress: 'emerald' };
 }
 
 function closureTone(status: string): Color {
