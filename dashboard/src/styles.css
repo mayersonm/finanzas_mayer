@@ -173,3 +173,34 @@ button {
 :root[data-theme="light"] .bg-slate-950\/85 {
   background-color: rgba(15, 23, 42, 0.58) !important;
 }
+
+/* Dark-first utilities need explicit light hover states to keep contrast readable. */
+:root[data-theme="light"] .hover\:bg-slate-800:hover,
+:root[data-theme="light"] .hover\:bg-slate-800\/90:hover,
+:root[data-theme="light"] .hover\:bg-slate-900:hover,
+:root[data-theme="light"] .hover\:bg-slate-900\/70:hover,
+:root[data-theme="light"] .hover\:bg-slate-900\/80:hover {
+  background-color: rgba(241, 245, 249, 0.94) !important;
+}
+
+:root[data-theme="light"] .hover\:border-slate-600:hover,
+:root[data-theme="light"] .hover\:border-slate-700:hover,
+:root[data-theme="light"] .hover\:border-slate-800:hover {
+  border-color: rgb(148, 163, 184) !important;
+}
+
+:root[data-theme="light"] .hover\:text-slate-100:hover,
+:root[data-theme="light"] .hover\:text-white:hover {
+  color: rgb(15, 23, 42) !important;
+}
+
+:root[data-theme="light"] button[aria-current="page"] {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(5, 150, 105, 0.55) !important;
+  color: rgb(4, 120, 87) !important;
+}
+
+:root[data-theme="light"] button[aria-current="page"] svg,
+:root[data-theme="light"] button[aria-current="page"] span {
+  color: rgb(4, 120, 87) !important;
+}
