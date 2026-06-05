@@ -138,6 +138,11 @@ export default {
         return json(await exchangeRate(env));
       }
 
+      if (url.pathname === '/api/calendar' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await calendarOnly(env, url.searchParams));
+      }
+
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
         await requireDashboardOrAdminAccess(request, env);
         return json(await dashboard(env, url.searchParams));
@@ -769,6 +774,23 @@ function serviceLabel(name) {
     d1AdminKey: 'D1 admin key',
   };
   return labels[name] || name;
+}
+
+async function calendarOnly(env, params) {
+  const chatId = getChatId(env, params);
+  const now = new Date();
+  const requestedMonth = normalizeMonthKey(params.get('calendar_month') || params.get('calendarMonth') || '');
+  const usdRate = Number((await exchangeRate(env)).rate || 3.85);
+  const cycle = payCycleFromDate(now);
+  const debts = await debtsList(env, chatId);
+  const calendario = await monthlyCalendar(env, chatId, now, cycle, [], debts, [], null, usdRate, requestedMonth);
+
+  return {
+    ok: true,
+    calendario,
+    source: 'd1-calendar',
+    updatedAt: localIso(now),
+  };
 }
 
 async function dashboard(env, params) {
@@ -3820,7 +3842,7 @@ async function monthlyCalendar(env, chatId, now, cycle, fixedExpenses, debts, al
   const events = [];
   const monthCloseParts = parseDateKeyParts(month.closeDate);
   const monthCycle = payCycleFromDate(dateFromKey(dateKeyFromParts(monthCloseParts.year, monthCloseParts.monthIndex, 22)));
-  const calendarFixedExpenses = month.key === cycle.closeKey
+  const calendarFixedExpenses = month.key === cycle.closeKey && (fixedExpenses || []).length
     ? fixedExpenses
     : await fixedExpensesList(env, chatId, monthCycle.key, usdRate, monthCycle);
 
