@@ -5,7 +5,7 @@ import { LoginScreen } from './components/auth/LoginScreen';
 import { PasswordPanel } from './components/auth/PasswordPanel';
 import { AppHeader } from './components/layout/AppHeader';
 import { DashboardSidebar, DashboardTabs } from './components/layout/DashboardTabs';
-import { MOCK_DASHBOARD } from './data/mockDashboard';
+import { OverviewSection } from './features/overview/OverviewSection';
 import { getRealExpenses } from './lib/finance';
 import type { ApiStatus, DashboardData, DashboardUser, TabId } from './types/dashboard';
 
@@ -17,7 +17,6 @@ const GoalsSection = lazy(() => import('./features/goals/GoalsSection').then((mo
 const InvestmentsSection = lazy(() => import('./features/investments/InvestmentsSection').then((mod) => ({ default: mod.InvestmentsSection })));
 const MovementsSection = lazy(() => import('./features/movements/MovementsSection').then((mod) => ({ default: mod.MovementsSection })));
 const NetWorthSection = lazy(() => import('./features/netWorth/NetWorthSection').then((mod) => ({ default: mod.NetWorthSection })));
-const OverviewSection = lazy(() => import('./features/overview/OverviewSection').then((mod) => ({ default: mod.OverviewSection })));
 const SettingsSection = lazy(() => import('./features/settings/SettingsSection').then((mod) => ({ default: mod.SettingsSection })));
 
 type Theme = 'light' | 'dark';
@@ -26,7 +25,7 @@ const LOGIN_EMAIL_STORAGE_KEY = 'finanzas_dashboard_email';
 const DEFAULT_LOGIN_EMAIL = 'mayersonm@gmail.com';
 
 export default function App() {
-  const [data, setData] = useState<DashboardData>(MOCK_DASHBOARD);
+  const [data, setData] = useState<DashboardData>(() => createEmptyDashboard());
   const [tab, setTab] = useState<TabId>('inicio');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<ApiStatus>('demo');
@@ -215,7 +214,7 @@ export default function App() {
   const handleLogout = useCallback(() => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
     setToken(null);
-    setData(MOCK_DASHBOARD);
+    setData(createEmptyDashboard());
     setStatus('demo');
     setAuthError('');
     setUsers([]);
@@ -272,6 +271,19 @@ export default function App() {
       setPasswordLoading(false);
     }
   }, [confirmPassword, currentPassword, fetchData, newPassword, token]);
+
+  useEffect(() => {
+    if (configured || token) return undefined;
+    let cancelled = false;
+
+    void import('./data/mockDashboard').then(({ MOCK_DASHBOARD }) => {
+      if (!cancelled) setData(MOCK_DASHBOARD);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [configured, token]);
 
   useEffect(() => {
     if (!configured || !token) return;
@@ -347,12 +359,6 @@ export default function App() {
 
           <DashboardTabs activeTab={tab} onTabChange={setTab} />
 
-          {!configured ? (
-            <div className="rounded-tremor-default border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-              Configura `VITE_GAS_API_URL` para conectar el dashboard con D1.
-            </div>
-          ) : null}
-
           <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
             {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
             {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
@@ -365,6 +371,12 @@ export default function App() {
             {tab === 'metas' ? <GoalsSection data={data} /> : null}
             {tab === 'configuracion' ? <SettingsSection authToken={token} chatId={selectedChatId} /> : null}
           </Suspense>
+
+          {!configured ? (
+            <div className="mt-4 rounded-tremor-default border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100 sm:mt-5">
+              Configura `VITE_GAS_API_URL` para conectar el dashboard con D1.
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -389,4 +401,27 @@ export default function App() {
       ) : null}
     </main>
   );
+}
+
+function createEmptyDashboard(): DashboardData {
+  return {
+    balance: 0,
+    patrimonio: 0,
+    patrimonioDisponible: 0,
+    balanceGeneralNeto: 0,
+    balanceNeto: 0,
+    ingresos: 0,
+    gastos: 0,
+    ingresosMes: 0,
+    gastosMes: 0,
+    balanceMes: 0,
+    movimientos: 0,
+    movimientosMes: 0,
+    mes: 'Cargando',
+    transacciones: [],
+    categorias: [],
+    meses: [],
+    presupuestos: [],
+    metas: [],
+  };
 }

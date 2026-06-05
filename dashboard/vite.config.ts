@@ -11,9 +11,23 @@ export default defineConfig({
         entryFileNames: '[name]-[hash].js',
         chunkFileNames: '[name]-[hash].js',
         assetFileNames: '[name]-[hash][extname]',
-        manualChunks: {
-          tremor: ['@tremor/react'],
-          icons: ['@remixicon/react'],
+        manualChunks(id) {
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/scheduler')) {
+            return 'react';
+          }
+          if (id.includes('node_modules/@remixicon/react')) {
+            return 'icons';
+          }
+          if (
+            id.includes('node_modules/@tremor/react') ||
+            id.includes('node_modules/@headlessui/react') ||
+            id.includes('node_modules/recharts') ||
+            id.includes('node_modules/d3-') ||
+            id.includes('node_modules/clsx') ||
+            id.includes('node_modules/tailwind-merge')
+          ) {
+            return 'tremor';
+          }
         },
       },
     },

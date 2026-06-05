@@ -1,4 +1,4 @@
-import { RiDatabase2Line, RiLockPasswordLine, RiLogoutBoxRLine, RiMoonLine, RiRefreshLine, RiSunLine } from '@remixicon/react';
+import { DatabaseIcon, LockIcon, LogoutIcon, MoonIcon, RefreshIcon, SunIcon, type AppIcon } from '../common/AppIcons';
 import { formatDate, formatUpdatedAt } from '../../lib/formatters';
 import type { ApiStatus, DashboardData, DashboardUser } from '../../types/dashboard';
 
@@ -71,23 +71,23 @@ export function AppHeader({
               ))}
             </select>
           ) : null}
-          <HeaderButton icon={RiRefreshLine} onClick={onRefresh} disabled={loading || syncing}>
+          <HeaderButton icon={RefreshIcon} onClick={onRefresh} disabled={loading || syncing}>
             {loading ? 'Actualizando' : 'Actualizar'}
           </HeaderButton>
           {isConfigured ? (
-            <HeaderButton icon={RiDatabase2Line} onClick={onSyncSheets} disabled={loading || syncing} tone="primary">
+            <HeaderButton icon={DatabaseIcon} onClick={onSyncSheets} disabled={loading || syncing} tone="primary">
               {syncing ? 'Sincronizando' : 'Sync manual'}
             </HeaderButton>
           ) : null}
-          <HeaderButton icon={theme === 'dark' ? RiSunLine : RiMoonLine} onClick={onToggleTheme}>
+          <HeaderButton icon={theme === 'dark' ? SunIcon : MoonIcon} onClick={onToggleTheme}>
             {theme === 'dark' ? 'Claro' : 'Oscuro'}
           </HeaderButton>
           {isConfigured ? (
             <>
-              <HeaderButton icon={RiLockPasswordLine} onClick={onTogglePasswordPanel}>
+              <HeaderButton icon={LockIcon} onClick={onTogglePasswordPanel}>
                 Clave
               </HeaderButton>
-              <HeaderButton icon={RiLogoutBoxRLine} onClick={onLogout} tone="danger">
+              <HeaderButton icon={LogoutIcon} onClick={onLogout} tone="danger">
                 Salir
               </HeaderButton>
             </>
@@ -112,7 +112,7 @@ function HeaderButton({
   disabled,
   tone = 'secondary',
 }: {
-  icon: typeof RiRefreshLine;
+  icon: AppIcon;
   children: string;
   onClick: () => void;
   disabled?: boolean;
