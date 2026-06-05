@@ -185,6 +185,7 @@ function cmdInsightsIA(chatId) {
     chatId,
     `*Preparando insights IA...*\n\n` +
     `Estoy leyendo:\n` +
+    `- Caja actual: ${contexto.cajaActualTexto}\n` +
     `- ${contexto.movimientosMes} movimientos del ciclo\n` +
     `- ${contexto.categoriasCount} categorias con gasto\n` +
     `- ${contexto.deudasActivas} deudas activas\n` +
@@ -200,7 +201,9 @@ function cmdInsightsIA(chatId) {
     'Usa solo los montos del resumen. No inventes importes, fechas ni categorias.',
     'Si comparas ciclo y mes calendario, dilo explicitamente.',
     'No diagnostiques caida de ingresos, crisis, deuda usada para financiar gastos, venta de activos ni porcentajes extremos si el resumen no lo dice literalmente.',
-    'Para recomendaciones de gasto usa Caja actual, Dinero libre del ciclo y Modo seguro diario; no uses Balance del ciclo como caja disponible.',
+    'Caja actual registrada es el numero principal para cualquier recomendacion de gasto, alerta o prioridad.',
+    'No uses indicadores proyectados o presupuestales como base del analisis. No los llames disponible ni los compares contra gastos.',
+    'No uses Balance del ciclo como caja disponible; solo explica flujo registrado.',
     'Si el flujo del ciclo es negativo, dilo como flujo registrado negativo y sugiere revisar si falta registrar ingresos o si hay gastos/fijos del ciclo cargados.',
     '',
     resumen,
@@ -276,6 +279,7 @@ function contextoInsightsIA_(chatId) {
       categoriasCount: (d1.categorias || []).length,
       deudasActivas: deudas.length,
       alertasCount: alertas.length,
+      cajaActualTexto: formatoMoneda_(d1.balance, 'PEN'),
       resumen: resumenFinancieroParaIA_(chatId),
     };
   }
@@ -296,6 +300,7 @@ function contextoInsightsIA_(chatId) {
     categoriasCount: Object.keys(gastosCat).length,
     deudasActivas: deudas.length,
     alertasCount: alertas.length,
+    cajaActualTexto: 'no disponible',
     resumen: resumenFinancieroParaIA_(chatId),
   };
 }
@@ -358,8 +363,6 @@ function resumenFinancieroParaIA_(chatId) {
     const deudaPen = deudas.filter(d => normalizarMoneda_(d.currency) !== 'USD').reduce((a, d) => a + Number(d.pendiente || 0), 0);
     const deudaUsd = deudas.filter(d => normalizarMoneda_(d.currency) === 'USD').reduce((a, d) => a + Number(d.pendiente || 0), 0);
     const ciclo = d1.cycleRange || d1.cycleLabel || (d1.cierre && d1.cierre.range) || d1.mesKey || d1.mes || '';
-    const dinero = d1.dineroLibre || {};
-    const diario = dinero.daily || {};
     const cierre = d1.cierre || {};
     const totalCategorias = (d1.categorias || []).reduce((total, item) => total + Number(item.monto || 0), 0);
     const topCats = (d1.categorias || [])
@@ -379,10 +382,7 @@ function resumenFinancieroParaIA_(chatId) {
       `Balance del ciclo: ${formatoMoneda_(d1.balanceMes, 'PEN')}`,
       `Caja actual registrada: ${formatoMoneda_(d1.balance, 'PEN')}`,
       `Patrimonio disponible: ${formatoMoneda_(d1.patrimonioDisponible || d1.patrimonio || 0, 'PEN')}`,
-      `Dinero libre del ciclo: ${formatoMoneda_(dinero.availableToSpend, 'PEN')}`,
-      `Modo seguro diario: ${formatoMoneda_(diario.safe, 'PEN')}`,
-      `Dias al cierre: ${Number(dinero.daysLeft || 0)}`,
-      `Presupuesto pendiente: ${formatoMoneda_(cierre.presupuestoRestante || dinero.budgetRemaining || 0, 'PEN')}`,
+      `Presupuesto pendiente: ${formatoMoneda_(cierre.presupuestoRestante || 0, 'PEN')}`,
       `Deuda pendiente PEN: ${formatoMoneda_(deudaPen, 'PEN')}`,
       `Deuda pendiente USD: ${formatoMoneda_(deudaUsd, 'USD')}`,
       'Reglas para interpretar:',
@@ -390,7 +390,8 @@ function resumenFinancieroParaIA_(chatId) {
       '- El ciclo contable es 23-22; las transacciones conservan su fecha real.',
       '- Gastos del ciclo puede incluir fijos pagados; top categorias muestra gasto categorizado/variable.',
       '- Ingresos del ciclo son ingresos registrados dentro del rango; no significan sueldo total ni caida de ingresos.',
-      '- Caja actual y dinero libre son la base para decidir gasto diario; balance del ciclo solo explica flujo registrado.',
+      '- Caja actual registrada manda sobre cualquier otro numero para decidir gasto, prioridad o liquidez.',
+      '- Balance del ciclo solo explica flujo registrado; no es caja disponible.',
       '- No afirmes que los gastos se financiaron con deuda/ahorros si no aparece una fuente explicita.',
       'Top categorias:',
       topCats || '- sin gastos',
