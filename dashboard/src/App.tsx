@@ -4,7 +4,7 @@ import { isApiConfigured, SESSION_STORAGE_KEY } from './app/config';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { PasswordPanel } from './components/auth/PasswordPanel';
 import { AppHeader } from './components/layout/AppHeader';
-import { DashboardTabs } from './components/layout/DashboardTabs';
+import { DashboardSidebar, DashboardTabs } from './components/layout/DashboardTabs';
 import { MOCK_DASHBOARD } from './data/mockDashboard';
 import { getRealExpenses } from './lib/finance';
 import type { ApiStatus, DashboardData, DashboardUser, TabId } from './types/dashboard';
@@ -307,61 +307,65 @@ export default function App() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-6 sm:py-5 lg:px-8">
-      <div className={showPasswordPanel ? 'pointer-events-none blur-sm' : ''}>
-        <AppHeader
-          data={data}
-          loading={loading}
-          status={status}
-          isConfigured={configured}
-          onRefresh={() => void fetchData()}
-          onSyncSheets={() => void syncSheetsToD1()}
-          syncing={syncing}
-          theme={theme}
-          onToggleTheme={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
-          onTogglePasswordPanel={() => {
-            setPasswordError('');
-            setPasswordSuccess('');
-            setShowPasswordPanel(true);
-          }}
-          onLogout={handleLogout}
-          users={users}
-          selectedChatId={selectedChatId}
-          onSelectedChatIdChange={setSelectedChatId}
-        />
+    <main className="min-h-screen px-3 py-3 sm:px-6 sm:py-5 lg:px-6 xl:px-8">
+      <div className={`mx-auto flex w-full max-w-[96rem] gap-5 ${showPasswordPanel ? 'pointer-events-none blur-sm' : ''}`}>
+        <DashboardSidebar activeTab={tab} onTabChange={setTab} />
 
-        {syncMessage ? (
-          <div className="mb-4 rounded-tremor-default border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm font-medium text-emerald-100">
-            {syncMessage}
-          </div>
-        ) : null}
+        <div className="min-w-0 flex-1">
+          <AppHeader
+            data={data}
+            loading={loading}
+            status={status}
+            isConfigured={configured}
+            onRefresh={() => void fetchData()}
+            onSyncSheets={() => void syncSheetsToD1()}
+            syncing={syncing}
+            theme={theme}
+            onToggleTheme={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
+            onTogglePasswordPanel={() => {
+              setPasswordError('');
+              setPasswordSuccess('');
+              setShowPasswordPanel(true);
+            }}
+            onLogout={handleLogout}
+            users={users}
+            selectedChatId={selectedChatId}
+            onSelectedChatIdChange={setSelectedChatId}
+          />
 
-        {syncError ? (
-          <div className="mb-4 rounded-tremor-default border border-rose-400/30 bg-rose-500/10 p-3 text-sm font-medium text-rose-100">
-            {syncError}
-          </div>
-        ) : null}
+          {syncMessage ? (
+            <div className="mb-4 rounded-tremor-default border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm font-medium text-emerald-100">
+              {syncMessage}
+            </div>
+          ) : null}
 
-        <DashboardTabs activeTab={tab} onTabChange={setTab} />
+          {syncError ? (
+            <div className="mb-4 rounded-tremor-default border border-rose-400/30 bg-rose-500/10 p-3 text-sm font-medium text-rose-100">
+              {syncError}
+            </div>
+          ) : null}
 
-        {!configured ? (
-          <div className="rounded-tremor-default border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-            Configura `VITE_GAS_API_URL` para conectar el dashboard con D1.
-          </div>
-        ) : null}
+          <DashboardTabs activeTab={tab} onTabChange={setTab} />
 
-        <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
-          {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
-          {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
-          {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} exchangeRate={exchangeRate} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
-          {tab === 'dinero' ? <FreeMoneySection data={data} /> : null}
-          {tab === 'calendario' ? <CalendarSection data={data} authToken={token} chatId={selectedChatId} /> : null}
-          {tab === 'patrimonio' ? <NetWorthSection authToken={token} chatId={selectedChatId} /> : null}
-          {tab === 'inversiones' ? <InvestmentsSection authToken={token} chatId={selectedChatId} exchangeRate={exchangeRate} /> : null}
-          {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
-          {tab === 'metas' ? <GoalsSection data={data} /> : null}
-          {tab === 'configuracion' ? <SettingsSection authToken={token} chatId={selectedChatId} /> : null}
-        </Suspense>
+          {!configured ? (
+            <div className="rounded-tremor-default border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+              Configura `VITE_GAS_API_URL` para conectar el dashboard con D1.
+            </div>
+          ) : null}
+
+          <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
+            {tab === 'inicio' ? <OverviewSection data={data} realExpenses={realExpenses} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
+            {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
+            {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} exchangeRate={exchangeRate} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
+            {tab === 'dinero' ? <FreeMoneySection data={data} /> : null}
+            {tab === 'calendario' ? <CalendarSection data={data} authToken={token} chatId={selectedChatId} /> : null}
+            {tab === 'patrimonio' ? <NetWorthSection authToken={token} chatId={selectedChatId} /> : null}
+            {tab === 'inversiones' ? <InvestmentsSection authToken={token} chatId={selectedChatId} exchangeRate={exchangeRate} /> : null}
+            {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
+            {tab === 'metas' ? <GoalsSection data={data} /> : null}
+            {tab === 'configuracion' ? <SettingsSection authToken={token} chatId={selectedChatId} /> : null}
+          </Suspense>
+        </div>
       </div>
 
       {showPasswordPanel ? (
