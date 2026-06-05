@@ -1,7 +1,7 @@
 import colors from 'tailwindcss/colors';
 import formsPlugin from '@tailwindcss/forms';
 
-const appColorScale = '(?:slate|rose|orange|amber|emerald|cyan|sky|violet|teal)';
+const appColorScale = '(?:slate|gray|red|rose|orange|amber|yellow|green|emerald|cyan|sky|blue|violet|fuchsia)';
 const appColorSteps = '(?:50|100|200|300|400|500|600|700|800|900|950)';
 
 /** @type {import('tailwindcss').Config} */
@@ -10,6 +10,7 @@ export default {
   content: [
     './index.html',
     './src/**/*.{js,ts,jsx,tsx}',
+    './node_modules/@tremor/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
     transparent: 'transparent',
