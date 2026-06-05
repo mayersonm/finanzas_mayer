@@ -4365,16 +4365,10 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, cashBalance, freeMo
     });
   }
 
-  const availableToSpend = Number(freeMoney?.availableToSpend || 0);
-  const dailySafe = Number(freeMoney?.daily?.safe || 0);
-  const daysLeft = Number(freeMoney?.daysLeft || 0);
   if (Number.isFinite(Number(cashBalance))) {
-    const dailyText = dailySafe > 0 && daysLeft > 0
-      ? ` Modo seguro: ${formatCurrency(dailySafe, 'PEN')} al dia por ${daysLeft} dias.`
-      : '';
     insights.push({
-      title: availableToSpend > 0 ? 'Caja para decidir' : 'Caja ajustada',
-      message: `Caja actual: ${formatCurrency(cashBalance, 'PEN')}. Libre del ciclo: ${formatCurrency(availableToSpend, 'PEN')}.${dailyText}`,
+      title: cashBalance > 0 ? 'Caja actual' : 'Caja ajustada',
+      message: `Caja actual registrada: ${formatCurrency(cashBalance, 'PEN')}. Usa este monto como base; el balance del ciclo solo explica movimientos registrados.`,
     });
   } else if (ingresosMes > 0) {
     insights.push({
