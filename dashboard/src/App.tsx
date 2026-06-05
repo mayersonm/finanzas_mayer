@@ -24,6 +24,18 @@ type Theme = 'light' | 'dark';
 const LOGIN_EMAIL_STORAGE_KEY = 'finanzas_dashboard_email';
 const DEFAULT_LOGIN_EMAIL = 'mayersonm@gmail.com';
 
+function getInitialTheme(): Theme {
+  const stored = window.localStorage.getItem('finanzas_theme');
+  if (stored === 'light' || stored === 'dark') return stored;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.classList.toggle('dark', theme === 'dark');
+  window.localStorage.setItem('finanzas_theme', theme);
+}
+
 export default function App() {
   const [data, setData] = useState<DashboardData>(() => createEmptyDashboard());
   const [tab, setTab] = useState<TabId>('inicio');
@@ -41,11 +53,7 @@ export default function App() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = window.localStorage.getItem('finanzas_theme');
-    if (stored === 'light' || stored === 'dark') return stored;
-    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-  });
+  const [theme, setTheme] = useState<Theme>(() => getInitialTheme());
   const [users, setUsers] = useState<DashboardUser[]>([]);
   const [selectedChatId, setSelectedChatId] = useState('');
   const [exchangeRate, setExchangeRate] = useState(3.85);
@@ -333,7 +341,13 @@ export default function App() {
             onSyncSheets={() => void syncSheetsToD1()}
             syncing={syncing}
             theme={theme}
-            onToggleTheme={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
+            onToggleTheme={() => {
+              setTheme((value) => {
+                const nextTheme = value === 'dark' ? 'light' : 'dark';
+                applyTheme(nextTheme);
+                return nextTheme;
+              });
+            }}
             onTogglePasswordPanel={() => {
               setPasswordError('');
               setPasswordSuccess('');
