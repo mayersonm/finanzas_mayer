@@ -946,6 +946,8 @@ async function dashboard(env, params) {
     ingresosMes,
     gastosMes: gastosMesConFijosPagados,
     balanceMes: balanceMesCaja,
+    cashBalance: balanceCaja,
+    freeMoney: dineroLibre,
     categories,
     budgets,
     debts,
@@ -4308,7 +4310,7 @@ function smartAlerts({ now, cycle, ingresosMes, gastosMes, budgets, fixedExpense
   return alerts.slice(0, 8);
 }
 
-function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets, debts, months }) {
+function smartInsights({ ingresosMes, gastosMes, balanceMes, cashBalance, freeMoney, categories, budgets, debts, months }) {
   const insights = [];
   const activeDebts = debts.filter((item) => item.estado === 'activa');
   const totalDebtPen = activeDebts
@@ -4363,11 +4365,21 @@ function smartInsights({ ingresosMes, gastosMes, balanceMes, categories, budgets
     });
   }
 
-  if (ingresosMes > 0) {
-    const savingsRate = Math.round((balanceMes / ingresosMes) * 100);
+  const availableToSpend = Number(freeMoney?.availableToSpend || 0);
+  const dailySafe = Number(freeMoney?.daily?.safe || 0);
+  const daysLeft = Number(freeMoney?.daysLeft || 0);
+  if (Number.isFinite(Number(cashBalance))) {
+    const dailyText = dailySafe > 0 && daysLeft > 0
+      ? ` Modo seguro: ${formatCurrency(dailySafe, 'PEN')} al dia por ${daysLeft} dias.`
+      : '';
     insights.push({
-      title: savingsRate >= 20 ? 'Buen margen de ahorro' : 'Margen ajustado',
-      message: `Balance del ciclo: ${formatCurrency(balanceMes, 'PEN')} (${savingsRate}% de ingresos). ${savingsRate >= 20 ? 'Buen espacio para metas.' : 'Conviene proteger caja.'}`,
+      title: availableToSpend > 0 ? 'Caja para decidir' : 'Caja ajustada',
+      message: `Caja actual: ${formatCurrency(cashBalance, 'PEN')}. Libre del ciclo: ${formatCurrency(availableToSpend, 'PEN')}.${dailyText}`,
+    });
+  } else if (ingresosMes > 0) {
+    insights.push({
+      title: balanceMes >= 0 ? 'Flujo positivo' : 'Flujo registrado negativo',
+      message: `Entraron ${formatCurrency(ingresosMes, 'PEN')} y salieron ${formatCurrency(gastosMes, 'PEN')} registrados en el ciclo.`,
     });
   }
 
