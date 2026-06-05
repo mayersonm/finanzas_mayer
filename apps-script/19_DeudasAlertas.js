@@ -199,6 +199,9 @@ function cmdInsightsIA(chatId) {
     'Da insights accionables, breves y concretos. No des teoria.',
     'Usa solo los montos del resumen. No inventes importes, fechas ni categorias.',
     'Si comparas ciclo y mes calendario, dilo explicitamente.',
+    'No diagnostiques caida de ingresos, crisis, deuda usada para financiar gastos, venta de activos ni porcentajes extremos si el resumen no lo dice literalmente.',
+    'Para recomendaciones de gasto usa Caja actual, Dinero libre del ciclo y Modo seguro diario; no uses Balance del ciclo como caja disponible.',
+    'Si el flujo del ciclo es negativo, dilo como flujo registrado negativo y sugiere revisar si falta registrar ingresos o si hay gastos/fijos del ciclo cargados.',
     '',
     resumen,
     '',
@@ -355,6 +358,9 @@ function resumenFinancieroParaIA_(chatId) {
     const deudaPen = deudas.filter(d => normalizarMoneda_(d.currency) !== 'USD').reduce((a, d) => a + Number(d.pendiente || 0), 0);
     const deudaUsd = deudas.filter(d => normalizarMoneda_(d.currency) === 'USD').reduce((a, d) => a + Number(d.pendiente || 0), 0);
     const ciclo = d1.cycleRange || d1.cycleLabel || (d1.cierre && d1.cierre.range) || d1.mesKey || d1.mes || '';
+    const dinero = d1.dineroLibre || {};
+    const diario = dinero.daily || {};
+    const cierre = d1.cierre || {};
     const totalCategorias = (d1.categorias || []).reduce((total, item) => total + Number(item.monto || 0), 0);
     const topCats = (d1.categorias || [])
       .slice(0, 5)
@@ -371,12 +377,21 @@ function resumenFinancieroParaIA_(chatId) {
       `Ingresos del ciclo: ${formatoMoneda_(d1.ingresosMes, 'PEN')}`,
       `Gastos del ciclo: ${formatoMoneda_(d1.gastosMes, 'PEN')}`,
       `Balance del ciclo: ${formatoMoneda_(d1.balanceMes, 'PEN')}`,
+      `Caja actual registrada: ${formatoMoneda_(d1.balance, 'PEN')}`,
+      `Patrimonio disponible: ${formatoMoneda_(d1.patrimonioDisponible || d1.patrimonio || 0, 'PEN')}`,
+      `Dinero libre del ciclo: ${formatoMoneda_(dinero.availableToSpend, 'PEN')}`,
+      `Modo seguro diario: ${formatoMoneda_(diario.safe, 'PEN')}`,
+      `Dias al cierre: ${Number(dinero.daysLeft || 0)}`,
+      `Presupuesto pendiente: ${formatoMoneda_(cierre.presupuestoRestante || dinero.budgetRemaining || 0, 'PEN')}`,
       `Deuda pendiente PEN: ${formatoMoneda_(deudaPen, 'PEN')}`,
       `Deuda pendiente USD: ${formatoMoneda_(deudaUsd, 'USD')}`,
       'Reglas para interpretar:',
       '- Usa solo estos montos; no inventes importes ni fechas.',
       '- El ciclo contable es 23-22; las transacciones conservan su fecha real.',
       '- Gastos del ciclo puede incluir fijos pagados; top categorias muestra gasto categorizado/variable.',
+      '- Ingresos del ciclo son ingresos registrados dentro del rango; no significan sueldo total ni caida de ingresos.',
+      '- Caja actual y dinero libre son la base para decidir gasto diario; balance del ciclo solo explica flujo registrado.',
+      '- No afirmes que los gastos se financiaron con deuda/ahorros si no aparece una fuente explicita.',
       'Top categorias:',
       topCats || '- sin gastos',
       'Alertas:',
@@ -418,6 +433,7 @@ function resumenFinancieroParaIA_(chatId) {
     'Reglas para interpretar:',
     '- Usa solo estos montos; no inventes importes ni fechas.',
     '- El ciclo contable es 23-22; las transacciones conservan su fecha real.',
+    '- Sin D1 no hay caja actual confiable; no hagas conclusiones sobre liquidez, sueldo o caida de ingresos.',
     'Top categorias:',
     topCats || '- sin gastos',
     'Alertas:',
