@@ -41,6 +41,7 @@ function construirResumenMensualEmail_(chatId, periodoDate, modo) {
 
   const data = {
     modo: modo || 'cierre',
+    chatId: String(chatId),
     periodo: periodo,
     periodoKey: periodoKey,
     anteriorKey: anteriorKey,
@@ -514,6 +515,8 @@ function generarSugerenciaMensualIA_(data) {
 
   const balance = data.totalesPeriodo.ingresos - data.totalesPeriodo.gastos;
   const balanceAnterior = data.totalesAnterior.ingresos - data.totalesAnterior.gastos;
+  const d1 = data.chatId ? leerDashboardD1_(data.chatId) : null;
+  const cajaActual = d1 && d1.ok ? fmtEmail_(d1.balance) : 'no disponible';
 
   const prompt = [
     'Eres un coach de finanzas personales para Mayeson en Peru.',
@@ -521,10 +524,16 @@ function generarSugerenciaMensualIA_(data) {
     'No recomiendes productos financieros especificos, deuda, trading ni inversiones riesgosas.',
     'Enfocate en habitos, presupuesto, ahorro, control de gastos y proximos pasos concretos.',
     'Si los ingresos del mes son cero, advierte que puede faltar registrar ingresos antes de concluir que no hubo entradas.',
+    'Caja actual registrada manda sobre el balance del periodo cuando este disponible.',
+    'No diagnostiques caida de ingresos, crisis, sueldo, venta de activos ni gastos financiados con deuda/ahorros si no aparece literalmente.',
+    'Balance mensual es flujo registrado del periodo; no lo llames caja disponible.',
     'El texto debe servir tambien como base para una futura alerta anual, asi que deja una senal mensual resumida.',
     '',
     'PERIODO ANALIZADO:',
     data.nombrePeriodo + ' comparado contra ' + data.nombreAnterior,
+    '',
+    'CAJA ACTUAL:',
+    cajaActual,
     '',
     'TOTALES:',
     'Ingresos actual: ' + fmtEmail_(data.totalesPeriodo.ingresos),
@@ -563,7 +572,10 @@ function generarSugerenciaMensualIA_(data) {
   ].join('\n');
 
   try {
-    const resp = fetchIAConReintentos_('https://api.synterolink.com/v1/messages', {
+    const props = PropertiesService.getScriptProperties();
+    const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
+    const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
+    let resp = fetchIAConReintentos_(claudeUrl, {
       method: 'post',
       headers: {
         'x-api-key': apiKey,
@@ -571,29 +583,45 @@ function generarSugerenciaMensualIA_(data) {
         'content-type': 'application/json',
       },
       payload: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: claudeModel,
         max_tokens: 900,
         messages: [{ role: 'user', content: prompt }],
       }),
       muteHttpExceptions: true,
     }, 'email mensual /v1/messages');
 
-    const result = JSON.parse(resp.getContentText());
+    let raw = resp.getContentText();
+    let responseCode = resp.getResponseCode();
+    let chatCompletionsFallback = false;
+    if (debeReintentarChatCompletions_(responseCode, raw, claudeUrl)) {
+      Logger.log('Email mensual /v1/messages bloqueado; reintentando /v1/chat/completions.');
+      resp = llamarIAChatCompletions_(apiKey, claudeUrl, claudeModel, 900, prompt, '', '');
+      raw = resp.getContentText();
+      responseCode = resp.getResponseCode();
+      chatCompletionsFallback = responseCode < 300;
+    }
+
+    const result = parseJsonSeguro_(raw, null);
+    if (!result) {
+      Logger.log('Respuesta mensual IA JSON invalida: ' + raw);
+      return sugerenciaMensualFallback_(data, 'Respuesta invalida de IA.');
+    }
     if (result.error) {
       Logger.log('Error API mensual: ' + JSON.stringify(result.error));
       return sugerenciaMensualFallback_(data, result.error.message || 'Error de API');
     }
 
-    const consejo = result.content && result.content.find(function (b) {
-      return b.type === 'text';
-    });
+    const bloqueTexto = result.content && result.content.find(function (b) { return b.type === 'text'; });
+    const consejoTexto = chatCompletionsFallback
+      ? result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content
+      : bloqueTexto && bloqueTexto.text;
 
-    if (!consejo || !consejo.text) {
-      Logger.log('Respuesta mensual IA inesperada: ' + resp.getContentText());
+    if (!consejoTexto) {
+      Logger.log('Respuesta mensual IA inesperada: ' + raw);
       return sugerenciaMensualFallback_(data, 'Respuesta vacia de IA.');
     }
 
-    return String(consejo.text).trim();
+    return String(consejoTexto).trim();
   } catch (err) {
     Logger.log('Error generarSugerenciaMensualIA_: ' + err.toString());
     return sugerenciaMensualFallback_(data, err.toString());
