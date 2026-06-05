@@ -35,6 +35,7 @@ function construirResumenAnualEmail_(chatId, year, modo) {
 
   const data = {
     modo: modo || 'cierre',
+    chatId: String(chatId),
     year: Number(year),
     previousYear: previousYear,
     txsYear: txsYear,
@@ -325,14 +326,20 @@ function generarSugerenciaAnualIA_(data) {
 
   const balance = data.totals.ingresos - data.totals.gastos;
   const previousBalance = data.previousTotals.ingresos - data.previousTotals.gastos;
+  const d1 = data.chatId ? leerDashboardD1_(data.chatId) : null;
+  const cajaActual = d1 && d1.ok ? fmtEmail_(d1.balance) : 'no disponible';
 
   const prompt = [
     'Eres un coach de finanzas personales para Mayeson en Peru.',
     'Genera una alerta financiera anual clara, accionable y prudente.',
     'No recomiendes productos financieros especificos, deuda, trading ni inversiones riesgosas.',
     'Si el anio aun no esta completo, dilo como acumulado del anio y evita conclusiones definitivas.',
+    'Caja actual registrada manda sobre balances acumulados cuando este disponible.',
+    'No diagnostiques caida de ingresos, crisis, sueldo, venta de activos ni gastos financiados con deuda/ahorros si no aparece literalmente.',
+    'Balance anual es flujo registrado acumulado; no lo llames caja disponible.',
     '',
     'ANIO ANALIZADO: ' + data.year + ' comparado contra ' + data.previousYear,
+    'Caja actual registrada: ' + cajaActual,
     'Ingresos: ' + fmtEmail_(data.totals.ingresos) + ' vs ' + fmtEmail_(data.previousTotals.ingresos),
     'Gastos: ' + fmtEmail_(data.totals.gastos) + ' vs ' + fmtEmail_(data.previousTotals.gastos),
     'Balance: ' + fmtSignedEmail_(balance) + ' vs ' + fmtSignedEmail_(previousBalance),
@@ -364,7 +371,10 @@ function generarSugerenciaAnualIA_(data) {
   ].join('\n');
 
   try {
-    const resp = fetchIAConReintentos_('https://api.synterolink.com/v1/messages', {
+    const props = PropertiesService.getScriptProperties();
+    const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
+    const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
+    let resp = fetchIAConReintentos_(claudeUrl, {
       method: 'post',
       headers: {
         'x-api-key': apiKey,
@@ -372,29 +382,45 @@ function generarSugerenciaAnualIA_(data) {
         'content-type': 'application/json',
       },
       payload: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: claudeModel,
         max_tokens: 950,
         messages: [{ role: 'user', content: prompt }],
       }),
       muteHttpExceptions: true,
     }, 'email anual /v1/messages');
 
-    const result = JSON.parse(resp.getContentText());
+    let raw = resp.getContentText();
+    let responseCode = resp.getResponseCode();
+    let chatCompletionsFallback = false;
+    if (debeReintentarChatCompletions_(responseCode, raw, claudeUrl)) {
+      Logger.log('Email anual /v1/messages bloqueado; reintentando /v1/chat/completions.');
+      resp = llamarIAChatCompletions_(apiKey, claudeUrl, claudeModel, 950, prompt, '', '');
+      raw = resp.getContentText();
+      responseCode = resp.getResponseCode();
+      chatCompletionsFallback = responseCode < 300;
+    }
+
+    const result = parseJsonSeguro_(raw, null);
+    if (!result) {
+      Logger.log('Respuesta anual IA JSON invalida: ' + raw);
+      return sugerenciaAnualFallback_(data, 'Respuesta invalida de IA.');
+    }
     if (result.error) {
       Logger.log('Error API anual: ' + JSON.stringify(result.error));
       return sugerenciaAnualFallback_(data, result.error.message || 'Error de API');
     }
 
-    const consejo = result.content && result.content.find(function (b) {
-      return b.type === 'text';
-    });
+    const bloqueTexto = result.content && result.content.find(function (b) { return b.type === 'text'; });
+    const consejoTexto = chatCompletionsFallback
+      ? result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content
+      : bloqueTexto && bloqueTexto.text;
 
-    if (!consejo || !consejo.text) {
-      Logger.log('Respuesta anual IA inesperada: ' + resp.getContentText());
+    if (!consejoTexto) {
+      Logger.log('Respuesta anual IA inesperada: ' + raw);
       return sugerenciaAnualFallback_(data, 'Respuesta vacia de IA.');
     }
 
-    return String(consejo.text).trim();
+    return String(consejoTexto).trim();
   } catch (err) {
     Logger.log('Error generarSugerenciaAnualIA_: ' + err.toString());
     return sugerenciaAnualFallback_(data, err.toString());

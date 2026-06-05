@@ -419,100 +419,47 @@ function cmdProyeccion(chatId) {
 // Necesitas tu API key de Anthropic en Script Properties:
 // Archivo → Propiedades del proyecto → claude_api_key
 function cmdAnalisisIA(chatId) {
-  // chatId = 1538086276;
-  sendMessage(chatId, '🤖 Analizando tus finanzas...\n\nEstoy revisando ingresos, gastos, categorias, presupuestos, metas y proyeccion del ciclo 23-22.', true);
- 
-  const hoy = new Date();
-  const periodo = cicloPagoDesdeFecha_(hoy);
-  const nombreMes = periodo.label;
- 
-  // Datos del ciclo de pago
-  const data = filtrarTransaccionesCiclo_(obtenerTransacciones(chatId), periodo);
- 
-  if (data.length < 3) {
+  const contexto = contextoInsightsIA_(chatId);
+  sendMessage(chatId,
+    '🤖 Analizando tus finanzas...\n\n' +
+    'Estoy leyendo primero la caja actual registrada:\n' +
+    '`' + contexto.cajaActualTexto + '`\n\n' +
+    'Luego reviso movimientos, categorias, presupuestos y alertas del ciclo 23-22.',
+    true
+  );
+
+  if (contexto.movimientosMes < 3 && contexto.cajaActualTexto === 'no disponible') {
     return sendMessage(chatId,
-      '📭 Necesito al menos 3 movimientos en este ciclo para hacer un análisis útil.', true);
+      '📭 Necesito caja actual desde D1 o al menos 3 movimientos en este ciclo para hacer un análisis útil.', true);
   }
- 
-  let ingresos = 0, gastos = 0;
-  const porCat = {};
- 
-  data.forEach(r => {
-    const monto = parseFloat(r[5]) || 0;
-    if (r[2] === 'ingreso') {
-      ingresos += monto;
-    } else {
-      gastos += monto;
-      const cat = String(r[4]).toLowerCase();
-      porCat[cat] = (porCat[cat] || 0) + monto;
-    }
-  });
- 
-  const resumenCats = Object.entries(porCat)
-    .sort((a, b) => b[1] - a[1])
-    .map(([cat, m]) => `- ${cat}: S/ ${m.toFixed(2)}`)
-    .join('\n');
- 
-  // Presupuestos activos
-  const sheetPres    = getOrCreateSheet('Presupuestos', ['ChatID','Categoría','Límite']);
-  const presupuestos = sheetPres.getDataRange().getValues().slice(1)
-    .filter(r => String(r[0]) === chatId)
-    .map(r => `- ${r[1]}: límite S/ ${r[2]}`)
-    .join('\n');
- 
-  // Metas activas
-  const sheetMetas = getOrCreateSheet('Metas', ['ChatID','Nombre','Objetivo','Ahorrado','Creada']);
-  const metas      = sheetMetas.getDataRange().getValues().slice(1)
-    .filter(r => String(r[0]) === chatId)
-    .map(r => `- ${r[1]}: S/ ${r[3]} de S/ ${r[2]} ahorrados`)
-    .join('\n');
- 
-  const diaHoy      = diasTranscurridosCiclo_(periodo, hoy);
-  const diasMes     = diasTotalesCiclo_(periodo);
-  const pctMes      = Math.round((diaHoy / diasMes) * 100);
-  const gastoDiario = gastos / diaHoy;
-  const gastoProyect = gastoDiario * diasMes;
- 
+
   const prompt = [
-  'Eres un asesor financiero personal para Mayeson, un desarrollador independiente en Perú.',
-  'Analiza sus finanzas del ciclo de pago 23-22 y da 5 consejos concretos con números reales.',
-  '',
-  'DATOS DEL CICLO:',
-  `Ciclo: ${nombreMes} | Día ${diaHoy} de ${diasMes} (${pctMes}% del ciclo transcurrido)`,
-  `Ingresos: S/ ${ingresos.toFixed(2)}`,
-  `Gastos: S/ ${gastos.toFixed(2)}`,
-  `Balance: S/ ${(ingresos - gastos).toFixed(2)}`,
-  `Gasto diario promedio: S/ ${gastoDiario.toFixed(2)}`,
-  `Proyección de gastos al cierre: S/ ${gastoProyect.toFixed(2)}`,
-  `¿Proyección supera ingresos?: ${gastoProyect > ingresos ? 'SÍ ⚠️' : 'No'}`,
-  '',
-  'GASTOS POR CATEGORÍA:',
-  resumenCats,
-  presupuestos ? `\nPRESUPUESTOS ACTIVOS:\n${presupuestos}` : '',
-  metas        ? `\nMETAS DE AHORRO:\n${metas}`              : '',
-  '',
-  'REGLAS:',
-  '- Responde en español.',
-  '- USA los números reales para dar contexto en cada consejo.',
-  '- Sé específico: menciona categorías, montos y fechas cuando ayude.',
-  '- Si una categoría supera el 40% del gasto total, menciónala con su monto.',
-  '- Si la proyección supera los ingresos, pon alerta en el punto 1.',
-  '- Compara el gasto diario actual vs lo ideal para no pasarse.',
-  '- Relaciona los consejos con las metas de ahorro si existen.',
-  '- Tono cercano, directo y motivador. Nada de teoría.',
-  '- Cierra con una frase corta de motivación.',
-  '',
-  'FORMATO EXACTO (respeta el markdown para Telegram):',
-  '💡 *Análisis del ciclo ' + nombreMes + '*',
-  '',
-  '1. [consejo con número real]',
-  '2. [consejo con número real]',
-  '3. [consejo con número real]',
-  '4. [consejo con número real]',
-  '5. [consejo con número real]',
-  '',
-  '🔥 [frase motivadora corta]',
-].join('\n');
+    'Eres un asesor financiero personal para Mayeson en Peru.',
+    'Haz un analisis financiero breve, prudente y accionable.',
+    '',
+    'REGLAS CRITICAS:',
+    '- El primer punto debe empezar por Caja actual registrada y usar ese monto como base operativa.',
+    '- No uses balance del ciclo, ingresos del ciclo ni indicadores proyectados como caja disponible.',
+    '- No diagnostiques caida de ingresos, crisis, venta de activos, falta de sueldo o gastos financiados con deuda/ahorros si no aparece literalmente en los datos.',
+    '- Si el balance del ciclo es negativo, llamalo flujo registrado negativo; sugiere revisar si faltan ingresos por registrar o si hay fijos/gastos cargados.',
+    '- No uses porcentajes extremos contra ingresos del ciclo. Si hablas de presupuesto, menciona categoria, gasto y limite.',
+    '- No recomiendes productos financieros especificos, trading, deuda nueva ni decisiones riesgosas.',
+    '- Usa solo los montos del resumen. No inventes importes, fechas ni categorias.',
+    '',
+    'RESUMEN REAL:',
+    contexto.resumen,
+    '',
+    'FORMATO EXACTO PARA TELEGRAM:',
+    '💡 *Analisis financiero*',
+    '',
+    '1. *Caja actual:* [lectura con el monto de caja actual registrada]',
+    '2. *Gasto principal:* [categoria/monto real y que accion tomar]',
+    '3. *Presupuesto:* [solo si hay categoria sensible; si no, di que no hay alerta fuerte]',
+    '4. *Deudas:* [monto PEN/USD pendiente y prioridad prudente]',
+    '5. *Siguiente accion:* [accion concreta para las proximas 48 horas]',
+    '',
+    'Cierre: [frase corta, sin dramatizar]',
+  ].join('\n');
  
   try {
     const apiKey = PropertiesService.getScriptProperties().getProperty('claude_api_key');
@@ -552,7 +499,11 @@ function cmdAnalisisIA(chatId) {
       chatCompletionsFallback = responseCode < 300;
     }
 
-    const result = JSON.parse(raw);
+    const result = parseJsonSeguro_(raw, null);
+    if (!result) {
+      Logger.log('Analisis IA JSON invalido: ' + raw);
+      return sendMessage(chatId, '❌ Respuesta inválida de la IA. Intenta de nuevo.', true);
+    }
  
     if (result.error) {
       Logger.log('Error API: ' + JSON.stringify(result.error));
