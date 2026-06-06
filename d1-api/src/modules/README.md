@@ -1,15 +1,16 @@
+
 # Modules
 
-Mapa objetivo para separar el API sin romper contratos existentes:
+Estructura del API D1:
 
-- `auth`: login, sesion, cambio de clave y permisos.
-- `dashboard`: resumen principal, patrimonio, dinero libre, analisis e insights.
-- `transactions`: movimientos, importacion y exportacion.
-- `commitments`: gastos fijos, deudas y pagos.
-- `investments`: inversiones, portafolio y valorizacion.
-- `rules`: categorias, reglas automaticas y normalizacion.
-- `sync`: sincronizacion Sheets -> D1.
-- `receipts`: recibos, R2 y archivos adjuntos.
-- `shared`: fechas, moneda, respuestas HTTP y utilidades comunes.
+- `dashboard/planning.js`: dinero libre, alertas, insights, calendario y resumen inteligente.
+- `settings/service.js`: configuracion del dashboard, usuario principal, categorias visibles y perfiles.
 
-La regla es mover primero helpers puros y despues handlers con pruebas de sintaxis/despliegue en cada paso.
+Siguientes cortes recomendados:
+
+- `transactions/service.js`: movimientos, exportacion y recibos enlazados.
+- `commitments/service.js`: gastos fijos, deudas y pagos.
+- `investments/service.js`: inversiones y patrimonio.
+- `sync/service.js`: sincronizacion Sheets -> D1.
+- `receipts/service.js`: R2 y archivos de recibos.
+- `rules/service.js`: reglas de categorias y presupuestos.

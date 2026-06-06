@@ -1,5 +1,10 @@
+
 # App
 
-Entrada del Worker HTTP.
+Entrada HTTP del Worker.
 
-Por ahora `worker.js` conserva la logica operativa completa del API para no cambiar comportamiento durante el refactor. La siguiente separacion segura es mover rutas por dominio a `../modules/*` manteniendo `index.js` como entrypoint estable para Wrangler.
+- `../index.js` es el entrypoint estable de Wrangler.
+- `worker.js` arma el router y delega a modulos de dominio.
+- La logica compartida vive en `../shared`.
+- Autenticacion vive en `../auth`.
+- Funciones de dashboard y configuracion viven en `../modules`.
