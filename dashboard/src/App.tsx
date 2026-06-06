@@ -1,5 +1,5 @@
-import { Suspense, lazy, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { apiEndpoint, getUsdToPenRate } from './app/api';
+import { Suspense, lazy, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { apiEndpoint } from './app/api';
 import { isApiConfigured, SESSION_STORAGE_KEY } from './app/config';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { PasswordPanel } from './components/auth/PasswordPanel';
@@ -7,7 +7,7 @@ import { AppHeader } from './components/layout/AppHeader';
 import { DashboardSidebar, DashboardTabs } from './components/layout/DashboardTabs';
 import { OverviewSection } from './features/overview/OverviewSection';
 import { getRealExpenses } from './lib/finance';
-import type { ApiStatus, DashboardData, DashboardUser, TabId } from './types/dashboard';
+import type { ApiStatus, DashboardBootstrapData, DashboardData, DashboardUser, TabId } from './types/dashboard';
 
 const AnalysisSection = lazy(() => import('./features/analysis/AnalysisSection').then((mod) => ({ default: mod.AnalysisSection })));
 const CalendarSection = lazy(() => import('./features/calendar/CalendarSection').then((mod) => ({ default: mod.CalendarSection })));
@@ -57,6 +57,7 @@ export default function App() {
   const [users, setUsers] = useState<DashboardUser[]>([]);
   const [selectedChatId, setSelectedChatId] = useState('');
   const [exchangeRate, setExchangeRate] = useState(3.85);
+  const selectedChatIdRef = useRef('');
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const [syncError, setSyncError] = useState('');
@@ -67,18 +68,20 @@ export default function App() {
   const clearSession = useCallback((message = 'Sesion expirada. Ingresa nuevamente.') => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
     setToken(null);
+    selectedChatIdRef.current = '';
     setAuthError(message);
     setStatus('error');
   }, []);
 
-  const fetchData = useCallback(async (sessionToken?: string | null) => {
+  const fetchData = useCallback(async (sessionToken?: string | null, chatIdOverride?: string) => {
     const activeToken = sessionToken ?? token;
     if (!configured || !activeToken) return;
 
     setLoading(true);
     try {
-      const url = new URL(apiEndpoint('dashboard'));
-      if (selectedChatId) url.searchParams.set('chat_id', selectedChatId);
+      const url = new URL(apiEndpoint('bootstrap'));
+      const requestedChatId = chatIdOverride ?? selectedChatIdRef.current;
+      if (requestedChatId) url.searchParams.set('chat_id', requestedChatId);
 
       const response = await fetch(url.toString(), {
         headers: { Authorization: `Bearer ${activeToken}` },
@@ -89,12 +92,20 @@ export default function App() {
         return;
       }
 
-      const nextData = (await response.json()) as DashboardData;
-      if (!response.ok || nextData.ok === false || nextData.error) {
-        throw new Error(nextData.error || 'Respuesta invalida');
+      const result = (await response.json()) as DashboardBootstrapData;
+      const nextData = result.dashboard;
+      if (!response.ok || result.ok === false || result.error || !nextData) {
+        throw new Error(result.error || 'Respuesta invalida');
       }
 
       setData(nextData);
+      setUsers(result.users || []);
+      setExchangeRate(Number(result.exchangeRate || nextData.exchangeRate || 3.85) || 3.85);
+      const resolvedChatId = requestedChatId || result.defaultChatId || result.users?.[0]?.chatId || '';
+      if (resolvedChatId) {
+        selectedChatIdRef.current = resolvedChatId;
+        setSelectedChatId((current) => current || resolvedChatId);
+      }
       setStatus('live');
     } catch (error) {
       console.error('API error:', error);
@@ -102,7 +113,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [clearSession, configured, selectedChatId, token]);
+  }, [clearSession, configured, token]);
 
   const syncSheetsToD1 = useCallback(async () => {
     if (!configured || !token) return;
@@ -158,29 +169,11 @@ export default function App() {
     }
   }, [clearSession, configured, fetchData, selectedChatId, token]);
 
-  const fetchUsers = useCallback(async (sessionToken?: string | null) => {
-    const activeToken = sessionToken ?? token;
-    if (!configured || !activeToken) return;
-
-    try {
-      const response = await fetch(apiEndpoint('users'), {
-        headers: { Authorization: `Bearer ${activeToken}` },
-      });
-
-      if (response.status === 401) {
-        clearSession();
-        return;
-      }
-
-      const result = await response.json() as { ok?: boolean; users?: DashboardUser[]; defaultChatId?: string };
-      if (response.ok && result.ok !== false) {
-        setUsers(result.users || []);
-        setSelectedChatId((current) => current || result.defaultChatId || result.users?.[0]?.chatId || '');
-      }
-    } catch (error) {
-      console.error('Users error:', error);
-    }
-  }, [clearSession, configured, token]);
+  const handleSelectedChatIdChange = useCallback((chatId: string) => {
+    selectedChatIdRef.current = chatId;
+    setSelectedChatId(chatId);
+    void fetchData(undefined, chatId);
+  }, [fetchData]);
 
   const handleLogin = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -209,15 +202,13 @@ export default function App() {
       setLoginEmail(cleanEmail);
       setPassword('');
       setStatus('demo');
-      await fetchUsers(result.token);
-      await fetchData(result.token);
     } catch (error) {
       console.error('Login error:', error);
       setAuthError('Usuario, clave o API no disponible.');
     } finally {
       setAuthLoading(false);
     }
-  }, [fetchData, fetchUsers, loginEmail, password]);
+  }, [loginEmail, password]);
 
   const handleLogout = useCallback(() => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -226,6 +217,7 @@ export default function App() {
     setStatus('demo');
     setAuthError('');
     setUsers([]);
+    selectedChatIdRef.current = '';
     setSelectedChatId('');
     void fetch(apiEndpoint('logout'), { method: 'POST' }).catch(() => undefined);
   }, []);
@@ -271,14 +263,13 @@ export default function App() {
       setNewPassword('');
       setConfirmPassword('');
       setPasswordSuccess('Clave actualizada. Usa esta nueva clave en el proximo login.');
-      await fetchData(result.token);
     } catch (error) {
       console.error('Password change error:', error);
       setPasswordError('No se pudo cambiar la clave. Revisa la clave actual.');
     } finally {
       setPasswordLoading(false);
     }
-  }, [confirmPassword, currentPassword, fetchData, newPassword, token]);
+  }, [confirmPassword, currentPassword, newPassword, token]);
 
   useEffect(() => {
     if (configured || token) return undefined;
@@ -296,13 +287,13 @@ export default function App() {
   useEffect(() => {
     if (!configured || !token) return;
     void fetchData(token);
-    void fetchUsers(token);
-    void getUsdToPenRate().then(setExchangeRate).catch(() => setExchangeRate(3.85));
-  }, [fetchData, fetchUsers, configured, token]);
+  }, [fetchData, configured, token]);
 
   useEffect(() => {
     if (!configured || !token) return undefined;
-    const timer = window.setInterval(() => void fetchData(token), 60000);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void fetchData(token);
+    }, 180000);
     return () => window.clearInterval(timer);
   }, [fetchData, configured, token]);
 
@@ -356,7 +347,7 @@ export default function App() {
             onLogout={handleLogout}
             users={users}
             selectedChatId={selectedChatId}
-            onSelectedChatIdChange={setSelectedChatId}
+            onSelectedChatIdChange={handleSelectedChatIdChange}
           />
 
           {syncMessage ? (

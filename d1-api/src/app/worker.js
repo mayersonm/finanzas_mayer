@@ -124,6 +124,11 @@ export default {
         return json(await calendarOnly(env, url.searchParams));
       }
 
+      if (url.pathname === '/api/bootstrap' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await bootstrap(env, url.searchParams));
+      }
+
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
         await requireDashboardOrAdminAccess(request, env);
         return json(await dashboard(env, url.searchParams));
@@ -534,6 +539,26 @@ async function calendarOnly(env, params) {
   };
 }
 
+async function bootstrap(env, params) {
+  const started = Date.now();
+  const [dashboardData, usersData] = await Promise.all([
+    dashboard(env, params),
+    usersList(env),
+  ]);
+
+  return {
+    ok: true,
+    dashboard: dashboardData,
+    users: usersData.users || [],
+    defaultChatId: usersData.defaultChatId || '',
+    exchangeRate: dashboardData.exchangeRate || 3.85,
+    exchangeRateSource: dashboardData.exchangeRateSource || '',
+    source: 'd1-bootstrap',
+    latencyMs: Date.now() - started,
+    updatedAt: localIso(new Date()),
+  };
+}
+
 async function dashboard(env, params) {
   const chatId = getChatId(env, params);
   const now = new Date();
@@ -544,7 +569,8 @@ async function dashboard(env, params) {
   const calendarMonth = cycle;
   const cycleKey = monthKey;
   const monthName = monthLongNameFromKey(localDateKey(now));
-  const usdRate = Number((await exchangeRate(env)).rate || 3.85);
+  const rateInfo = await exchangeRate(env);
+  const usdRate = Number(rateInfo.rate || 3.85);
   const user = await ensureUserForChat(env, chatId);
   const settings = normalizeSettingsConfig(userSettingsToConfig(await getUserSettings(env, user.id)));
 
@@ -759,6 +785,8 @@ async function dashboard(env, params) {
     alertas: alerts,
     insights: insights,
     emailConfig,
+    exchangeRate: usdRate,
+    exchangeRateSource: rateInfo.source || '',
     source: 'd1',
     updatedAt: localIso(now),
   };
