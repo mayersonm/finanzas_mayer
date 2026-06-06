@@ -54,8 +54,11 @@ export function OverviewSection({
     : periodLabel;
   const committedRemaining = closure.pendienteComprometido ?? fixedPending + budgetRemaining + debtPending;
   const projectedFree = closure.queQueda;
-  const commitmentRate = percent(committedRemaining, Math.max(cashBalance, monthIncome));
+  const commitmentRate = percent(committedRemaining, cashBalance);
   const closureBudgetPct = percent(closure.presupuestoUsado, closure.presupuestoLimite);
+  const budgetStatusDetail = closure.presupuestoExcedido && closure.presupuestoExcedido > 0
+    ? `Disponible en otras categorias; excedido ${formatMoney(closure.presupuestoExcedido)}`
+    : `${closureBudgetPct}% del limite usado`;
   const automation = data.automatizacion;
 
   async function saveClosure() {
@@ -140,29 +143,29 @@ export function OverviewSection({
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <Title>Lectura rapida</Title>
-              <Text>Lo que pide atencion primero.</Text>
+              <Title>Estado del ciclo</Title>
+              <Text>Caja, compromisos y salidas actuales.</Text>
             </div>
-            <Badge color={commitmentRate >= 100 ? 'rose' : commitmentRate >= 80 ? 'amber' : 'emerald'}>{commitmentRate}%</Badge>
+            <Badge color={commitmentRate >= 100 ? 'rose' : commitmentRate >= 80 ? 'amber' : 'emerald'}>{commitmentRate}% de caja</Badge>
           </div>
 
           <div className="mt-4 grid gap-3">
             <StatusRow
-              label="Pendiente"
+              label="Compromisos pendientes"
               value={formatMoney(committedRemaining)}
-              detail="Deudas, fijos y presupuesto pendiente"
+              detail="Deudas + fijos + presupuesto por usar"
               tone={commitmentRate >= 100 ? 'text-rose-300' : commitmentRate >= 80 ? 'text-amber-300' : 'text-emerald-300'}
             />
             <StatusRow
-              label="Gasto ciclo"
+              label="Salidas del ciclo"
               value={formatMoney(data.gastosMes)}
-              detail={`${expensePeriodLabel} · ${data.movimientosMes ?? data.movimientos} movimientos`}
+              detail={`Gastos + fijos pagados (${expensePeriodLabel})`}
               tone={data.gastosMes > cashBalance ? 'text-amber-300' : 'text-sky-300'}
             />
             <StatusRow
-              label="Presupuesto"
+              label="Presupuesto disponible"
               value={formatMoney(closure.presupuestoRestante)}
-              detail={`${closureBudgetPct}% usado`}
+              detail={budgetStatusDetail}
               tone={closure.presupuestoRestante < 0 ? 'text-rose-300' : closureBudgetPct >= 85 ? 'text-amber-300' : 'text-emerald-300'}
             />
           </div>
