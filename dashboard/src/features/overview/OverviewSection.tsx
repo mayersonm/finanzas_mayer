@@ -1,12 +1,10 @@
 import { useState } from 'react';
-import { Badge, BarChart, Card, DonutChart, Metric, ProgressBar, Text, Title, type Color } from '@tremor/react';
+import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
 import { apiEndpoint } from '../../app/api';
-import { KpiCard } from '../../components/dashboard/KpiCard';
 import { EmptyState } from '../../components/common/EmptyState';
 import { DatabaseIcon, SaveIcon } from '../../components/common/AppIcons';
 import { percent } from '../../lib/finance';
 import { formatMoney, formatUpdatedAt } from '../../lib/formatters';
-import { categoryColors } from '../../lib/tremorColors';
 import type { AutomationCenter, ClosureSummary, DashboardData, RealExpenses } from '../../types/dashboard';
 
 export function OverviewSection({
@@ -29,8 +27,6 @@ export function OverviewSection({
   const [closing, setClosing] = useState(false);
   const [closeMessage, setCloseMessage] = useState('');
   const [closeError, setCloseError] = useState('');
-  const totalCategorias = data.categorias.reduce((total, item) => total + item.monto, 0);
-  const topCategory = data.categorias[0];
   const topFugas = data.topFugas || [];
   const monthIncome = data.ingresosMes ?? data.ingresos;
   const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
@@ -99,49 +95,96 @@ export function OverviewSection({
 
   return (
     <>
-      <section className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <KpiCard
-          label="Caja actual"
-          value={formatMoney(cashBalance)}
-          detail="Saldo total registrado"
-          color={cashBalance >= 0 ? 'emerald' : 'rose'}
-        />
-        <KpiCard
-          label="Patrimonio disponible"
-          value={formatMoney(patrimonioDisponible)}
-          detail="Caja menos deudas y fijos"
-          color={patrimonioDisponible >= 0 ? 'emerald' : 'rose'}
-        />
-        <KpiCard
-          label="Libre proyectado"
-          value={formatMoney(projectedFree)}
-          detail="Patrimonio menos presupuesto"
-          color={projectedFree >= 0 ? 'emerald' : 'rose'}
-        />
-        <KpiCard
-          label="Pendiente comprometido"
-          value={formatMoney(committedRemaining)}
-          detail={`${commitmentRate}% de caja actual`}
-          color={commitmentRate >= 100 ? 'rose' : commitmentRate >= 80 ? 'amber' : 'violet'}
-        />
-        <KpiCard
-          label="Gastos del ciclo"
-          value={formatMoney(data.gastosMes)}
-          detail={`${periodLabel} - ${data.movimientosMes ?? data.movimientos} movimientos`}
-          color={data.gastosMes > cashBalance ? 'amber' : 'sky'}
-        />
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge color={cashBalance >= 0 ? 'emerald' : 'rose'}>{cashBalance >= 0 ? 'Caja positiva' : 'Caja negativa'}</Badge>
+                <Badge color="slate">{data.cycleLabel || data.mes}</Badge>
+              </div>
+              <Title>Vista principal</Title>
+              <Text>{periodLabel}</Text>
+            </div>
+            <Badge color="cyan">Cierre {formatDateLabel(closure.closeDate)}</Badge>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
+            <div className="min-w-0">
+              <Text>Caja actual</Text>
+              <p className={`mt-2 truncate font-mono text-4xl font-semibold sm:text-5xl ${cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                {formatMoney(cashBalance)}
+              </p>
+              <p className="mt-3 max-w-2xl text-sm text-slate-400">
+                Saldo real registrado en D1. Esta es la base para decidir cuanto puedes gastar hoy.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <FocusMetric
+                label="Libre actual"
+                value={formatMoney(projectedFree)}
+                detail="Despues de compromisos y presupuesto"
+                tone={projectedFree >= 0 ? 'text-emerald-300' : 'text-rose-300'}
+              />
+              <FocusMetric
+                label="Patrimonio"
+                value={formatMoney(patrimonioDisponible)}
+                detail="Caja menos deudas y fijos"
+                tone={patrimonioDisponible >= 0 ? 'text-emerald-300' : 'text-rose-300'}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <Title>Lectura rapida</Title>
+              <Text>Lo que pide atencion primero.</Text>
+            </div>
+            <Badge color={commitmentRate >= 100 ? 'rose' : commitmentRate >= 80 ? 'amber' : 'emerald'}>{commitmentRate}%</Badge>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            <StatusRow
+              label="Pendiente"
+              value={formatMoney(committedRemaining)}
+              detail="Deudas, fijos y presupuesto pendiente"
+              tone={commitmentRate >= 100 ? 'text-rose-300' : commitmentRate >= 80 ? 'text-amber-300' : 'text-emerald-300'}
+            />
+            <StatusRow
+              label="Gasto ciclo"
+              value={formatMoney(data.gastosMes)}
+              detail={`${expensePeriodLabel} · ${data.movimientosMes ?? data.movimientos} movimientos`}
+              tone={data.gastosMes > cashBalance ? 'text-amber-300' : 'text-sky-300'}
+            />
+            <StatusRow
+              label="Presupuesto"
+              value={formatMoney(closure.presupuestoRestante)}
+              detail={`${closureBudgetPct}% usado`}
+              tone={closure.presupuestoRestante < 0 ? 'text-rose-300' : closureBudgetPct >= 85 ? 'text-amber-300' : 'text-emerald-300'}
+            />
+          </div>
+
+          <ProgressBar
+            className="mt-5"
+            value={Math.min(commitmentRate, 100)}
+            color={commitmentRate >= 100 ? 'rose' : commitmentRate >= 80 ? 'amber' : 'emerald'}
+          />
+        </Card>
       </section>
 
       {automation ? (
         <AutomationPanel automation={automation} onSyncSheets={onSyncSheets} syncing={Boolean(syncing)} />
       ) : null}
 
-      <section className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)]">
+      <section className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <Title>{closure.label || 'Cierre 23'}</Title>
-              <Text>{periodLabel} - cierre {formatDateLabel(closure.closeDate)}</Text>
+              <Title>Cierre financiero</Title>
+              <Text>{closure.label || 'Cierre 23'} · {periodLabel}</Text>
               {closure.savedAt ? <Text>Guardado {formatSavedAt(closure.savedAt)}</Text> : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -182,18 +225,14 @@ export function OverviewSection({
             </div>
           ) : null}
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <ClosureMetric label="Caja actual" value={formatMoney(cashBalance)} tone={cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <ClosureMetric label="Ingresos ciclo" value={formatMoney(closure.ingresos)} tone="text-emerald-300" detail={incomePeriodLabel} />
             <ClosureMetric label="Gastos ciclo" value={formatMoney(closure.gastos)} tone="text-rose-300" detail={expensePeriodLabel} />
             <ClosureMetric label="Balance ciclo" value={formatMoney(closure.balance)} tone={closure.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
-            <ClosureMetric label="Libre actual" value={formatMoney(closure.queQueda)} tone={closure.queQueda >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
           </div>
 
           <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-            <ClosureLine label="Fijos pagados" value={closure.fijosPagados} />
             <ClosureLine label="Fijos pendientes" value={closure.fijosPendientes} />
-            <ClosureLine label="Presupuesto usado" value={closure.presupuestoUsado} />
             <ClosureLine label="Presupuesto pendiente" value={closure.presupuestoRestante} strong />
             <ClosureLine label="Deudas pendientes" value={closure.deudasPendientes} />
             <ClosureLine label="Total pendiente" value={closure.pendienteComprometido} strong />
@@ -227,23 +266,25 @@ export function OverviewSection({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Title>Top fugas</Title>
-              <Text>Los 5 gastos variables que mas pesan este ciclo.</Text>
+              <Text>Solo los gastos variables que conviene mirar hoy.</Text>
             </div>
-            <Badge color={topFugas.length ? 'amber' : 'emerald'}>{topFugas.length ? `${topFugas.length} alertas` : 'Sin fugas'}</Badge>
+            <Badge color={topFugas.length ? 'amber' : 'emerald'}>{topFugas.length ? `${Math.min(topFugas.length, 3)} alertas` : 'Sin fugas'}</Badge>
           </div>
 
           {topFugas.length ? (
-            <div className="mt-4 grid gap-3 lg:grid-cols-5">
-              {topFugas.map((item, index) => (
-                <div key={`${item.label}-${item.category}`} className="min-w-0 border-t border-slate-800 pt-3 lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-200">#{index + 1}</span>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {topFugas.slice(0, 3).map((item, index) => (
+                <div key={`${item.label}-${item.category}`} className="min-w-0 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-200">#{index + 1}</span>
+                      <p className="mt-2 truncate text-sm font-semibold text-slate-100">{item.label}</p>
+                      <Text className="truncate">{item.category}</Text>
+                    </div>
                     <span className="shrink-0 font-mono text-sm font-semibold text-slate-100">{formatMoney(item.amount)}</span>
                   </div>
-                  <p className="truncate text-sm font-semibold text-slate-100">{item.label}</p>
-                  <Text className="mt-1 truncate">{item.category}</Text>
                   <ProgressBar className="mt-3" value={item.sharePct} color={item.sharePct >= 35 ? 'rose' : item.sharePct >= 20 ? 'amber' : 'cyan'} />
-                  <p className="mt-2 text-xs text-slate-400">{item.reason}</p>
+                  <p className="mt-2 line-clamp-2 text-xs text-slate-400">{item.reason}</p>
                 </div>
               ))}
             </div>
@@ -254,82 +295,29 @@ export function OverviewSection({
           )}
         </Card>
       </section>
-
-      <section className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <Title>Ultimos 6 meses</Title>
-              <Text>Por fecha real del movimiento</Text>
-            </div>
-            <Badge color="emerald">S/</Badge>
-          </div>
-          <BarChart
-            className="mt-4 h-56 sm:mt-6 sm:h-72"
-            data={data.meses}
-            index="mes"
-            categories={['ingresos', 'gastos']}
-            colors={['emerald', 'rose']}
-            valueFormatter={formatMoney}
-            yAxisWidth={56}
-            showLegend
-          />
-        </Card>
-
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Title>Gastos por categoria</Title>
-              <Text>{topCategory ? `Principal: ${topCategory.cat}` : 'Sin gastos este ciclo'}</Text>
-            </div>
-            <Badge color="cyan">{data.categorias.length}</Badge>
-          </div>
-          {data.categorias.length ? (
-            <>
-              <DonutChart
-                className="mt-4 h-48 sm:mt-6 sm:h-56"
-                data={data.categorias}
-                category="monto"
-                index="cat"
-                colors={categoryColors}
-                valueFormatter={formatMoney}
-                showLabel
-              />
-              <div className="mt-4 space-y-3 sm:mt-5">
-                {data.categorias.slice(0, 5).map((item, index) => (
-                  <div key={item.cat} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-200">{item.cat}</p>
-                      <ProgressBar className="mt-2" value={percent(item.monto, totalCategorias)} color={categoryColors[index % categoryColors.length]} />
-                    </div>
-                    <p className="font-mono text-sm font-semibold text-slate-100">{formatMoney(item.monto)}</p>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="mt-6">
-              <EmptyState>Sin gastos este ciclo.</EmptyState>
-            </div>
-          )}
-        </Card>
-      </section>
-
-      <section className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 md:grid-cols-3">
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <Text>Ingresos del ciclo</Text>
-          <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(monthIncome)}</Metric>
-        </Card>
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <Text>Fijos pendientes</Text>
-          <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(fixedPending)}</Metric>
-        </Card>
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <Text>Presupuesto restante</Text>
-          <Metric className="mt-2 truncate text-xl sm:text-2xl">{formatMoney(budgetRemaining)}</Metric>
-        </Card>
-      </section>
     </>
+  );
+}
+
+function FocusMetric({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: string }) {
+  return (
+    <div className="min-w-0 rounded-tremor-default border border-slate-800 bg-slate-900/30 px-3 py-3">
+      <Text>{label}</Text>
+      <p className={`mt-1 truncate font-mono text-xl font-semibold ${tone}`}>{value}</p>
+      <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>
+    </div>
+  );
+}
+
+function StatusRow({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: string }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-t border-slate-800 pt-3 first:border-t-0 first:pt-0">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-slate-100">{label}</p>
+        <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>
+      </div>
+      <p className={`shrink-0 font-mono text-sm font-semibold ${tone}`}>{value}</p>
+    </div>
   );
 }
 
@@ -342,7 +330,7 @@ function AutomationPanel({
   onSyncSheets?: () => void;
   syncing: boolean;
 }) {
-  const primaryActions = automation.actions.slice(0, 4);
+  const primaryActions = automation.actions.slice(0, 2);
 
   return (
     <section className="mt-4 sm:mt-5">
@@ -350,27 +338,35 @@ function AutomationPanel({
         <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Title>{automation.title || 'Piloto automatico'}</Title>
+              <Title>Prioridad de hoy</Title>
               <Badge color={automationColor(automation.status)}>{automation.statusLabel}</Badge>
               <Badge color={automation.score >= 80 ? 'emerald' : automation.score >= 60 ? 'amber' : 'rose'}>{automation.score}/100</Badge>
             </div>
             <Text className="mt-1">{automation.message}</Text>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <AutomationMetric label="Gasto diario" value={formatMoney(automation.daily.normal)} detail={`${automation.daily.daysLeft} dias restantes`} />
-              <AutomationMetric label="Modo seguro" value={formatMoney(automation.daily.safe)} detail="Ritmo conservador" />
-              <AutomationMetric label="Sync" value={automation.sync.statusLabel} detail={automation.sync.lastAt ? formatUpdatedAt(automation.sync.lastAt) : 'Sin registro'} />
-              <AutomationMetric label="Reglas" value={`${automation.rules.coveragePct}%`} detail={`${automation.rules.categoryRules} reglas / ${automation.rules.budgetRules} presupuesto`} />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <FocusMetric
+                label="Gasto diario"
+                value={formatMoney(automation.daily.normal)}
+                detail={`${automation.daily.daysLeft} dias restantes`}
+                tone="text-cyan-300"
+              />
+              <FocusMetric
+                label="Sync Sheets"
+                value={automation.sync.statusLabel}
+                detail={automation.sync.lastAt ? formatUpdatedAt(automation.sync.lastAt) : 'Sin registro'}
+                tone={automation.sync.status === 'ok' ? 'text-emerald-300' : 'text-amber-300'}
+              />
             </div>
           </div>
 
           <div className="min-w-0">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <Title>Acciones sugeridas</Title>
-                <Text>{automation.rules.message}</Text>
+                <Title>Acciones clave</Title>
+                <Text>Maximo dos para no llenar la pantalla.</Text>
               </div>
-              {automation.budgets.risky ? <Badge color="amber">{automation.budgets.risky} presupuestos</Badge> : <Badge color="emerald">OK</Badge>}
+              {automation.budgets.risky ? <Badge color="amber">{automation.budgets.risky} riesgos</Badge> : <Badge color="emerald">OK</Badge>}
             </div>
 
             {primaryActions.length ? (
@@ -407,33 +403,10 @@ function AutomationPanel({
                 <EmptyState>Sin acciones urgentes.</EmptyState>
               </div>
             )}
-
-            {automation.rules.suggestions.length ? (
-              <div className="mt-4 border-t border-slate-800 pt-3">
-                <p className="text-sm font-semibold text-slate-100">Reglas candidatas</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {automation.rules.suggestions.slice(0, 3).map((item) => (
-                    <span key={item.keyword} className="rounded-full border border-slate-800 bg-slate-900/40 px-3 py-1 text-xs font-medium text-slate-300">
-                      {item.label}{' -> '}{item.category}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
       </Card>
     </section>
-  );
-}
-
-function AutomationMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <div className="min-w-0 rounded-tremor-default border border-slate-800 bg-slate-900/30 px-3 py-2">
-      <Text>{label}</Text>
-      <p className="mt-1 truncate font-mono text-lg font-semibold text-slate-100">{value}</p>
-      <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>
-    </div>
   );
 }
 
