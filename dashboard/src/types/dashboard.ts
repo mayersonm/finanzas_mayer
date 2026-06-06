@@ -218,6 +218,76 @@ export interface SmartInsight {
   message: string;
 }
 
+export interface AutomationAction {
+  id: string;
+  type: 'sync' | 'closure' | 'spending' | 'budget' | 'rules' | 'commitments' | 'alert' | 'leak' | string;
+  priority: 'high' | 'medium' | 'low' | string;
+  title: string;
+  message: string;
+  cta: string;
+  runnable: boolean;
+}
+
+export interface AutomationRuleSuggestion {
+  keyword: string;
+  category: string;
+  label: string;
+  count: number;
+  amount: number;
+  example: string;
+  reason: string;
+}
+
+export interface AutomationCenter {
+  status: 'ok' | 'watch' | 'attention' | string;
+  statusLabel: string;
+  score: number;
+  title: string;
+  message: string;
+  cycle: {
+    start: string;
+    end: string;
+    closeDate: string;
+    range: string;
+  };
+  daily: {
+    safe: number;
+    normal: number;
+    flexible: number;
+    availableToSpend: number;
+    daysLeft: number;
+  };
+  sync: {
+    status: 'ok' | 'stale' | 'missing' | 'error' | string;
+    statusLabel: string;
+    lastAt?: string;
+    ageHours?: number | null;
+    source?: string;
+    message: string;
+  };
+  rules: {
+    categoryRules: number;
+    budgetRules: number;
+    coveragePct: number;
+    weakTransactions: number;
+    suggestions: AutomationRuleSuggestion[];
+    message: string;
+  };
+  budgets: {
+    risky: number;
+    watched: Array<{
+      category: string;
+      limit: number;
+      spent: number;
+      remaining: number;
+      pct: number;
+      status: string;
+    }>;
+  };
+  actions: AutomationAction[];
+  updatedAt?: string;
+}
+
 export interface TopLeak {
   label: string;
   category: string;
@@ -494,6 +564,7 @@ export interface DashboardData {
   metas: Goal[];
   alertas?: SmartAlert[];
   insights?: SmartInsight[];
+  automatizacion?: AutomationCenter;
   emailConfig?: EmailConfig;
   exchangeRate?: number;
   exchangeRateSource?: string;
