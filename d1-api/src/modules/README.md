@@ -4,6 +4,7 @@
 Estructura del API D1:
 
 - `dashboard/planning.js`: dinero libre, alertas, insights, calendario y resumen inteligente.
+- `dashboard/automation.js`: piloto automatico, auditor de sync, cobertura de reglas y acciones sugeridas.
 - `settings/service.js`: configuracion del dashboard, usuario principal, categorias visibles y perfiles.
 
 Siguientes cortes recomendados:

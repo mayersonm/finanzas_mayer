@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { Badge, BarChart, Card, DonutChart, Metric, ProgressBar, Text, Title } from '@tremor/react';
+import { Badge, BarChart, Card, DonutChart, Metric, ProgressBar, Text, Title, type Color } from '@tremor/react';
 import { apiEndpoint } from '../../app/api';
 import { KpiCard } from '../../components/dashboard/KpiCard';
 import { EmptyState } from '../../components/common/EmptyState';
-import { SaveIcon } from '../../components/common/AppIcons';
+import { DatabaseIcon, SaveIcon } from '../../components/common/AppIcons';
 import { percent } from '../../lib/finance';
-import { formatMoney } from '../../lib/formatters';
+import { formatMoney, formatUpdatedAt } from '../../lib/formatters';
 import { categoryColors } from '../../lib/tremorColors';
-import type { ClosureSummary, DashboardData, RealExpenses } from '../../types/dashboard';
+import type { AutomationCenter, ClosureSummary, DashboardData, RealExpenses } from '../../types/dashboard';
 
 export function OverviewSection({
   data,
@@ -15,12 +15,16 @@ export function OverviewSection({
   authToken,
   chatId,
   onChanged,
+  onSyncSheets,
+  syncing,
 }: {
   data: DashboardData;
   realExpenses: RealExpenses;
   authToken?: string | null;
   chatId?: string;
   onChanged?: () => void;
+  onSyncSheets?: () => void;
+  syncing?: boolean;
 }) {
   const [closing, setClosing] = useState(false);
   const [closeMessage, setCloseMessage] = useState('');
@@ -50,6 +54,7 @@ export function OverviewSection({
   const projectedFree = closure.queQueda;
   const commitmentRate = percent(committedRemaining, Math.max(cashBalance, monthIncome));
   const closureBudgetPct = percent(closure.presupuestoUsado, closure.presupuestoLimite);
+  const automation = data.automatizacion;
 
   async function saveClosure() {
     if (!authToken) return;
@@ -120,6 +125,10 @@ export function OverviewSection({
           color={data.gastosMes > cashBalance ? 'amber' : 'sky'}
         />
       </section>
+
+      {automation ? (
+        <AutomationPanel automation={automation} onSyncSheets={onSyncSheets} syncing={Boolean(syncing)} />
+      ) : null}
 
       <section className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
@@ -316,6 +325,128 @@ export function OverviewSection({
       </section>
     </>
   );
+}
+
+function AutomationPanel({
+  automation,
+  onSyncSheets,
+  syncing,
+}: {
+  automation: AutomationCenter;
+  onSyncSheets?: () => void;
+  syncing: boolean;
+}) {
+  const primaryActions = automation.actions.slice(0, 4);
+
+  return (
+    <section className="mt-4 sm:mt-5">
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Title>{automation.title || 'Piloto automatico'}</Title>
+              <Badge color={automationColor(automation.status)}>{automation.statusLabel}</Badge>
+              <Badge color={automation.score >= 80 ? 'emerald' : automation.score >= 60 ? 'amber' : 'rose'}>{automation.score}/100</Badge>
+            </div>
+            <Text className="mt-1">{automation.message}</Text>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <AutomationMetric label="Gasto diario" value={formatMoney(automation.daily.normal)} detail={`${automation.daily.daysLeft} dias restantes`} />
+              <AutomationMetric label="Modo seguro" value={formatMoney(automation.daily.safe)} detail="Ritmo conservador" />
+              <AutomationMetric label="Sync" value={automation.sync.statusLabel} detail={automation.sync.lastAt ? formatUpdatedAt(automation.sync.lastAt) : 'Sin registro'} />
+              <AutomationMetric label="Reglas" value={`${automation.rules.coveragePct}%`} detail={`${automation.rules.categoryRules} reglas / ${automation.rules.budgetRules} presupuesto`} />
+            </div>
+          </div>
+
+          <div className="min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <Title>Acciones sugeridas</Title>
+                <Text>{automation.rules.message}</Text>
+              </div>
+              {automation.budgets.risky ? <Badge color="amber">{automation.budgets.risky} presupuestos</Badge> : <Badge color="emerald">OK</Badge>}
+            </div>
+
+            {primaryActions.length ? (
+              <div className="mt-4 grid gap-2">
+                {primaryActions.map((action) => (
+                  <div key={action.id} className="grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="min-w-0 truncate text-sm font-semibold text-slate-100">{action.title}</p>
+                        <Badge color={priorityColor(action.priority)}>{priorityLabel(action.priority)}</Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-400">{action.message}</p>
+                    </div>
+                    {action.type === 'sync' && onSyncSheets ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default border border-cyan-500/40 bg-cyan-500/10 px-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400/60 hover:bg-cyan-500/15 disabled:cursor-wait disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:opacity-60"
+                        disabled={syncing}
+                        onClick={onSyncSheets}
+                      >
+                        <DatabaseIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        {syncing ? 'Sincronizando' : action.cta}
+                      </button>
+                    ) : (
+                      <span className="inline-flex h-9 items-center justify-center rounded-tremor-default border border-slate-800 px-3 text-sm font-semibold text-slate-300">
+                        {action.cta}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4">
+                <EmptyState>Sin acciones urgentes.</EmptyState>
+              </div>
+            )}
+
+            {automation.rules.suggestions.length ? (
+              <div className="mt-4 border-t border-slate-800 pt-3">
+                <p className="text-sm font-semibold text-slate-100">Reglas candidatas</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {automation.rules.suggestions.slice(0, 3).map((item) => (
+                    <span key={item.keyword} className="rounded-full border border-slate-800 bg-slate-900/40 px-3 py-1 text-xs font-medium text-slate-300">
+                      {item.label}{' -> '}{item.category}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+function AutomationMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="min-w-0 rounded-tremor-default border border-slate-800 bg-slate-900/30 px-3 py-2">
+      <Text>{label}</Text>
+      <p className="mt-1 truncate font-mono text-lg font-semibold text-slate-100">{value}</p>
+      <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>
+    </div>
+  );
+}
+
+function automationColor(status: string): Color {
+  if (status === 'ok') return 'emerald';
+  if (status === 'watch') return 'amber';
+  return 'rose';
+}
+
+function priorityColor(priority: string): Color {
+  if (priority === 'high') return 'rose';
+  if (priority === 'medium') return 'amber';
+  return 'slate';
+}
+
+function priorityLabel(priority: string): string {
+  if (priority === 'high') return 'Alta';
+  if (priority === 'medium') return 'Media';
+  return 'Baja';
 }
 
 function getClosureSummary(

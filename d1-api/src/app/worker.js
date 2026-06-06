@@ -10,6 +10,7 @@ import { getAppSetting, readJsonCache, setAppSetting, setJsonCache, timeoutSigna
 import { changePassword, login, requireAdminKey, requireDashboardAccess, requireDashboardOrAdminAccess } from '../auth/service.js';
 import { categoryDefinitions, dashboardSettings, disableCategoryDefinition, ensureUserForChat, getUserSettings, linkTelegramUser, normalizeSettingsConfig, profile, updateDashboardSettings, upsertCategoryDefinition, userSettingsToConfig, usersList } from '../modules/settings/service.js';
 import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPlan, monthlyCalendar, netWorthInsights, realExpenses, smartAlerts, smartInsights, weeklyGoalPlan } from '../modules/dashboard/planning.js';
+import { automationCenter } from '../modules/dashboard/automation.js';
 
 export default {
   async fetch(request, env) {
@@ -741,6 +742,23 @@ async function dashboard(env, params) {
     months,
   });
   const calendario = await monthlyCalendar(env, chatId, now, calendarMonth, fixedExpenses, debts, alerts, objetivoSemanal, usdRate, requestedCalendarMonth, { fixedExpensesList });
+  const automatizacion = await automationCenter(env, {
+    chatId,
+    now,
+    cycle: calendarMonth,
+    expenseRows: cycleExpenses,
+    categoryRules,
+    budgetRules,
+    budgets,
+    alerts,
+    freeMoney: dineroLibre,
+    cierre,
+    cierreAutomatico,
+    topFugas,
+    fixedSummary,
+    deudaPendiente,
+    usdRate,
+  });
 
   return {
     ok: true,
@@ -784,6 +802,7 @@ async function dashboard(env, params) {
     metas: goals,
     alertas: alerts,
     insights: insights,
+    automatizacion,
     emailConfig,
     exchangeRate: usdRate,
     exchangeRateSource: rateInfo.source || '',
