@@ -1,0 +1,1006 @@
+{
+  "info": {
+    "name": "Finanzas Mayeson API",
+    "description": "Coleccion para probar el Worker D1 de Finanzas Mayeson.\n\nFlujo recomendado:\n1. Selecciona el environment Finanzas Mayeson.\n2. Llena login_email y login_password, o llena auth_token con dashboard_api_key.\n3. Ejecuta Auth / Login para guardar session_token y auth_token automaticamente.\n4. Para endpoints admin-only, llena admin_key.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get('auth_token') && pm.environment.get('dashboard_api_key')) {",
+          "  pm.environment.set('auth_token', pm.environment.get('dashboard_api_key'));",
+          "}",
+          "if (!pm.environment.get('today')) {",
+          "  pm.environment.set('today', new Date().toISOString().slice(0, 10));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Salud y Auth",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/health",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{login_email}}\",\n  \"password\": \"{{login_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.token) {",
+                  "  pm.environment.set('session_token', data.token);",
+                  "  pm.environment.set('auth_token', data.token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Validar sesion",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/session"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/logout"
+          }
+        },
+        {
+          "name": "Cambiar clave",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{login_password}}\",\n  \"newPassword\": \"{{new_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Dashboard",
+      "item": [
+        {
+          "name": "Dashboard principal",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/dashboard?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Calendario mensual",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/calendar?chat_id={{chat_id}}&calendar_month={{calendar_month}}"
+          }
+        },
+        {
+          "name": "Tipo de cambio USD/PEN",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/exchange-rate"
+          }
+        },
+        {
+          "name": "Patrimonio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/net-worth?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Guardar corte de patrimonio",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/net-worth/snapshot?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Listar cierres",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/closures?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Guardar cierre",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/closures?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cycle_start\": \"{{cycle_start}}\",\n  \"dryRun\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Movimientos",
+      "item": [
+        {
+          "name": "Listar movimientos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/transactions?chat_id={{chat_id}}&limit={{limit}}&q={{search}}&category={{category}}"
+          }
+        },
+        {
+          "name": "Crear movimiento (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-key",
+                "value": "{{admin_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/transactions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"fecha\": \"{{today}}\",\n  \"hora\": \"12:00\",\n  \"tipo\": \"gasto\",\n  \"desc\": \"Prueba Postman\",\n  \"cat\": \"otro\",\n  \"monto\": 1,\n  \"currency\": \"PEN\",\n  \"payment_method\": \"debito\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "const value = get(data, 'transaction.id');",
+                  "if (value) {",
+                  "  pm.environment.set('transaction_id', value);",
+                  "}",
+                  "function get(obj, path) {",
+                  "  return path.split('.').reduce((acc, key) => acc && acc[key], obj);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar movimiento",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/transactions/{{transaction_id}}?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fecha\": \"{{today}}\",\n  \"hora\": \"12:00\",\n  \"tipo\": \"gasto\",\n  \"desc\": \"Prueba Postman editada\",\n  \"cat\": \"supermercado\",\n  \"monto\": 1.5,\n  \"currency\": \"PEN\",\n  \"payment_method\": \"debito\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar movimiento",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/transactions/{{transaction_id}}?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Cambiar categoria (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-key",
+                "value": "{{admin_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/transactions/category",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"id\": \"{{transaction_id}}\",\n  \"category\": \"supermercado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cambiar pago (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-key",
+                "value": "{{admin_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/transactions/payment",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"id\": \"{{transaction_id}}\",\n  \"payment_method\": \"credito\",\n  \"payment_due_date\": \"{{payment_due_date}}\",\n  \"card_name\": \"{{card_name}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Compromisos",
+      "item": [
+        {
+          "name": "Crear/actualizar presupuesto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/budgets?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"cat\": \"supermercado\",\n  \"limite\": 1200\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Crear gasto fijo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/fixed-expenses?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"nombre\": \"Internet Postman\",\n  \"monto\": 120,\n  \"currency\": \"PEN\",\n  \"cat\": \"servicios\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "const value = get(data, 'fixedExpense.id');",
+                  "if (value) {",
+                  "  pm.environment.set('fixed_id', value);",
+                  "}",
+                  "function get(obj, path) {",
+                  "  return path.split('.').reduce((acc, key) => acc && acc[key], obj);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar gasto fijo",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/fixed-expenses/{{fixed_id}}?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Internet Postman\",\n  \"monto\": 130,\n  \"currency\": \"PEN\",\n  \"cat\": \"servicios\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Marcar fijo pagado/saltado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/fixed-expenses/{{fixed_id}}/status?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"status\": \"pagado\",\n  \"month_key\": \"{{month_key}}\",\n  \"paid_date\": \"{{today}}\",\n  \"notes\": \"Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar gasto fijo",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/fixed-expenses/{{fixed_id}}?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Crear deuda",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/debts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"nombre\": \"Deuda Postman\",\n  \"monto\": 150,\n  \"pagado\": 0,\n  \"currency\": \"USD\",\n  \"vencimiento\": \"{{payment_due_date}}\",\n  \"notas\": \"Prueba Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "const value = get(data, 'debt.id');",
+                  "if (value) {",
+                  "  pm.environment.set('debt_id', value);",
+                  "}",
+                  "function get(obj, path) {",
+                  "  return path.split('.').reduce((acc, key) => acc && acc[key], obj);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar deuda",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/debts/{{debt_id}}?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Deuda Postman\",\n  \"total\": 150,\n  \"pagado\": 10,\n  \"currency\": \"USD\",\n  \"vencimiento\": \"{{payment_due_date}}\",\n  \"notas\": \"Actualizada desde Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar pago de deuda",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/debts/{{debt_id}}/payments?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"amount\": 10,\n  \"currency\": \"USD\",\n  \"payment_date\": \"{{today}}\",\n  \"notes\": \"Pago Postman\",\n  \"record_transaction\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar deuda",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/debts/{{debt_id}}?chat_id={{chat_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Inversiones",
+      "item": [
+        {
+          "name": "Listar inversiones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/investments?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Crear inversion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/investments?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"name\": \"Inversion Postman\",\n  \"kind\": \"fondo\",\n  \"amount\": 100,\n  \"currentValue\": 105,\n  \"currency\": \"USD\",\n  \"notes\": \"Prueba Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "const value = get(data, 'investment.id');",
+                  "if (value) {",
+                  "  pm.environment.set('investment_id', value);",
+                  "}",
+                  "function get(obj, path) {",
+                  "  return path.split('.').reduce((acc, key) => acc && acc[key], obj);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar inversion",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/investments/{{investment_id}}?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Inversion Postman\",\n  \"kind\": \"fondo\",\n  \"amount\": 100,\n  \"currentValue\": 110,\n  \"currency\": \"USD\",\n  \"notes\": \"Actualizada desde Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar inversion",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/investments/{{investment_id}}?chat_id={{chat_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Configuracion y Reglas",
+      "item": [
+        {
+          "name": "Leer settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/settings?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Guardar settings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/settings?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"creditCutDay\": 25,\n  \"creditPayDay\": 10,\n  \"payday\": 23,\n  \"savingsTargetAmount\": 0,\n  \"emergencyBufferAmount\": 0,\n  \"investorProfile\": \"conservador\",\n  \"investmentHorizon\": \"corto\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Categorias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/categories?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Guardar categoria",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/categories?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"{{category}}\",\n  \"label\": \"Categoria Postman\",\n  \"color\": \"#64748b\",\n  \"keywords\": [\n    \"postman\",\n    \"prueba\"\n  ],\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Desactivar categoria",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/categories/delete?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"{{category}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Listar reglas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/rules?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Clasificar texto (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-key",
+                "value": "{{admin_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/rules/classify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"description\": \"Compra en Plaza Vea\",\n  \"category\": \"otro\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Guardar regla categoria",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/rules/category?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"pattern\": \"plaza vea\",\n  \"category\": \"supermercado\",\n  \"priority\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar regla categoria",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/rules/category/delete?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"pattern\": \"plaza vea\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Guardar regla presupuesto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/rules/budget?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"budgetCategory\": \"supermercado\",\n  \"includedCategory\": \"comida\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar regla presupuesto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/rules/budget/delete?chat_id={{chat_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"budgetCategory\": \"supermercado\",\n  \"includedCategory\": \"comida\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Sync y Apps Script",
+      "item": [
+        {
+          "name": "Sincronizar Sheets a D1",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/sync?chat_id={{chat_id}}&limit={{limit}}"
+          }
+        },
+        {
+          "name": "Sincronizar GAS directo",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/sync/gas?chat_id={{chat_id}}&limit={{limit}}"
+          }
+        },
+        {
+          "name": "Configurar triggers Apps Script",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/apps-script/setup-triggers"
+          }
+        },
+        {
+          "name": "Enviar email diario",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/apps-script/send-daily-email"
+          }
+        },
+        {
+          "name": "Enviar email mensual",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/apps-script/send-monthly-email?month={{month_key}}"
+          }
+        },
+        {
+          "name": "Enviar email anual",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/apps-script/send-yearly-email?year={{year}}"
+          }
+        },
+        {
+          "name": "Enviar Telegram diario",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/apps-script/send-daily-telegram?chat_id={{chat_id}}"
+          }
+        },
+        {
+          "name": "Estado del sistema",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/system-health"
+          }
+        },
+        {
+          "name": "Usuarios dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/users"
+          }
+        },
+        {
+          "name": "Vincular usuario Telegram (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-key",
+                "value": "{{admin_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/users/link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{login_email}}\",\n  \"chat_id\": \"{{chat_id}}\",\n  \"label\": \"Principal\",\n  \"role\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Recibos",
+      "item": [
+        {
+          "name": "Subir recibo (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-key",
+                "value": "{{admin_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/receipts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_id\": \"{{chat_id}}\",\n  \"transaction_id\": \"{{transaction_id}}\",\n  \"file_name\": \"recibo-postman.jpg\",\n  \"content_type\": \"image/jpeg\",\n  \"base64\": \"{{receipt_base64}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "const value = get(data, 'receipt.id');",
+                  "if (value) {",
+                  "  pm.environment.set('receipt_id', value);",
+                  "}",
+                  "function get(obj, path) {",
+                  "  return path.split('.').reduce((acc, key) => acc && acc[key], obj);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Descargar archivo de recibo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/receipts/{{receipt_id}}/file"
+          }
+        }
+      ]
+    }
+  ]
+}
