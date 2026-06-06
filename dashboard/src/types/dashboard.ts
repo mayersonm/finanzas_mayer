@@ -312,6 +312,9 @@ export interface ClosureSummary {
   range?: string;
   start?: string;
   end?: string;
+  incomeStart?: string;
+  incomeEnd?: string;
+  incomeLeadDays?: number;
   closeDate?: string;
   saved?: boolean;
   savedAt?: string;
@@ -321,6 +324,7 @@ export interface ClosureSummary {
   gastosMovimientos?: number;
   balance: number;
   movimientos?: number;
+  ingresosMovimientos?: number;
   fijosPagados: number;
   fijosPendientes: number;
   deudasPendientes: number;
@@ -543,6 +547,9 @@ export interface DashboardData {
   cycleLabel?: string;
   cycleStart?: string;
   cycleEnd?: string;
+  cycleIncomeStart?: string;
+  cycleIncomeEnd?: string;
+  cycleIncomeLeadDays?: number;
   cycleRange?: string;
   transacciones: Transaction[];
   categorias: CategoryTotal[];

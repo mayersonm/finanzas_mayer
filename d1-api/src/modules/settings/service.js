@@ -169,6 +169,7 @@ export function normalizeSettingsConfig(value) {
     emergencyBufferAmount: round(Math.max(0, parseAmount(value.emergencyBufferAmount ?? value.emergency_buffer_amount ?? 0))),
     investorProfile: profile,
     investmentHorizon: horizon,
+    cycleIncomeLeadDays: clamp(Number(value.cycleIncomeLeadDays ?? value.cycle_income_lead_days ?? 1), 0, 7),
   };
 }
 
@@ -356,9 +357,10 @@ export async function upsertUserSettings(env, userId, config) {
       default_currency, default_payment_method, receipt_image_max_bytes,
       email_daily, email_monthly, email_yearly,
       savings_target_amount, emergency_buffer_amount, investor_profile, investment_horizon,
+      cycle_income_lead_days,
       updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id) DO UPDATE SET
       credit_cutoff_day = excluded.credit_cutoff_day,
       credit_due_day = excluded.credit_due_day,
@@ -373,6 +375,7 @@ export async function upsertUserSettings(env, userId, config) {
       emergency_buffer_amount = excluded.emergency_buffer_amount,
       investor_profile = excluded.investor_profile,
       investment_horizon = excluded.investment_horizon,
+      cycle_income_lead_days = excluded.cycle_income_lead_days,
       updated_at = CURRENT_TIMESTAMP
   `).bind(
     userId,
@@ -389,6 +392,7 @@ export async function upsertUserSettings(env, userId, config) {
     config.emergencyBufferAmount,
     config.investorProfile,
     config.investmentHorizon,
+    config.cycleIncomeLeadDays,
   ).run();
 }
 
@@ -408,5 +412,6 @@ export function userSettingsToConfig(settings) {
     emergencyBufferAmount: Number(settings.emergency_buffer_amount || 0),
     investorProfile: settings.investor_profile || 'conservador',
     investmentHorizon: settings.investment_horizon || 'corto',
+    cycleIncomeLeadDays: Number(settings.cycle_income_lead_days ?? 1),
   };
 }

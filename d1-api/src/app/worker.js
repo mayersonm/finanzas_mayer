@@ -574,6 +574,13 @@ async function dashboard(env, params) {
   const usdRate = Number(rateInfo.rate || 3.85);
   const user = await ensureUserForChat(env, chatId);
   const settings = normalizeSettingsConfig(userSettingsToConfig(await getUserSettings(env, user.id)));
+  const cycleStartParts = parseDateKeyParts(calendarMonth.startKey);
+  const cycleIncomeLeadDays = clamp(Number(settings.cycleIncomeLeadDays ?? 1), 0, 7);
+  const cycleIncomeStartKey = dateKeyFromParts(
+    cycleStartParts.year,
+    cycleStartParts.monthIndex,
+    cycleStartParts.day - cycleIncomeLeadDays,
+  );
 
   const totalsPromise = env.DB.prepare(`
     SELECT
@@ -592,6 +599,15 @@ async function dashboard(env, params) {
     FROM transactions
     WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
   `).bind(usdRate, usdRate, chatId, calendarMonth.startKey, calendarMonth.endKey).first();
+
+  const cycleIncomeTotalsPromise = env.DB.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END), 0) AS ingresosMes,
+      COUNT(*) AS ingresosMovimientos,
+      COALESCE(SUM(CASE WHEN tx_date < ? THEN 1 ELSE 0 END), 0) AS ingresosPreviosMovimientos
+    FROM transactions
+    WHERE chat_id = ? AND type = 'ingreso' AND tx_date BETWEEN ? AND ?
+  `).bind(usdRate, calendarMonth.startKey, chatId, cycleIncomeStartKey, calendarMonth.endKey).first();
 
   const latestPromise = env.DB.prepare(`
     SELECT
@@ -621,6 +637,7 @@ async function dashboard(env, params) {
   const [
     totals,
     monthTotals,
+    cycleIncomeTotals,
     latest,
     cycleExpenses,
     categoryRules,
@@ -634,6 +651,7 @@ async function dashboard(env, params) {
   ] = await Promise.all([
     totalsPromise,
     monthTotalsPromise,
+    cycleIncomeTotalsPromise,
     latestPromise,
     cycleExpenseRows(env, chatId, calendarMonth),
     loadCategoryRules(env, chatId),
@@ -655,8 +673,9 @@ async function dashboard(env, params) {
 
   const ingresos = Number(totals?.ingresos || 0);
   const gastos = Number(totals?.gastos || 0);
-  const ingresosMes = Number(monthTotals?.ingresosMes || 0);
+  const ingresosMes = Number(cycleIncomeTotals?.ingresosMes || 0);
   const gastosMes = Number(monthTotals?.gastosMes || 0);
+  const movimientosMes = Number(monthTotals?.movimientosMes || 0) + Number(cycleIncomeTotals?.ingresosPreviosMovimientos || 0);
   const ingresosCierre = ingresosMes;
   const gastosCierre = gastosMes;
   const gastosConFijosPagados = round(gastos + fixedSummary.paid);
@@ -673,12 +692,16 @@ async function dashboard(env, params) {
     range: calendarMonth.rangeLabel,
     start: calendarMonth.startKey,
     end: calendarMonth.endKey,
+    incomeStart: cycleIncomeStartKey,
+    incomeEnd: calendarMonth.endKey,
+    incomeLeadDays: cycleIncomeLeadDays,
     closeDate: calendarMonth.closeDate,
     ingresos: round(ingresosCierre),
     gastos: gastosCierreConFijos,
     gastosMovimientos: round(gastosCierre),
     balance: balanceCierre,
-    movimientos: Number(monthTotals?.movimientosMes || 0),
+    movimientos: movimientosMes,
+    ingresosMovimientos: Number(cycleIncomeTotals?.ingresosMovimientos || 0),
     fijosPagados: fixedSummary.paid,
     fijosPendientes: fixedSummary.pending,
     deudasPendientes: deudaPendiente,
@@ -779,9 +802,12 @@ async function dashboard(env, params) {
     cycleLabel: cycle.label,
     cycleStart: calendarMonth.startKey,
     cycleEnd: calendarMonth.endKey,
+    cycleIncomeStart: cycleIncomeStartKey,
+    cycleIncomeEnd: calendarMonth.endKey,
+    cycleIncomeLeadDays,
     cycleClose: calendarMonth.closeDate,
     cycleRange: calendarMonth.rangeLabel,
-    movimientosMes: Number(monthTotals?.movimientosMes || 0),
+    movimientosMes,
     cierre,
     cierreAutomatico,
     dineroLibre,
