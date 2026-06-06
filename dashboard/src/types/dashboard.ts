@@ -495,7 +495,22 @@ export interface DashboardData {
   alertas?: SmartAlert[];
   insights?: SmartInsight[];
   emailConfig?: EmailConfig;
+  exchangeRate?: number;
+  exchangeRateSource?: string;
   source?: string;
+  updatedAt?: string;
+  error?: string;
+}
+
+export interface DashboardBootstrapData {
+  ok?: boolean;
+  dashboard?: DashboardData;
+  users?: DashboardUser[];
+  defaultChatId?: string;
+  exchangeRate?: number;
+  exchangeRateSource?: string;
+  source?: string;
+  latencyMs?: number;
   updatedAt?: string;
   error?: string;
 }
