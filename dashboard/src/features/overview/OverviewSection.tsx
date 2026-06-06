@@ -50,6 +50,12 @@ export function OverviewSection({
     monthBalance,
   });
   const periodLabel = data.cycleRange || closure.range || data.mes;
+  const incomePeriodLabel = closure.incomeStart && closure.incomeStart !== closure.start
+    ? `${formatShortDateLabel(closure.incomeStart)} - ${formatShortDateLabel(closure.incomeEnd || closure.end)}`
+    : periodLabel;
+  const expensePeriodLabel = closure.start && closure.end
+    ? `${formatShortDateLabel(closure.start)} - ${formatShortDateLabel(closure.end)}`
+    : periodLabel;
   const committedRemaining = closure.pendienteComprometido ?? fixedPending + budgetRemaining + debtPending;
   const projectedFree = closure.queQueda;
   const commitmentRate = percent(committedRemaining, Math.max(cashBalance, monthIncome));
@@ -178,8 +184,8 @@ export function OverviewSection({
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <ClosureMetric label="Caja actual" value={formatMoney(cashBalance)} tone={cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
-            <ClosureMetric label="Entro ciclo" value={formatMoney(closure.ingresos)} tone="text-emerald-300" />
-            <ClosureMetric label="Salio ciclo" value={formatMoney(closure.gastos)} tone="text-rose-300" />
+            <ClosureMetric label="Ingresos ciclo" value={formatMoney(closure.ingresos)} tone="text-emerald-300" detail={incomePeriodLabel} />
+            <ClosureMetric label="Gastos ciclo" value={formatMoney(closure.gastos)} tone="text-rose-300" detail={expensePeriodLabel} />
             <ClosureMetric label="Balance ciclo" value={formatMoney(closure.balance)} tone={closure.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
             <ClosureMetric label="Libre actual" value={formatMoney(closure.queQueda)} tone={closure.queQueda >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
           </div>
@@ -471,6 +477,9 @@ function getClosureSummary(
     range: data.cycleRange || [data.cycleStart, data.cycleEnd].filter(Boolean).join(' - '),
     start: data.cycleStart,
     end: data.cycleEnd,
+    incomeStart: data.cycleIncomeStart,
+    incomeEnd: data.cycleIncomeEnd,
+    incomeLeadDays: data.cycleIncomeLeadDays,
     ingresos: fallback.monthIncome,
     gastos: data.gastosMes,
     balance: fallback.monthBalance,
@@ -488,11 +497,12 @@ function getClosureSummary(
   };
 }
 
-function ClosureMetric({ label, value, tone }: { label: string; value: string; tone: string }) {
+function ClosureMetric({ label, value, tone, detail }: { label: string; value: string; tone: string; detail?: string }) {
   return (
     <div className="min-w-0 border-l border-slate-700 pl-3">
       <Text>{label}</Text>
       <p className={`mt-1 truncate font-mono text-lg font-semibold sm:text-xl ${tone}`}>{value}</p>
+      {detail ? <p className="mt-1 truncate text-xs text-slate-400">{detail}</p> : null}
     </div>
   );
 }
@@ -517,6 +527,13 @@ function formatDateLabel(value?: string) {
   const [year, month, day] = value.split('-');
   if (!year || !month || !day) return value;
   return `${day}/${month}/${year}`;
+}
+
+function formatShortDateLabel(value?: string) {
+  if (!value) return '';
+  const [, month, day] = value.split('-');
+  if (!month || !day) return value;
+  return `${day}/${month}`;
 }
 
 function formatSavedAt(value: string) {
