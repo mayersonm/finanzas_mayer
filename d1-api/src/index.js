@@ -807,7 +807,7 @@ async function dashboard(env, params) {
   const user = await ensureUserForChat(env, chatId);
   const settings = normalizeSettingsConfig(userSettingsToConfig(await getUserSettings(env, user.id)));
 
-  const totals = await env.DB.prepare(`
+  const totalsPromise = env.DB.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
       COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos,
@@ -816,7 +816,7 @@ async function dashboard(env, params) {
     WHERE chat_id = ?
   `).bind(usdRate, usdRate, chatId).first();
 
-  const monthTotals = await env.DB.prepare(`
+  const monthTotalsPromise = env.DB.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresosMes,
       COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastosMes,
@@ -825,7 +825,7 @@ async function dashboard(env, params) {
     WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
   `).bind(usdRate, usdRate, chatId, calendarMonth.startKey, calendarMonth.endKey).first();
 
-  const latest = await env.DB.prepare(`
+  const latestPromise = env.DB.prepare(`
     SELECT
       t.id,
       t.tx_date AS fecha,
@@ -850,16 +850,36 @@ async function dashboard(env, params) {
     LIMIT 20
   `).bind(chatId).all();
 
-  const categories = await categoriesWithSpending(env, chatId, calendarMonth, usdRate);
-  const topFugas = await topLeaks(env, chatId, calendarMonth, usdRate);
-
-  const months = await lastMonths(env, chatId, now, usdRate);
-  const budgets = await budgetsWithSpending(env, chatId, calendarMonth, usdRate);
-  const budgetRules = await loadBudgetRules(env, chatId);
-  const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, usdRate, calendarMonth);
-  const debts = await debtsList(env, chatId);
-  const goals = await goalsList(env, chatId);
-  const emailConfig = await emailConfigFromGas(env);
+  const [
+    totals,
+    monthTotals,
+    latest,
+    cycleExpenses,
+    categoryRules,
+    budgetRules,
+    budgetRows,
+    months,
+    fixedExpenses,
+    debts,
+    goals,
+    emailConfig,
+  ] = await Promise.all([
+    totalsPromise,
+    monthTotalsPromise,
+    latestPromise,
+    cycleExpenseRows(env, chatId, calendarMonth),
+    loadCategoryRules(env, chatId),
+    loadBudgetRules(env, chatId),
+    budgetsRows(env, chatId),
+    lastMonths(env, chatId, now, usdRate),
+    fixedExpensesList(env, chatId, monthKey, usdRate, calendarMonth),
+    debtsList(env, chatId),
+    goalsList(env, chatId),
+    emailConfigFromGas(env),
+  ]);
+  const categories = categoriesFromExpenseRows(cycleExpenses, categoryRules, usdRate);
+  const topFugas = topLeaksFromExpenseRows(cycleExpenses, categoryRules, usdRate);
+  const budgets = budgetsFromExpenseRows(budgetRows, cycleExpenses, categoryRules, budgetRules, usdRate);
   const fixedSummary = fixedExpensesSummary(fixedExpenses, usdRate);
   const deudaPendiente = round(debts
     .filter((item) => item.estado !== 'pagada')
@@ -2246,19 +2266,55 @@ async function syncFromGas(env, params) {
 }
 
 async function emailConfigFromGas(env) {
-  if (!env.GAS_API_URL || !env.GAS_API_KEY) return undefined;
+  const cacheKey = 'email_config_cache';
+  const cached = await readJsonCache(env, cacheKey, 10 * 60 * 1000);
+  if (cached.fresh) return cached.value;
+  if (!env.GAS_API_URL || !env.GAS_API_KEY) return cached.value;
 
   try {
     const url = new URL(env.GAS_API_URL);
     url.searchParams.set('action', 'dashboard');
     url.searchParams.set('key', env.GAS_API_KEY);
 
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: timeoutSignal(900) });
     const data = await response.json();
-    return data?.emailConfig;
+    if (data?.emailConfig) {
+      await setJsonCache(env, cacheKey, data.emailConfig);
+      return data.emailConfig;
+    }
+    return cached.value;
   } catch (_error) {
-    return undefined;
+    await setJsonCache(env, cacheKey, null);
+    return cached.value;
   }
+}
+
+async function readJsonCache(env, key, maxAgeMs) {
+  const raw = await getAppSetting(env, key);
+  if (!raw) return { fresh: false, value: undefined };
+
+  try {
+    const parsed = JSON.parse(raw);
+    const timestamp = Number(parsed.timestamp || 0);
+    const fresh = Boolean(timestamp && Date.now() - timestamp < maxAgeMs);
+    return { fresh, value: parsed.value };
+  } catch (_error) {
+    return { fresh: false, value: undefined };
+  }
+}
+
+async function setJsonCache(env, key, value) {
+  await setAppSetting(env, key, JSON.stringify({ value, timestamp: Date.now() }));
+}
+
+function timeoutSignal(ms) {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
 }
 
 async function deleteTransactionFromGas(env, tx) {
@@ -2890,20 +2946,128 @@ async function insertDebtPaymentTransaction(env, { chatId, paymentId, debtName, 
   return tx;
 }
 
+async function cycleExpenseRows(env, chatId, cycle) {
+  const rows = await env.DB.prepare(`
+    SELECT description AS desc, category AS cat, amount, currency, source
+    FROM transactions
+    WHERE chat_id = ?
+      AND type = 'gasto'
+      AND tx_date BETWEEN ? AND ?
+  `).bind(chatId, cycle.startKey, cycle.endKey).all();
+
+  return rows.results || [];
+}
+
+async function budgetsRows(env, chatId) {
+  const rows = await env.DB.prepare(`
+    SELECT category AS cat, limit_amount AS limite
+    FROM budgets
+    WHERE chat_id = ?
+  `).bind(chatId).all();
+
+  return rows.results || [];
+}
+
+function categoriesFromExpenseRows(rows, rules, usdRate = 3.85) {
+  const spending = {};
+  for (const row of rows || []) {
+    const cat = classifyCategoryFromLoadedRules(rules, row.cat, row.desc);
+    spending[cat] = (spending[cat] || 0) + currencyToPen(Number(row.amount || 0), row.currency || 'PEN', usdRate);
+  }
+
+  return Object.keys(spending)
+    .map((cat) => ({
+      cat: title(cat),
+      monto: round(spending[cat]),
+      color: COLORS[cat] || COLORS.otro,
+    }))
+    .sort((a, b) => b.monto - a.monto || a.cat.localeCompare(b.cat));
+}
+
+function topLeaksFromExpenseRows(rows, rules, usdRate = 3.85) {
+  const grouped = {};
+  let total = 0;
+
+  for (const row of rows || []) {
+    const cat = classifyCategoryFromLoadedRules(rules, row.cat, row.desc);
+    const source = normalizeKey(row.source || '');
+    const descKey = normalizeKey(row.desc || '');
+    if (cat === 'deudas' || source === 'debt_payment' || descKey.startsWith('fijo pagado')) continue;
+
+    const amount = currencyToPen(Number(row.amount || 0), row.currency || 'PEN', usdRate);
+    if (amount <= 0) continue;
+
+    const label = leakLabel(row.desc, cat);
+    const key = `${normalizeKey(label)}|${cat}`;
+    if (!grouped[key]) {
+      grouped[key] = {
+        label,
+        category: title(cat),
+        amount: 0,
+        count: 0,
+      };
+    }
+    grouped[key].amount += amount;
+    grouped[key].count += 1;
+    total += amount;
+  }
+
+  return Object.values(grouped)
+    .map((item) => {
+      const sharePct = total > 0 ? round((item.amount / total) * 100) : 0;
+      return {
+        label: item.label,
+        category: item.category,
+        amount: round(item.amount),
+        count: item.count,
+        sharePct,
+        reason: item.count > 1
+          ? `${item.count} movimientos - ${sharePct}% del gasto variable`
+          : `${sharePct}% del gasto variable`,
+      };
+    })
+    .sort((a, b) => b.amount - a.amount || b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, 5);
+}
+
+function budgetsFromExpenseRows(rows, expenseRows, categoryRules, budgetRules, usdRate = 3.85) {
+  const spending = {};
+  for (const row of expenseRows || []) {
+    const cat = classifyCategoryFromLoadedRules(categoryRules, row.cat, row.desc);
+    spending[cat] = (spending[cat] || 0) + currencyToPen(Number(row.amount || 0), row.currency || 'PEN', usdRate);
+  }
+
+  return (rows || []).map((row) => ({
+    cat: title(row.cat),
+    limite: round(row.limite),
+    gasto: round(budgetSpendWithRules(spending, row.cat, budgetRules)),
+  })).sort((a, b) => b.gasto - a.gasto || a.cat.localeCompare(b.cat));
+}
+
 async function lastMonths(env, chatId, now, usdRate = 3.85) {
   const result = [];
   const current = parseDateKeyParts(localDateKey(now));
+  const startMonth = dateKeyFromParts(current.year, current.monthIndex - 5, 1);
+  const endMonth = dateKeyFromParts(current.year, current.monthIndex + 1, 0);
+  const rows = await env.DB.prepare(`
+    SELECT
+      substr(tx_date, 1, 7) AS month_key,
+      COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
+      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos
+    FROM transactions
+    WHERE chat_id = ?
+      AND tx_date BETWEEN ? AND ?
+    GROUP BY substr(tx_date, 1, 7)
+  `).bind(usdRate, usdRate, chatId, startMonth, endMonth).all();
+  const byMonth = {};
+  for (const row of rows.results || []) {
+    byMonth[row.month_key] = row;
+  }
 
   for (let i = 5; i >= 0; i--) {
     const monthStart = dateKeyFromParts(current.year, current.monthIndex - i, 1);
     const monthKey = monthStart.slice(0, 7);
-    const row = await env.DB.prepare(`
-      SELECT
-        COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
-        COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos
-      FROM transactions
-      WHERE chat_id = ? AND substr(tx_date, 1, 7) = ?
-    `).bind(usdRate, usdRate, chatId, monthKey).first();
+    const row = byMonth[monthKey] || {};
 
     result.push({
       mes: monthShortNameFromKey(monthStart),
@@ -2918,7 +3082,7 @@ async function lastMonths(env, chatId, now, usdRate = 3.85) {
 }
 
 async function categoriesWithSpending(env, chatId, cycle, usdRate = 3.85) {
-  const rows = await env.DB.prepare(`
+  const rowsPromise = env.DB.prepare(`
     SELECT category AS cat, description AS desc, amount, currency
     FROM transactions
     WHERE chat_id = ?
@@ -2926,7 +3090,10 @@ async function categoriesWithSpending(env, chatId, cycle, usdRate = 3.85) {
       AND tx_date BETWEEN ? AND ?
   `).bind(chatId, cycle.startKey, cycle.endKey).all();
 
-  const rules = await loadCategoryRules(env, chatId);
+  const [rows, rules] = await Promise.all([
+    rowsPromise,
+    loadCategoryRules(env, chatId),
+  ]);
   const spending = {};
   for (const row of rows.results || []) {
     const cat = classifyCategoryFromLoadedRules(rules, row.cat, row.desc);
@@ -2943,7 +3110,7 @@ async function categoriesWithSpending(env, chatId, cycle, usdRate = 3.85) {
 }
 
 async function topLeaks(env, chatId, period, usdRate = 3.85) {
-  const rows = await env.DB.prepare(`
+  const rowsPromise = env.DB.prepare(`
     SELECT description AS desc, category AS cat, amount, currency, source
     FROM transactions
     WHERE chat_id = ?
@@ -2951,7 +3118,10 @@ async function topLeaks(env, chatId, period, usdRate = 3.85) {
       AND tx_date BETWEEN ? AND ?
   `).bind(chatId, period.startKey, period.endKey).all();
 
-  const rules = await loadCategoryRules(env, chatId);
+  const [rows, rules] = await Promise.all([
+    rowsPromise,
+    loadCategoryRules(env, chatId),
+  ]);
   const grouped = {};
   let total = 0;
 
@@ -3010,13 +3180,13 @@ function leakLabel(description, category) {
 }
 
 async function budgetsWithSpending(env, chatId, cycle, usdRate = 3.85) {
-  const rows = await env.DB.prepare(`
+  const rowsPromise = env.DB.prepare(`
     SELECT category AS cat, limit_amount AS limite
     FROM budgets
     WHERE chat_id = ?
   `).bind(chatId).all();
 
-  const spendingRows = await env.DB.prepare(`
+  const spendingRowsPromise = env.DB.prepare(`
     SELECT category AS cat, description AS desc, amount, currency
     FROM transactions
     WHERE chat_id = ?
@@ -3024,8 +3194,12 @@ async function budgetsWithSpending(env, chatId, cycle, usdRate = 3.85) {
       AND tx_date BETWEEN ? AND ?
   `).bind(chatId, cycle.startKey, cycle.endKey).all();
 
-  const categoryRules = await loadCategoryRules(env, chatId);
-  const budgetRules = await loadBudgetRules(env, chatId);
+  const [rows, spendingRows, categoryRules, budgetRules] = await Promise.all([
+    rowsPromise,
+    spendingRowsPromise,
+    loadCategoryRules(env, chatId),
+    loadBudgetRules(env, chatId),
+  ]);
   const spending = {};
   for (const row of spendingRows.results || []) {
     const cat = classifyCategoryFromLoadedRules(categoryRules, row.cat, row.desc);
