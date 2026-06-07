@@ -84,10 +84,19 @@ button {
 :root[data-theme="light"] .bg-slate-900\/60,
 :root[data-theme="light"] .bg-slate-900\/50,
 :root[data-theme="light"] .bg-slate-900\/40,
+:root[data-theme="light"] .bg-slate-900\/30,
 :root[data-theme="light"] .bg-slate-900\/20,
 :root[data-theme="light"] .bg-slate-900,
 :root[data-theme="light"] .bg-slate-800\/90,
+:root[data-theme="light"] .bg-slate-800\/80,
 :root[data-theme="light"] .bg-slate-800,
+:root[data-theme="light"] .bg-slate-800\/60,
+:root[data-theme="light"] .bg-slate-800\/50,
+:root[data-theme="light"] .bg-slate-800\/40,
+:root[data-theme="light"] .bg-slate-800\/30,
+:root[data-theme="light"] .bg-slate-700\/80,
+:root[data-theme="light"] .bg-slate-700\/70,
+:root[data-theme="light"] .bg-slate-700\/60,
 :root[data-theme="light"] .bg-slate-800\/70 {
   background-color: rgba(255, 255, 255, 0.86) !important;
 }
@@ -96,6 +105,9 @@ button {
 :root[data-theme="light"] .bg-slate-950\/50,
 :root[data-theme="light"] .bg-slate-950\/60,
 :root[data-theme="light"] .bg-slate-900\/20,
+:root[data-theme="light"] .bg-slate-900\/30,
+:root[data-theme="light"] .bg-slate-800\/30,
+:root[data-theme="light"] .bg-slate-800\/40,
 :root[data-theme="light"] .bg-slate-900\/40 {
   background-color: rgba(248, 250, 252, 0.82) !important;
 }

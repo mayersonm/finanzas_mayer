@@ -11,6 +11,7 @@ import { changePassword, login, requireAdminKey, requireDashboardAccess, require
 import { categoryDefinitions, dashboardSettings, disableCategoryDefinition, ensureUserForChat, getUserSettings, linkTelegramUser, normalizeSettingsConfig, profile, updateDashboardSettings, upsertCategoryDefinition, userSettingsToConfig, usersList } from '../modules/settings/service.js';
 import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPlan, monthlyCalendar, netWorthInsights, realExpenses, smartAlerts, smartInsights, weeklyGoalPlan } from '../modules/dashboard/planning.js';
 import { automationCenter } from '../modules/dashboard/automation.js';
+import { advisorResponse } from '../modules/ai/advisor.js';
 
 export default {
   async fetch(request, env) {
@@ -133,6 +134,12 @@ export default {
       if (url.pathname === '/api/dashboard' && request.method === 'GET') {
         await requireDashboardOrAdminAccess(request, env);
         return json(await dashboard(env, url.searchParams));
+      }
+
+      if (url.pathname === '/api/ai/advisor' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        const payload = await safeJson(request);
+        return json(await aiAdvisor(env, url.searchParams, payload));
       }
 
       if (url.pathname === '/api/net-worth' && request.method === 'GET') {
@@ -558,6 +565,15 @@ async function bootstrap(env, params) {
     latencyMs: Date.now() - started,
     updatedAt: localIso(new Date()),
   };
+}
+
+async function aiAdvisor(env, params, payload) {
+  const dashboardData = await dashboard(env, params);
+  const chatId = getChatId(env, params);
+  const user = await ensureUserForChat(env, chatId);
+  const settings = normalizeSettingsConfig(userSettingsToConfig(await getUserSettings(env, user.id)));
+
+  return advisorResponse(env, dashboardData, settings, payload);
 }
 
 async function dashboard(env, params) {

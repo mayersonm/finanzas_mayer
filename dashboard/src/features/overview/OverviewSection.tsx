@@ -2,10 +2,24 @@ import { useState } from 'react';
 import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
 import { apiEndpoint } from '../../app/api';
 import { EmptyState } from '../../components/common/EmptyState';
-import { DatabaseIcon, SaveIcon } from '../../components/common/AppIcons';
+import { DatabaseIcon, RefreshIcon, SaveIcon } from '../../components/common/AppIcons';
 import { percent } from '../../lib/finance';
 import { formatMoney, formatUpdatedAt } from '../../lib/formatters';
 import type { AutomationCenter, ClosureSummary, DashboardData, RealExpenses } from '../../types/dashboard';
+
+type AdvisorResult = {
+  ok?: boolean;
+  title?: string;
+  summary?: string;
+  bullets?: string[];
+  actions?: string[];
+  riskLevel?: 'bajo' | 'medio' | 'alto' | string;
+  source?: 'ai' | 'local' | string;
+  providerStatus?: string;
+  providerError?: string;
+  note?: string;
+  error?: string;
+};
 
 export function OverviewSection({
   data,
@@ -27,6 +41,10 @@ export function OverviewSection({
   const [closing, setClosing] = useState(false);
   const [closeMessage, setCloseMessage] = useState('');
   const [closeError, setCloseError] = useState('');
+  const [advisor, setAdvisor] = useState<AdvisorResult | null>(null);
+  const [advisorQuestion, setAdvisorQuestion] = useState('');
+  const [advisorLoading, setAdvisorLoading] = useState(false);
+  const [advisorError, setAdvisorError] = useState('');
   const topFugas = data.topFugas || [];
   const monthIncome = data.ingresosMes ?? data.ingresos;
   const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
@@ -93,6 +111,39 @@ export function OverviewSection({
       setCloseError(error instanceof Error ? error.message : 'No se pudo guardar el cierre');
     } finally {
       setClosing(false);
+    }
+  }
+
+  async function askAdvisor(mode: 'daily' | 'question', presetQuestion?: string) {
+    if (!authToken || advisorLoading) return;
+
+    const question = String(presetQuestion ?? advisorQuestion).trim();
+    setAdvisorLoading(true);
+    setAdvisorError('');
+    try {
+      const url = new URL(apiEndpoint('ai/advisor'));
+      if (chatId) url.searchParams.set('chat_id', chatId);
+
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mode, question }),
+      });
+      const result = await response.json() as AdvisorResult;
+
+      if (!response.ok || result.ok === false) {
+        throw new Error(result.error || 'No se pudo generar el consejo IA');
+      }
+
+      setAdvisor(result);
+      if (mode === 'question' && !presetQuestion) setAdvisorQuestion('');
+    } catch (error) {
+      setAdvisorError(error instanceof Error ? error.message : 'No se pudo generar el consejo IA');
+    } finally {
+      setAdvisorLoading(false);
     }
   }
 
@@ -181,6 +232,16 @@ export function OverviewSection({
       {automation ? (
         <AutomationPanel automation={automation} onSyncSheets={onSyncSheets} syncing={Boolean(syncing)} />
       ) : null}
+
+      <AiAdvisorPanel
+        result={advisor}
+        loading={advisorLoading}
+        error={advisorError}
+        question={advisorQuestion}
+        disabled={!authToken}
+        onQuestionChange={setAdvisorQuestion}
+        onAsk={askAdvisor}
+      />
 
       <section className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
@@ -299,6 +360,160 @@ export function OverviewSection({
         </Card>
       </section>
     </>
+  );
+}
+
+function AiAdvisorPanel({
+  result,
+  loading,
+  error,
+  question,
+  disabled,
+  onQuestionChange,
+  onAsk,
+}: {
+  result: AdvisorResult | null;
+  loading: boolean;
+  error: string;
+  question: string;
+  disabled: boolean;
+  onQuestionChange: (value: string) => void;
+  onAsk: (mode: 'daily' | 'question', question?: string) => void;
+}) {
+  const badgeColor: Color = result?.riskLevel === 'alto'
+    ? 'rose'
+    : result?.riskLevel === 'medio'
+      ? 'amber'
+      : result
+        ? 'emerald'
+        : 'slate';
+  const sourceLabel = result?.source === 'ai'
+    ? 'IA activa'
+    : result?.source === 'local'
+      ? 'Modo local'
+      : 'Listo';
+  const quickQuestions = [
+    'Cuanto puedo gastar hoy?',
+    'Que pago primero?',
+    'Donde se esta fugando la plata?',
+  ];
+
+  return (
+    <section className="mt-4 sm:mt-5">
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Title>Consejero IA</Title>
+              <Badge color={badgeColor}>{sourceLabel}</Badge>
+            </div>
+            <Text className="mt-1">Caja actual, presupuesto y fugas.</Text>
+
+            <div className="mt-4 grid gap-3">
+              <button
+                type="button"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-tremor-default border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-500/15 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:opacity-60 sm:w-fit"
+                disabled={disabled || loading}
+                onClick={() => onAsk('daily')}
+              >
+                <RefreshIcon className={`h-4 w-4 shrink-0 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+                {loading ? 'Analizando' : 'Analizar ahora'}
+              </button>
+
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <input
+                  className="form-input"
+                  value={question}
+                  disabled={disabled || loading}
+                  placeholder="Pregunta rapida a tus finanzas"
+                  onChange={(event) => onQuestionChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') onAsk('question');
+                  }}
+                />
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center justify-center rounded-tremor-default border border-cyan-500/40 bg-cyan-500/10 px-4 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400/60 hover:bg-cyan-500/15 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:opacity-60"
+                  disabled={disabled || loading || !question.trim()}
+                  onClick={() => onAsk('question')}
+                >
+                  Preguntar
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {quickQuestions.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className="rounded-full border border-slate-800 bg-slate-900/30 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-cyan-400/50 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={disabled || loading}
+                    onClick={() => onAsk('question', item)}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="min-w-0 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3">
+            {loading ? (
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-100">Analizando caja, presupuesto, deudas y fugas...</p>
+                <div className="h-2 rounded-full bg-slate-800/80" />
+                <div className="h-2 w-4/5 rounded-full bg-slate-800/80" />
+                <div className="h-2 w-2/3 rounded-full bg-slate-800/80" />
+              </div>
+            ) : result ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-slate-100">{result.title || 'Consejo financiero'}</p>
+                  {result.providerStatus === 'fallback' || result.providerStatus === 'missing_key' ? (
+                    <Badge color="amber">Sin proveedor</Badge>
+                  ) : null}
+                </div>
+                {result.summary ? <p className="text-sm text-slate-400">{result.summary}</p> : null}
+
+                {result.bullets?.length ? (
+                  <div className="grid gap-2">
+                    {result.bullets.map((item) => (
+                      <p key={item} className="rounded-tremor-default border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-300">
+                        {item}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+
+                {result.actions?.length ? (
+                  <div className="grid gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Siguiente jugada</p>
+                    {result.actions.map((item) => (
+                      <div key={item} className="flex gap-2 text-sm text-slate-300">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {result.note || result.providerError ? (
+                  <p className="text-xs text-slate-500">{result.note || result.providerError}</p>
+                ) : null}
+              </div>
+            ) : (
+              <EmptyState>Sin analisis generado.</EmptyState>
+            )}
+
+            {error ? (
+              <div className="mt-3 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-100">
+                {error}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </Card>
+    </section>
   );
 }
 
