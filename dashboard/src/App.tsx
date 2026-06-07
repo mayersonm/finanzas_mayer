@@ -1,4 +1,4 @@
-import { Suspense, lazy, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiEndpoint } from './app/api';
 import { isApiConfigured, SESSION_STORAGE_KEY } from './app/config';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -39,7 +39,8 @@ function applyTheme(theme: Theme) {
 export default function App() {
   const [data, setData] = useState<DashboardData>(() => createEmptyDashboard());
   const [tab, setTab] = useState<TabId>('inicio');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => Boolean(isApiConfigured() && window.localStorage.getItem(SESSION_STORAGE_KEY)));
+  const [hasLoadedData, setHasLoadedData] = useState(false);
   const [status, setStatus] = useState<ApiStatus>('demo');
   const [token, setToken] = useState<string | null>(() => window.localStorage.getItem(SESSION_STORAGE_KEY));
   const [loginEmail, setLoginEmail] = useState(() => window.localStorage.getItem(LOGIN_EMAIL_STORAGE_KEY) || DEFAULT_LOGIN_EMAIL);
@@ -99,6 +100,7 @@ export default function App() {
       }
 
       setData(nextData);
+      setHasLoadedData(true);
       setUsers(result.users || []);
       setExchangeRate(Number(result.exchangeRate || nextData.exchangeRate || 3.85) || 3.85);
       const resolvedChatId = requestedChatId || result.defaultChatId || result.users?.[0]?.chatId || '';
@@ -199,6 +201,7 @@ export default function App() {
       window.localStorage.setItem(SESSION_STORAGE_KEY, result.token);
       window.localStorage.setItem(LOGIN_EMAIL_STORAGE_KEY, cleanEmail);
       setToken(result.token);
+      setHasLoadedData(false);
       setLoginEmail(cleanEmail);
       setPassword('');
       setStatus('demo');
@@ -214,6 +217,7 @@ export default function App() {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
     setToken(null);
     setData(createEmptyDashboard());
+    setHasLoadedData(false);
     setStatus('demo');
     setAuthError('');
     setUsers([]);
@@ -276,7 +280,10 @@ export default function App() {
     let cancelled = false;
 
     void import('./data/mockDashboard').then(({ MOCK_DASHBOARD }) => {
-      if (!cancelled) setData(MOCK_DASHBOARD);
+      if (!cancelled) {
+        setData(MOCK_DASHBOARD);
+        setHasLoadedData(true);
+      }
     });
 
     return () => {
@@ -316,6 +323,8 @@ export default function App() {
       />
     );
   }
+
+  const showInitialSkeleton = configured && Boolean(token) && !hasLoadedData && status !== 'error';
 
   return (
     <main className="min-h-screen px-3 py-3 sm:px-6 sm:py-5 lg:px-6 xl:px-8">
@@ -364,28 +373,32 @@ export default function App() {
 
           <DashboardTabs activeTab={tab} onTabChange={setTab} />
 
-          <Suspense fallback={<div className="rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">Cargando...</div>}>
-            {tab === 'inicio' ? (
-              <OverviewSection
-                data={data}
-                realExpenses={realExpenses}
-                authToken={token}
-                chatId={selectedChatId}
-                onChanged={() => void fetchData()}
-                onSyncSheets={() => void syncSheetsToD1()}
-                syncing={syncing}
-              />
-            ) : null}
-            {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
-            {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} exchangeRate={exchangeRate} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
-            {tab === 'dinero' ? <FreeMoneySection data={data} /> : null}
-            {tab === 'calendario' ? <CalendarSection data={data} authToken={token} chatId={selectedChatId} /> : null}
-            {tab === 'patrimonio' ? <NetWorthSection authToken={token} chatId={selectedChatId} /> : null}
-            {tab === 'inversiones' ? <InvestmentsSection authToken={token} chatId={selectedChatId} exchangeRate={exchangeRate} /> : null}
-            {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
-            {tab === 'metas' ? <GoalsSection data={data} /> : null}
-            {tab === 'configuracion' ? <SettingsSection authToken={token} chatId={selectedChatId} /> : null}
-          </Suspense>
+          {showInitialSkeleton ? (
+            <DashboardSkeleton />
+          ) : (
+            <Suspense fallback={<PanelSkeleton />}>
+              {tab === 'inicio' ? (
+                <OverviewSection
+                  data={data}
+                  realExpenses={realExpenses}
+                  authToken={token}
+                  chatId={selectedChatId}
+                  onChanged={() => void fetchData()}
+                  onSyncSheets={() => void syncSheetsToD1()}
+                  syncing={syncing}
+                />
+              ) : null}
+              {tab === 'movimientos' ? <MovementsSection data={data} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
+              {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} exchangeRate={exchangeRate} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
+              {tab === 'dinero' ? <FreeMoneySection data={data} /> : null}
+              {tab === 'calendario' ? <CalendarSection data={data} authToken={token} chatId={selectedChatId} /> : null}
+              {tab === 'patrimonio' ? <NetWorthSection authToken={token} chatId={selectedChatId} /> : null}
+              {tab === 'inversiones' ? <InvestmentsSection authToken={token} chatId={selectedChatId} exchangeRate={exchangeRate} /> : null}
+              {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
+              {tab === 'metas' ? <GoalsSection data={data} /> : null}
+              {tab === 'configuracion' ? <SettingsSection authToken={token} chatId={selectedChatId} /> : null}
+            </Suspense>
+          )}
 
           {!configured ? (
             <div className="mt-4 rounded-tremor-default border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100 sm:mt-5">
@@ -416,6 +429,133 @@ export default function App() {
       ) : null}
     </main>
   );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="grid gap-4" aria-label="Cargando dashboard">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+        <SkeletonCard className="min-h-[17rem]">
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div className="grid gap-2">
+              <SkeletonLine className="h-6 w-28" />
+              <SkeletonLine className="h-5 w-44" />
+            </div>
+            <SkeletonLine className="h-7 w-24" />
+          </div>
+          <SkeletonLine className="h-4 w-28" />
+          <SkeletonLine className="mt-3 h-12 w-64 max-w-full" />
+          <SkeletonLine className="mt-4 h-4 w-full max-w-xl" />
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <SkeletonBlock />
+            <SkeletonBlock />
+          </div>
+        </SkeletonCard>
+
+        <SkeletonCard className="min-h-[17rem]">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div className="grid gap-2">
+              <SkeletonLine className="h-5 w-36" />
+              <SkeletonLine className="h-4 w-48" />
+            </div>
+            <SkeletonLine className="h-7 w-24" />
+          </div>
+          <div className="grid gap-4">
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+          <SkeletonLine className="mt-5 h-2 w-full" />
+        </SkeletonCard>
+      </div>
+
+      <SkeletonCard className="min-h-[11rem]">
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-3">
+            <SkeletonLine className="h-5 w-40" />
+            <SkeletonLine className="h-4 w-full max-w-lg" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SkeletonBlock />
+              <SkeletonBlock />
+            </div>
+          </div>
+          <div className="grid gap-3">
+            <SkeletonLine className="h-5 w-36" />
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+        </div>
+      </SkeletonCard>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
+        <SkeletonCard className="min-h-[14rem]">
+          <SkeletonLine className="h-5 w-40" />
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <SkeletonBlock />
+            <SkeletonBlock />
+            <SkeletonBlock />
+          </div>
+        </SkeletonCard>
+        <SkeletonCard className="min-h-[14rem]">
+          <SkeletonLine className="h-5 w-44" />
+          <SkeletonLine className="mt-5 h-2 w-full" />
+          <div className="mt-5 grid gap-3">
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+        </SkeletonCard>
+      </div>
+    </div>
+  );
+}
+
+function PanelSkeleton() {
+  return (
+    <SkeletonCard className="min-h-[12rem]">
+      <SkeletonLine className="h-5 w-40" />
+      <SkeletonLine className="mt-4 h-4 w-full max-w-xl" />
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <SkeletonBlock />
+        <SkeletonBlock />
+        <SkeletonBlock />
+      </div>
+    </SkeletonCard>
+  );
+}
+
+function SkeletonCard({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-tremor-default border border-slate-800 bg-slate-950/70 p-4 shadow-sm sm:p-6 ${className}`}>
+      <div className="animate-pulse">{children}</div>
+    </div>
+  );
+}
+
+function SkeletonBlock() {
+  return (
+    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3">
+      <SkeletonLine className="h-4 w-24" />
+      <SkeletonLine className="mt-3 h-6 w-32" />
+      <SkeletonLine className="mt-3 h-3 w-full" />
+    </div>
+  );
+}
+
+function SkeletonRow() {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-3 border-t border-slate-800 pt-3 first:border-t-0 first:pt-0">
+      <div>
+        <SkeletonLine className="h-4 w-36" />
+        <SkeletonLine className="mt-2 h-3 w-full" />
+      </div>
+      <SkeletonLine className="h-5 w-24" />
+    </div>
+  );
+}
+
+function SkeletonLine({ className = '' }: { className?: string }) {
+  return <div className={`rounded bg-slate-800/80 ${className}`} />;
 }
 
 function createEmptyDashboard(): DashboardData {
