@@ -9,7 +9,7 @@ $headers = @{ "x-admin-key" = "TU_D1_ADMIN_KEY" }
 Invoke-WebRequest -UseBasicParsing -Method POST -Headers $headers -Uri "https://finanzas-d1-api.mayersonm.workers.dev/api/sync/gas?chat_id=TU_CHAT_ID&limit=500" | Select-Object -ExpandProperty Content
 
 Dashboard Inicio:
-- Cerrar mes guarda el corte actual en D1.
+- Cerrar ciclo guarda el snapshot en D1, marca el ciclo como cerrado y deja ahorro/presupuesto sugerido para el siguiente ciclo.
 - Top fugas muestra los 5 gastos variables principales del mes.
 
 Telegram movimientos:
@@ -25,7 +25,7 @@ Dinero Libre:
 - Proyecta el gasto desde caja actual; deudas y fijos quedan como referencia.
 - El comando libre muestra objetivo semanal si D1 lo devuelve.
 - Dashboard > Calendario muestra gasto diario, fijos, deudas, cierre, pagos de credito y alertas.
-- Dia 23: sugerir cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto.
+- Dia 23: sugerir cerrar ciclo; el ahorro queda sugerido hasta que lo separes de verdad.
 
 cd dashboard
 npm ci
