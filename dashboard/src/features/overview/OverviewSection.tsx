@@ -60,6 +60,10 @@ export function OverviewSection({
     ? `Disponible en otras categorias; excedido ${formatMoney(closure.presupuestoExcedido)}`
     : `${closureBudgetPct}% del limite usado`;
   const automation = data.automatizacion;
+  const closureClosed = Boolean(closure.closed || closure.status === 'closed' || closure.saved);
+  const closureSuggestedSavings = Number(closure.suggestedSavings ?? data.cierreAutomatico?.suggestedSavings ?? data.dineroLibre?.recommendedSavings ?? 0);
+  const closureNextBudget = closure.nextBudget || [];
+  const closureNextCycleRange = closure.nextCycle?.range || '';
 
   async function saveClosure() {
     if (!authToken) return;
@@ -87,7 +91,11 @@ export function OverviewSection({
         throw new Error(result.error || 'No se pudo guardar el cierre');
       }
 
-      setCloseMessage(`Cierre guardado: ${result.closure?.label || closure.label}`);
+      const savedClosure = result.closure;
+      const savingsText = savedClosure?.suggestedSavings && savedClosure.suggestedSavings > 0
+        ? ` Ahorro sugerido: ${formatMoney(savedClosure.suggestedSavings)}.`
+        : '';
+      setCloseMessage(`Ciclo cerrado: ${savedClosure?.label || closure.label}.${savingsText}`);
       onChanged?.();
     } catch (error) {
       setCloseError(error instanceof Error ? error.message : 'No se pudo guardar el cierre');
@@ -194,6 +202,7 @@ export function OverviewSection({
               <Badge color={closure.queQueda >= 0 ? 'emerald' : 'rose'}>
                 {closure.movimientos ?? data.movimientosMes ?? 0} movimientos
               </Badge>
+              {closureClosed ? <Badge color="emerald">Ciclo cerrado</Badge> : null}
               <button
                 type="button"
                 className="inline-flex h-10 w-full min-w-[9.5rem] items-center justify-center gap-2 rounded-tremor-default border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 shadow-sm transition hover:border-emerald-400/60 hover:bg-emerald-500/15 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-wait disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:opacity-55 min-[420px]:w-auto"
@@ -201,7 +210,7 @@ export function OverviewSection({
                 onClick={() => void saveClosure()}
               >
                 <SaveIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{closing ? 'Guardando' : closure.saved ? 'Actualizar cierre' : 'Cerrar mes'}</span>
+                <span className="truncate">{closing ? 'Cerrando' : closureClosed ? 'Actualizar cierre' : 'Cerrar ciclo'}</span>
               </button>
             </div>
           </div>
@@ -215,6 +224,35 @@ export function OverviewSection({
           {closeError ? (
             <div className="mt-4 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-100">
               {closeError}
+            </div>
+          ) : null}
+
+          {closureClosed ? (
+            <div className="mt-4 rounded-tremor-default border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="font-semibold">Cierre real guardado en D1</p>
+                  <p className="mt-1 text-emerald-100/85">
+                    {closure.closedAt ? `Cerrado ${formatSavedAt(closure.closedAt)}.` : 'El ciclo ya tiene snapshot cerrado.'}
+                    {closureNextCycleRange ? ` Siguiente ciclo: ${closureNextCycleRange}.` : ''}
+                  </p>
+                </div>
+                <Badge color={closureSuggestedSavings > 0 ? 'amber' : 'emerald'}>
+                  {closureSuggestedSavings > 0 ? `Ahorro ${formatMoney(closureSuggestedSavings)}` : 'Sin ahorro pendiente'}
+                </Badge>
+              </div>
+
+              {closureNextBudget.length ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {closureNextBudget.slice(0, 3).map((item) => (
+                    <div key={item.category} className="min-w-0 rounded-tremor-default border border-emerald-500/20 bg-slate-900/30 px-3 py-2">
+                      <p className="truncate text-xs font-semibold text-emerald-100">{item.category}</p>
+                      <p className="mt-1 font-mono text-sm text-slate-100">{formatMoney(item.suggestedLimit)}</p>
+                      <p className="mt-1 truncate text-xs text-emerald-100/70">Sugerido siguiente ciclo</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
 

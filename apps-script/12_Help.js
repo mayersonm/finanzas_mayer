@@ -141,7 +141,7 @@ function sendHelp(chatId) {
     '• 🔔 `alertas`     - presupuestos, fijos, deudas y credito',
     '• 🧠 `insights`    - lectura inteligente con IA',
     '• 📅 Dashboard > Calendario - gasto diario, fijos, deudas, cierre y credito',
-    '• 🔁 Dia 23 - sugerir cerrar ciclo, separar ahorro y reiniciar presupuesto',
+    '• 🔁 Dia 23 - cerrar ciclo en D1 y dejar ahorro/presupuesto sugerido',
     '• 🤖 `analisis`    - consejos con IA',
     '• 🧭 `anual`       - resumen anual por correo',
     '• 📎 `exportar`    - historial en Excel',

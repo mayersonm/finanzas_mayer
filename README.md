@@ -67,11 +67,11 @@ La pestana `Config` guarda las preferencias en D1 y concentra:
 
 El boton `Actualizar` solo vuelve a leer D1. El boton `Sync manual` importa el respaldo de Google Sheets hacia D1 y muestra cuantos movimientos, presupuestos, fijos, deudas y metas se revisaron. Para movimientos, Google Sheets manda: si Sheets tiene 24 movimientos, D1 debe quedar con esos mismos 24 para ese `chat_id`; cualquier movimiento extra que exista solo en D1 se elimina durante la sincronizacion manual. No existe sincronizacion D1 -> Sheets.
 
-En `Inicio`, el boton `Cerrar mes` guarda el corte actual en D1 (`financial_closures`). El cierre se etiqueta con el dia 23, por ejemplo `Cierre 23/05`, pero los movimientos mantienen sus fechas reales dentro del mes calendario. El bloque `Top fugas` muestra los 5 gastos variables que mas pesan en el mes.
+En `Inicio`, el boton `Cerrar ciclo` guarda el snapshot actual en D1 (`financial_closures`), marca el ciclo como cerrado y deja una propuesta para el siguiente ciclo: ahorro sugerido y presupuesto recomendado por categoria. El cierre se etiqueta con el dia 23, por ejemplo `Cierre 23/05`, pero los movimientos mantienen sus fechas reales dentro del mes calendario. El bloque `Top fugas` muestra los 5 gastos variables que mas pesan en el mes.
 
 La pestana `Dinero Libre` proyecta el gasto desde `Caja actual`. Las deudas y fijos quedan visibles como referencia, pero no reducen el calculo diario porque se pueden mover o patear. Usa tres rangos: seguro, normal y flexible. Tambien simula compras y muestra una ruta educativa para invertir el excedente segun perfil y horizonte.
 
-La pestana `Calendario` muestra el mes calendario real con gasto diario por fecha, fijos, deudas, pagos de credito, alertas, objetivo semanal y cierre. La regla de cierre se activa cuando el ciclo esta cerca de terminar y el dia 23 sugiere: `Cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto`.
+La pestana `Calendario` muestra el mes calendario real con gasto diario por fecha, fijos, deudas, pagos de credito, alertas, objetivo semanal y cierre. La regla de cierre se activa cuando el ciclo esta cerca de terminar y el dia 23 sugiere cerrar el ciclo. El ahorro queda como sugerencia hasta que se separe de verdad.
 
 El `Objetivo semanal` se calcula desde D1 con el dinero libre disponible del ciclo. Muestra cuanto se puede gastar en la semana, cuanto ya se uso, cuanto queda y cuanto conviene gastar por dia hasta el domingo o hasta el fin del ciclo.
 
@@ -142,7 +142,7 @@ En el dashboard:
 
 ```text
 Calendario -> ver fijos, deudas, cierre, pagos de credito, alertas y objetivo semanal.
-Inicio -> ver aviso de cierre cuando toque cerrar ciclo.
+Inicio -> cerrar ciclo, guardar snapshot D1 y revisar presupuesto sugerido del siguiente ciclo.
 ```
 
 Si escribes una palabra que no es categoria, el bot la conserva como descripcion y deja la categoria como `otro` o la reclasifica por reglas si aplica.

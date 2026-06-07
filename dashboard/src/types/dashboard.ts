@@ -319,6 +319,28 @@ export interface ClosureSummary {
   saved?: boolean;
   savedAt?: string;
   snapshotId?: string;
+  status?: 'closed' | string;
+  closed?: boolean;
+  closedAt?: string;
+  suggestedSavings?: number;
+  savingsAction?: 'pending_confirmation' | 'not_available' | 'suggested' | string;
+  nextCycle?: {
+    key?: string;
+    start?: string;
+    end?: string;
+    closeDate?: string;
+    range?: string;
+  } | null;
+  nextBudget?: Array<{
+    category: string;
+    currentLimit: number;
+    spent: number;
+    remaining: number;
+    over: number;
+    suggestedLimit: number;
+    status: string;
+    reason: string;
+  }>;
   ingresos: number;
   gastos: number;
   gastosMovimientos?: number;
