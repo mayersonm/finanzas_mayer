@@ -4,11 +4,16 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "db:create": "wrangler d1 create finanzas_mayeson",
-    "db:migrate:local": "wrangler d1 migrations apply finanzas_mayeson --local",
-    "db:migrate:remote": "wrangler d1 migrations apply finanzas_mayeson --remote"
+    "dev": "npx wrangler@4.98.0 dev",
+    "deploy": "npx wrangler@4.98.0 deploy",
+    "deploy:prod": "npx wrangler@4.98.0 deploy",
+    "deploy:qa": "npx wrangler@4.98.0 deploy --env qa",
+    "db:create": "npx wrangler@4.98.0 d1 create finanzas_mayeson",
+    "db:create:qa": "npx wrangler@4.98.0 d1 create finanzas_mayeson_qa",
+    "db:migrate:local": "npx wrangler@4.98.0 d1 migrations apply finanzas_mayeson --local",
+    "db:migrate:remote": "npx wrangler@4.98.0 d1 migrations apply finanzas_mayeson --remote",
+    "db:migrate:prod": "npx wrangler@4.98.0 d1 migrations apply finanzas_mayeson --remote",
+    "db:migrate:qa": "npx wrangler@4.98.0 d1 migrations apply finanzas_mayeson_qa --remote --env qa"
   },
   "devDependencies": {
     "wrangler": "^4.90.0"

@@ -383,12 +383,26 @@ async function health(env) {
   return {
     ok: true,
     database: 'finanzas_mayeson',
+    environment: workerEnvironment(env),
     transactions: row?.total || 0,
     fixedExpenses: fixed?.total || 0,
     receipts: receipts?.total || 0,
     debts: debts?.total || 0,
     checkedAt: new Date().toISOString(),
   };
+}
+
+function workerEnvironment(env) {
+  return String(env.ENVIRONMENT || '').trim().toLowerCase() || 'production';
+}
+
+function isQaEnv(env) {
+  return workerEnvironment(env) === 'qa';
+}
+
+function gasActionHasSideEffects(action) {
+  const clean = String(action || '').trim().toLowerCase();
+  return !['health', 'dashboard', 'txs'].includes(clean);
 }
 
 async function systemHealth(env) {
@@ -498,6 +512,16 @@ async function systemHealth(env) {
 }
 
 async function gasConfigRequest(env, action, extraParams = new URLSearchParams()) {
+  if (isQaEnv(env) && gasActionHasSideEffects(action)) {
+    return {
+      ok: true,
+      skipped: true,
+      environment: 'qa',
+      action,
+      message: 'Accion externa bloqueada en QA para no afectar Apps Script, correos, Telegram ni Sheets de produccion.',
+    };
+  }
+
   if (!env.GAS_API_URL || !env.GAS_API_KEY) {
     throw httpError(400, 'Faltan secrets GAS_API_URL o GAS_API_KEY');
   }
@@ -1989,6 +2013,15 @@ async function emailConfigFromGas(env) {
 }
 
 async function deleteTransactionFromGas(env, tx) {
+  if (isQaEnv(env)) {
+    return {
+      ok: true,
+      skipped: true,
+      environment: 'qa',
+      reason: 'QA no borra movimientos en Apps Script/Sheets.',
+    };
+  }
+
   if (!env.GAS_API_URL || !env.GAS_API_KEY) {
     return { ok: false, skipped: true, reason: 'GAS_API_URL o GAS_API_KEY no configurado' };
   }
