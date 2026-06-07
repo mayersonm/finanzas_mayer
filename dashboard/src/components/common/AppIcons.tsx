@@ -84,6 +84,14 @@ export const FundsIcon: AppIcon = (props) => (
   </Icon>
 );
 
+export const SparklesIcon: AppIcon = (props) => (
+  <Icon {...props}>
+    <path d="M12 3l1.2 4.1L17 8.5l-3.8 1.4L12 14l-1.2-4.1L7 8.5l3.8-1.4z" />
+    <path d="M5.5 13l.8 2.4 2.2.8-2.2.8-.8 2.4-.8-2.4-2.2-.8 2.2-.8z" />
+    <path d="M18 14l.6 1.8 1.7.6-1.7.6-.6 1.8-.6-1.8-1.7-.6 1.7-.6z" />
+  </Icon>
+);
+
 export const WalletIcon: AppIcon = (props) => (
   <Icon {...props}>
     <path d="M4 7h14a2 2 0 0 1 2 2v8H6a2 2 0 0 1-2-2z" />

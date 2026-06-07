@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'dinero' | 'calendario' | 'patrimonio' | 'inversiones' | 'analisis' | 'metas' | 'configuracion';
+export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'dinero' | 'calendario' | 'patrimonio' | 'inversiones' | 'ia' | 'analisis' | 'metas' | 'configuracion';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {
@@ -547,6 +547,7 @@ export interface DashboardData {
   cycleLabel?: string;
   cycleStart?: string;
   cycleEnd?: string;
+  cycleClose?: string;
   cycleIncomeStart?: string;
   cycleIncomeEnd?: string;
   cycleIncomeLeadDays?: number;

@@ -10,6 +10,7 @@ import { getRealExpenses } from './lib/finance';
 import type { ApiStatus, DashboardBootstrapData, DashboardData, DashboardUser, TabId } from './types/dashboard';
 
 const AnalysisSection = lazy(() => import('./features/analysis/AnalysisSection').then((mod) => ({ default: mod.AnalysisSection })));
+const AiSection = lazy(() => import('./features/ai/AiSection').then((mod) => ({ default: mod.AiSection })));
 const CalendarSection = lazy(() => import('./features/calendar/CalendarSection').then((mod) => ({ default: mod.CalendarSection })));
 const CommitmentsSection = lazy(() => import('./features/commitments/CommitmentsSection').then((mod) => ({ default: mod.CommitmentsSection })));
 const FreeMoneySection = lazy(() => import('./features/freeMoney/FreeMoneySection').then((mod) => ({ default: mod.FreeMoneySection })));
@@ -394,6 +395,7 @@ export default function App() {
               {tab === 'calendario' ? <CalendarSection data={data} authToken={token} chatId={selectedChatId} /> : null}
               {tab === 'patrimonio' ? <NetWorthSection authToken={token} chatId={selectedChatId} /> : null}
               {tab === 'inversiones' ? <InvestmentsSection authToken={token} chatId={selectedChatId} exchangeRate={exchangeRate} /> : null}
+              {tab === 'ia' ? <AiSection data={data} authToken={token} chatId={selectedChatId} /> : null}
               {tab === 'analisis' ? <AnalysisSection data={data} /> : null}
               {tab === 'metas' ? <GoalsSection data={data} /> : null}
               {tab === 'configuracion' ? <SettingsSection authToken={token} chatId={selectedChatId} /> : null}

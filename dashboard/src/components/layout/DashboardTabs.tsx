@@ -4,7 +4,7 @@ import type { TabId } from '../../types/dashboard';
 const tabGroups: Array<{ label: string; ids: TabId[] }> = [
   { label: 'Operacion', ids: ['inicio', 'movimientos', 'compromisos'] },
   { label: 'Plan', ids: ['dinero', 'calendario', 'metas'] },
-  { label: 'Crecimiento', ids: ['patrimonio', 'inversiones', 'analisis'] },
+  { label: 'Crecimiento', ids: ['patrimonio', 'inversiones', 'ia', 'analisis'] },
   { label: 'Sistema', ids: ['configuracion'] },
 ];
 
