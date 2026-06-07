@@ -9,36 +9,43 @@ export async function advisorResponse(env, dashboardData, settings, payload = {}
   const context = buildAdvisorContext(dashboardData);
   const fallback = localAdvisor(context, question, mode);
   const provider = providerConfig(env, settings);
+  const prompt = buildPrompt(context, question, mode);
 
-  if (!provider.apiKey) {
-    return {
-      ...fallback,
-      source: 'local',
-      providerStatus: 'missing_key',
-      note: 'IA externa sin API key en Worker; usando analisis local.',
-    };
+  if (provider.apiKey) {
+    try {
+      return aiResult(await callProvider(provider, prompt), fallback, context, 'ok');
+    } catch (error) {
+      const gasResult = await callGasAdvisor(env, prompt).catch(() => null);
+      if (gasResult?.text) {
+        return aiResult(gasResult.text, fallback, context, gasResult.providerStatus || 'apps_script');
+      }
+
+      return {
+        ...fallback,
+        source: 'local',
+        providerStatus: 'fallback',
+        providerError: shortProviderError(error),
+        note: 'La IA externa no respondio a tiempo; usando analisis local.',
+      };
+    }
   }
 
-  try {
-    const text = await callProvider(provider, buildPrompt(context, question, mode));
-    const parsed = parseAdvisorJson(text, fallback);
-    return {
-      ...parsed,
-      ok: true,
-      source: 'ai',
-      providerStatus: 'ok',
-      generatedAt: new Date().toISOString(),
-      context,
-    };
-  } catch (error) {
-    return {
-      ...fallback,
-      source: 'local',
-      providerStatus: 'fallback',
-      providerError: shortProviderError(error),
-      note: 'La IA externa no respondio a tiempo; usando analisis local.',
-    };
+  const gasResult = await callGasAdvisor(env, prompt).catch((error) => ({
+    error: shortProviderError(error),
+  }));
+  if (gasResult?.text) {
+    return aiResult(gasResult.text, fallback, context, gasResult.providerStatus || 'apps_script');
   }
+
+  return {
+    ...fallback,
+    source: 'local',
+    providerStatus: gasResult?.error ? 'apps_script_error' : 'missing_key',
+    providerError: gasResult?.error || '',
+    note: gasResult?.error
+      ? 'Apps Script no pudo consultar IA; usando analisis local.'
+      : 'IA externa sin API key disponible; usando analisis local.',
+  };
 }
 
 function buildAdvisorContext(data) {
@@ -212,6 +219,43 @@ async function callProvider(provider, prompt) {
     }
     throw error;
   }
+}
+
+async function callGasAdvisor(env, prompt) {
+  if (!env.GAS_API_URL || !env.GAS_API_KEY) return null;
+
+  const url = new URL(env.GAS_API_URL);
+  url.searchParams.set('action', 'ai_advisor');
+  url.searchParams.set('key', env.GAS_API_KEY);
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    signal: timeoutSignal(PROVIDER_TIMEOUT_MS + 5000),
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.error || `Apps Script IA HTTP ${response.status}`);
+  }
+
+  return {
+    text: String(data.text || '').trim(),
+    providerStatus: data.providerStatus || data.source || 'apps_script',
+  };
+}
+
+function aiResult(text, fallback, context, providerStatus) {
+  const parsed = parseAdvisorJson(text, fallback);
+  return {
+    ...parsed,
+    ok: true,
+    source: 'ai',
+    providerStatus,
+    generatedAt: new Date().toISOString(),
+    context,
+  };
 }
 
 async function callMessages(provider, apiUrl, prompt) {

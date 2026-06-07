@@ -220,6 +220,23 @@ button {
   color: rgb(15, 23, 42) !important;
 }
 
+:root[data-theme="light"] .disabled\:bg-slate-900\/70:disabled,
+:root[data-theme="light"] .disabled\:bg-slate-900\/60:disabled,
+:root[data-theme="light"] .disabled\:bg-slate-900\/50:disabled,
+:root[data-theme="light"] .disabled\:bg-slate-800\/70:disabled {
+  background-color: rgba(226, 232, 240, 0.72) !important;
+}
+
+:root[data-theme="light"] .disabled\:border-slate-700:disabled,
+:root[data-theme="light"] .disabled\:border-slate-800:disabled {
+  border-color: rgb(203, 213, 225) !important;
+}
+
+:root[data-theme="light"] .disabled\:text-slate-500:disabled,
+:root[data-theme="light"] .disabled\:text-slate-600:disabled {
+  color: rgb(100, 116, 139) !important;
+}
+
 :root[data-theme="light"] button[aria-current="page"] {
   background-color: rgba(16, 185, 129, 0.12) !important;
   border-color: rgba(5, 150, 105, 0.55) !important;

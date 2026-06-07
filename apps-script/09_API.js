@@ -46,6 +46,7 @@ function handleDashboardApi(e) {
   }
 
   const action = String(params.action || 'dashboard').toLowerCase();
+  const body = dashRequestBody_(e);
 
   try {
     if (action === 'health' || action === 'ping') {
@@ -96,10 +97,14 @@ function handleDashboardApi(e) {
       return dashJson_(dashSendDailyTelegram_(params));
     }
 
+    if (action === 'ai_advisor' || action === 'ia_advisor') {
+      return dashJson_(dashAiAdvisor_(params, body));
+    }
+
     return dashJson_({
       ok: false,
       error: 'Accion no valida',
-      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email', 'send_monthly_email', 'send_yearly_email', 'send_daily_telegram'],
+      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email', 'send_monthly_email', 'send_yearly_email', 'send_daily_telegram', 'ai_advisor'],
     });
   } catch (err) {
     Logger.log('Dashboard API error: ' + (err && err.stack ? err.stack : err));
@@ -292,6 +297,80 @@ function dashConfig_() {
     },
     updatedAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
   };
+}
+
+function dashAiAdvisor_(params, body) {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('claude_api_key');
+  if (!apiKey) throw new Error('Falta claude_api_key en Script Properties');
+
+  const prompt = (body && body.prompt) || {};
+  const system = String(prompt.system || '').slice(0, 5000);
+  const user = String(prompt.user || body.promptText || body.text || '').slice(0, 18000);
+  if (!user) throw new Error('Falta prompt para IA');
+
+  const claudeUrl = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
+  const claudeModel = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
+  let resp = fetchIAConReintentos_(claudeUrl, {
+    method: 'post',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    payload: JSON.stringify({
+      model: claudeModel,
+      max_tokens: 700,
+      temperature: 0.15,
+      system: system,
+      messages: [{ role: 'user', content: user }],
+    }),
+    muteHttpExceptions: true,
+  }, 'dashboard advisor /v1/messages');
+
+  let raw = resp.getContentText();
+  let responseCode = resp.getResponseCode();
+  let chatCompletionsFallback = false;
+
+  if (debeReintentarChatCompletions_(responseCode, raw, claudeUrl)) {
+    Logger.log('Dashboard advisor /v1/messages bloqueado; reintentando /v1/chat/completions.');
+    resp = llamarIAChatCompletions_(apiKey, claudeUrl, claudeModel, 700, system ? system + '\n\n' + user : user, '', '');
+    raw = resp.getContentText();
+    responseCode = resp.getResponseCode();
+    chatCompletionsFallback = responseCode < 300;
+  }
+
+  const result = parseJsonSeguro_(raw, null);
+  const text = dashAiText_(result, chatCompletionsFallback);
+  if (responseCode >= 300 || !text) {
+    Logger.log('Dashboard advisor IA error: ' + raw);
+    throw new Error(resumenErrorClaude_(raw) || ('HTTP ' + responseCode));
+  }
+
+  return {
+    ok: true,
+    text: String(text).trim(),
+    source: 'apps_script_claude',
+    providerStatus: chatCompletionsFallback ? 'apps_script_chat_completions' : 'apps_script_messages',
+    model: claudeModel,
+    generatedAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
+  };
+}
+
+function dashAiText_(result, chatCompletionsFallback) {
+  if (!result) return '';
+  if (chatCompletionsFallback) {
+    return result.choices &&
+      result.choices[0] &&
+      result.choices[0].message &&
+      result.choices[0].message.content;
+  }
+
+  const content = result.content || [];
+  for (let i = 0; i < content.length; i++) {
+    if (content[i] && content[i].type === 'text' && content[i].text) return content[i].text;
+  }
+  return '';
 }
 
 function dashUpdateConfig_(params) {
@@ -865,6 +944,11 @@ function dashJson_(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function dashRequestBody_(e) {
+  if (!e || !e.postData || !e.postData.contents) return {};
+  return parseJsonSeguro_(e.postData.contents, {}) || {};
 }
 
 function dashDate_(value, format) {
