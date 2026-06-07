@@ -3,6 +3,10 @@
 
 
 function doPost(e) {
+  if (e && e.parameter && e.parameter.action) {
+    return handleDashboardApi(e);
+  }
+
   const lock = LockService.getScriptLock();
 
   try {
