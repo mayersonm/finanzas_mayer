@@ -2,14 +2,16 @@ import { formatCurrency, round } from '../../shared/money.js';
 import { timeoutSignal } from '../../shared/settings-store.js';
 
 const PROVIDER_TIMEOUT_MS = 10000;
+const GAS_ADVISOR_TIMEOUT_MS = 45000;
 
 export async function advisorResponse(env, dashboardData, settings, payload = {}) {
   const question = String(payload.question || '').trim().slice(0, 500);
   const mode = String(payload.mode || (question ? 'question' : 'daily')).toLowerCase();
+  const history = normalizeHistory(payload.history);
   const context = buildAdvisorContext(dashboardData);
   const fallback = localAdvisor(context, question, mode);
   const provider = providerConfig(env, settings);
-  const prompt = buildPrompt(context, question, mode);
+  const prompt = buildPrompt(context, question, mode, history);
 
   if (provider.apiKey) {
     try {
@@ -176,7 +178,7 @@ function providerConfig(env, settings) {
   };
 }
 
-function buildPrompt(context, question, mode) {
+function buildPrompt(context, question, mode, history = []) {
   return {
     system: [
       'Eres el consejero financiero de un dashboard personal.',
@@ -184,6 +186,8 @@ function buildPrompt(context, question, mode) {
       'Usa siempre caja actual como base para decidir cuanto puede gastar hoy.',
       'No confundas balance del ciclo con caja actual.',
       'No inventes meses, ingresos ni gastos fuera del JSON.',
+      'Usa el historial solo para continuidad conversacional; los montos del contexto financiero son la fuente de verdad.',
+      'Si el usuario pide explicar una respuesta anterior, conecta con el historial, pero recalcula con el contexto actual.',
       'No digas crisis de ingresos si la pregunta no lo exige.',
       'No des asesorias financieras profesionales ni recomiendes productos especificos.',
       'Devuelve solo JSON valido con: title, summary, bullets, actions, riskLevel.',
@@ -191,6 +195,7 @@ function buildPrompt(context, question, mode) {
     user: JSON.stringify({
       mode,
       question: question || 'Dame el consejo financiero de hoy.',
+      conversation: history,
       context,
       responseContract: {
         title: 'string',
@@ -201,6 +206,18 @@ function buildPrompt(context, question, mode) {
       },
     }),
   };
+}
+
+function normalizeHistory(history) {
+  if (!Array.isArray(history)) return [];
+
+  return history
+    .map((item) => ({
+      role: String(item?.role || '').toLowerCase() === 'user' ? 'user' : 'assistant',
+      content: String(item?.content || '').replace(/\s+/g, ' ').trim().slice(0, 1000),
+    }))
+    .filter((item) => item.content)
+    .slice(-10);
 }
 
 async function callProvider(provider, prompt) {
@@ -230,7 +247,7 @@ async function callGasAdvisor(env, prompt) {
 
   const response = await fetch(url.toString(), {
     method: 'POST',
-    signal: timeoutSignal(PROVIDER_TIMEOUT_MS + 5000),
+    signal: timeoutSignal(GAS_ADVISOR_TIMEOUT_MS),
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ prompt }),
   });

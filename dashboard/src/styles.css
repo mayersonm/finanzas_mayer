@@ -41,7 +41,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -174,13 +175,15 @@ button {
 
 :root[data-theme="light"] input,
 :root[data-theme="light"] select,
+:root[data-theme="light"] textarea,
 :root[data-theme="light"] .form-input {
   background-color: rgb(255, 255, 255) !important;
   border-color: rgb(203, 213, 225) !important;
   color: rgb(15, 23, 42) !important;
 }
 
-:root[data-theme="light"] input::placeholder {
+:root[data-theme="light"] input::placeholder,
+:root[data-theme="light"] textarea::placeholder {
   color: rgb(100, 116, 139) !important;
 }
 
