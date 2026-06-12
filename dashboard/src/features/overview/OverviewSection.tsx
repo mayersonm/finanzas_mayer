@@ -46,9 +46,12 @@ export function OverviewSection({
     monthBalance,
   });
   const periodLabel = data.cycleRange || closure.range || data.mes;
+  const hasIncomeLead = Number(closure.incomeLeadDays || 0) > 0 && closure.incomeStart && closure.incomeStart !== closure.start;
   const incomePeriodLabel = closure.incomeStart && closure.incomeStart !== closure.start
     ? `${formatShortDateLabel(closure.incomeStart)} - ${formatShortDateLabel(closure.incomeEnd || closure.end)}`
     : periodLabel;
+  const incomeMetricLabel = hasIncomeLead ? 'Ingreso disponible' : 'Ingresos ciclo';
+  const incomeMetricDetail = hasIncomeLead ? `${incomePeriodLabel} · ajuste de ingreso` : incomePeriodLabel;
   const expensePeriodLabel = closure.start && closure.end
     ? `${formatShortDateLabel(closure.start)} - ${formatShortDateLabel(closure.end)}`
     : periodLabel;
@@ -195,7 +198,7 @@ export function OverviewSection({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Title>Cierre financiero</Title>
-              <Text>{closure.label || 'Cierre 23'} · {periodLabel}</Text>
+              <Text>{closure.label || 'Cierre 22'} · {periodLabel}</Text>
               {closure.savedAt ? <Text>Guardado {formatSavedAt(closure.savedAt)}</Text> : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -267,7 +270,7 @@ export function OverviewSection({
           ) : null}
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <ClosureMetric label="Ingresos ciclo" value={formatMoney(closure.ingresos)} tone="text-emerald-300" detail={incomePeriodLabel} />
+            <ClosureMetric label={incomeMetricLabel} value={formatMoney(closure.ingresos)} tone="text-emerald-300" detail={incomeMetricDetail} />
             <ClosureMetric label="Gastos ciclo" value={formatMoney(closure.gastos)} tone="text-rose-300" detail={expensePeriodLabel} />
             <ClosureMetric label="Resultado ciclo" value={formatMoney(closure.balance)} tone={closure.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'} detail="Entradas menos salidas del ciclo" />
           </div>
@@ -488,7 +491,7 @@ function getClosureSummary(
   const pendienteComprometido = fallback.debtPending + fallback.fixedPending + fallback.budgetRemaining;
 
   return {
-    label: 'Cierre 23',
+    label: 'Cierre 22',
     range: data.cycleRange || [data.cycleStart, data.cycleEnd].filter(Boolean).join(' - '),
     start: data.cycleStart,
     end: data.cycleEnd,
@@ -538,7 +541,7 @@ function ClosureLine({ label, value, strong, danger }: { label: string; value: n
 }
 
 function formatDateLabel(value?: string) {
-  if (!value) return '23';
+  if (!value) return '22';
   const [year, month, day] = value.split('-');
   if (!year || !month || !day) return value;
   return `${day}/${month}/${year}`;

@@ -32,7 +32,7 @@ function enviarResumenMensualEmail() {
 function resumenMensualAutomatico() {
   const now = new Date();
   const dia = Number(Utilities.formatDate(now, 'America/Lima', 'd'));
-  if (dia !== 23) {
+  if (dia !== 22) {
     return 'No corresponde resumen mensual hoy';
   }
 
@@ -53,7 +53,7 @@ function resumenMensualAutomatico() {
 
 function enviarResumenMensualSiCorrespondeEmail() {
   const dia = Number(Utilities.formatDate(new Date(), 'America/Lima', 'd'));
-  if (dia !== 23) {
+  if (dia !== 22) {
     return 'No corresponde resumen mensual hoy';
   }
 

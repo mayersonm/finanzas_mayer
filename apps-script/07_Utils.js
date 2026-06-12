@@ -184,13 +184,13 @@ function nombreMesCortoCiclo_(date) {
 
 function cicloPagoDesdeFecha_(value) {
   const base = fechaLocalDesdeValor_(value || new Date());
-  const start = base.getDate() >= 23
-    ? new Date(base.getFullYear(), base.getMonth(), 23)
-    : new Date(base.getFullYear(), base.getMonth() - 1, 23);
+  const start = base.getDate() > 22
+    ? new Date(base.getFullYear(), base.getMonth(), 22)
+    : new Date(base.getFullYear(), base.getMonth() - 1, 22);
   const end = new Date(start.getFullYear(), start.getMonth() + 1, 22);
   const startKey = fechaKey_(start);
   const endKey = fechaKey_(end);
-  const close = new Date(start.getFullYear(), start.getMonth() + 1, 23);
+  const close = end;
   const closeKey = fechaKey_(close);
 
   return {

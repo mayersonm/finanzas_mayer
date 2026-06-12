@@ -972,7 +972,7 @@ async function saveFinancialClosure(env, params, payload = {}) {
 
   const closureKey = data.mesKey || closure.closeDate?.slice(0, 7) || localDateKey(new Date()).slice(0, 7);
   const id = `closure:${chatId}:${closureKey}`.slice(0, 180);
-  const currentCycle = payCycleFromDate(dateFromKey(closure.start || data.cycleStart || `${closureKey}-23`));
+  const currentCycle = payCycleFromDate(dateFromKey(closure.start || data.cycleStart || `${closureKey}-22`));
   const nextCycle = payCycleRelative(currentCycle, 1);
   const closedAt = localIso(new Date());
   const suggestedSavings = round(Math.max(0, Number(data.dineroLibre?.recommendedSavings ?? data.cierreAutomatico?.suggestedSavings ?? 0)));

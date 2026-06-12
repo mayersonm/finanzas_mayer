@@ -121,8 +121,8 @@ function dashDashboardData_(params) {
   const monthStart = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 1), DASH_TZ, 'yyyy-MM-dd');
   const monthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   const monthEnd = Utilities.formatDate(monthEndDate, DASH_TZ, 'yyyy-MM-dd');
-  const closeDate = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 23), DASH_TZ, 'yyyy-MM-dd');
-  const closeLabel = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 23), DASH_TZ, 'dd/MM');
+  const closeDate = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 22), DASH_TZ, 'yyyy-MM-dd');
+  const closeLabel = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 22), DASH_TZ, 'dd/MM');
   const monthRangeLabel = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 1), DASH_TZ, 'dd/MM/yyyy') + ' - ' + Utilities.formatDate(monthEndDate, DASH_TZ, 'dd/MM/yyyy');
   const cycleKey = monthKey;
   const allTxs = dashReadTransactions_(params);
@@ -405,8 +405,8 @@ function dashSetupTriggers_() {
     ok: true,
     result: result || 'Triggers recreados',
     dailySummaryHour: 21,
-    monthlySummaryDay: 23,
-    annualSummaryDay: 23,
+    monthlySummaryDay: 22,
+    annualSummaryDay: 22,
     updatedAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
   };
 }
@@ -432,7 +432,7 @@ function dashSendMonthlyEmail_(params) {
     ok: true,
     result: result || 'Resumen mensual enviado',
     type: 'monthly',
-    cycleDay: 23,
+    cycleDay: 22,
     sentAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
   };
 }
@@ -446,7 +446,7 @@ function dashSendYearlyEmail_(params) {
     result: result || 'Resumen anual enviado',
     type: 'yearly',
     year: year,
-    cycleDay: 23,
+    cycleDay: 22,
     sentAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
   };
 }

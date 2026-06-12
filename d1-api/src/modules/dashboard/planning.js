@@ -197,7 +197,7 @@ export function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deu
 export async function closureRuleSuggestion(env, chatId, now, cycle, plan, deps = {}) {
   const today = localDateKey(now || new Date());
   const todayParts = parseDateKeyParts(today);
-  const isCloseDay = todayParts.day === 23;
+  const isCloseDay = todayParts.day === 22;
   const targetCycle = isCloseDay ? payCycleFromDate(dateFromKey(dateKeyFromParts(todayParts.year, todayParts.monthIndex, 22))) : cycle;
   const daysToClose = isCloseDay ? 0 : daysBetween(today, targetCycle.closeDate);
   const isSoon = !isCloseDay && daysToClose >= 0 && daysToClose <= 3;
@@ -571,7 +571,7 @@ export function investmentSuggestion({ amount, profile, horizon, emergencyBuffer
 export function smartAlerts({ now, cycle, ingresosMes, gastosMes, budgets, fixedExpenses, debts, latest }) {
   const alerts = [];
   const today = localDateKey(now);
-  const cycleLabel = cycle?.shortLabel || '23-22';
+  const cycleLabel = cycle?.shortLabel || '22-22';
 
   budgets.forEach((item) => {
     const spent = Number(item.gasto || 0);
