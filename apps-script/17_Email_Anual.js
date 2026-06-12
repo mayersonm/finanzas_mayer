@@ -542,7 +542,7 @@ function leerCierresMensualesAnioEmail_(chatId, year) {
 }
 
 function filtrarTransaccionesAnioEmail_(txs, year) {
-  const startKey = String(year) + '-01-23';
+  const startKey = String(year) + '-01-22';
   const endKey = String(Number(year) + 1) + '-01-22';
   return txs.filter(function (r) {
     const key = fechaKeyFilaEmail_(r[0]);

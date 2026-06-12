@@ -61,7 +61,7 @@ function sendResumen(chatId) {
       .join('\n');
 
     return sendMessage(chatId,
-      `📊 *Resumen del ciclo ${d1.mes || '23-22'}*\n\n` +
+      `📊 *Resumen del ciclo ${d1.mes || '22-22'}*\n\n` +
       `📥 Ingresos: S/ ${Number(d1.ingresosMes || 0).toFixed(2)}\n` +
       `📤 Gastos:   S/ ${Number(d1.gastosMes || 0).toFixed(2)}\n` +
       `💰 Balance:  S/ ${Number(d1.balanceMes || 0).toFixed(2)}\n\n` +
@@ -401,7 +401,7 @@ function cmdProyeccion(chatId) {
     : '';
 
   sendMessage(chatId,
-    `📈 *Proyección — cierre del ciclo 23-22*\n_${periodo.label}_\n\n` +
+    `📈 *Proyección — cierre del ciclo 22-22*\n_${periodo.label}_\n\n` +
     `📅 Día ${diaHoy} de ${diasMes} (faltan ${diasRest} días)\n\n` +
     `💸 Gasto diario promedio: S/ ${gastoDiario.toFixed(2)}\n` +
     `📤 Gastos proyectados:    S/ ${gastoProyect.toFixed(2)}\n` +
@@ -424,7 +424,7 @@ function cmdAnalisisIA(chatId) {
     '🤖 Analizando tus finanzas...\n\n' +
     'Estoy leyendo primero la caja actual registrada:\n' +
     '`' + contexto.cajaActualTexto + '`\n\n' +
-    'Luego reviso movimientos, categorias, presupuestos y alertas del ciclo 23-22.',
+    'Luego reviso movimientos, categorias, presupuestos y alertas del ciclo 22-22.',
     true
   );
 
@@ -644,7 +644,7 @@ function cmdCompararMeses(chatId) {
     .join('\n');
 
   sendMessage(chatId,
-    `📆 *Ciclos de pago 23-22*\n_${nomAnt} vs ${nomAct}_\n\n` +
+    `📆 *Ciclos de pago 22-22*\n_${nomAnt} vs ${nomAct}_\n\n` +
     `*Ingresos*\n` +
     `${flecha(act.ing, ant.ing)} ${nomAnt}: S/ ${ant.ing.toFixed(2)}\n` +
     `${flecha(act.ing, ant.ing)} ${nomAct}: S/ ${act.ing.toFixed(2)} (${diff(act.ing, ant.ing)})\n\n` +

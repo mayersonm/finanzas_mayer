@@ -429,11 +429,11 @@ function filtrarTransaccionesPeriodoEmail_(txs, periodo) {
 
 function periodoPagoEmail_(date) {
   const base = fechaLocalEmail_(Utilities.formatDate(date || new Date(), 'America/Lima', 'yyyy-MM-dd'));
-  const start = base.getDate() >= 23
-    ? new Date(base.getFullYear(), base.getMonth(), 23)
-    : new Date(base.getFullYear(), base.getMonth() - 1, 23);
+  const start = base.getDate() > 22
+    ? new Date(base.getFullYear(), base.getMonth(), 22)
+    : new Date(base.getFullYear(), base.getMonth() - 1, 22);
   const end = new Date(start.getFullYear(), start.getMonth() + 1, 22);
-  const close = new Date(start.getFullYear(), start.getMonth() + 1, 23);
+  const close = end;
   const startKey = Utilities.formatDate(start, 'America/Lima', 'yyyy-MM-dd');
   const endKey = Utilities.formatDate(end, 'America/Lima', 'yyyy-MM-dd');
   const closeKey = Utilities.formatDate(close, 'America/Lima', 'yyyy-MM-dd');

@@ -90,12 +90,12 @@ export function parseDateKeyParts(value) {
 
 export function payCycleFromDate(date) {
   const parts = parseDateKeyParts(localDateKey(date || new Date()));
-  const startMonthIndex = parts.day >= 23 ? parts.monthIndex : parts.monthIndex - 1;
+  const startMonthIndex = parts.day > 22 ? parts.monthIndex : parts.monthIndex - 1;
   const startYear = parts.year;
-  const startKey = dateKeyFromParts(startYear, startMonthIndex, 23);
+  const startKey = dateKeyFromParts(startYear, startMonthIndex, 22);
   const start = parseDateKeyParts(startKey);
   const endKey = dateKeyFromParts(start.year, start.monthIndex + 1, 22);
-  const closeKey = dateKeyFromParts(start.year, start.monthIndex + 1, 23);
+  const closeKey = endKey;
   return {
     key: startKey.slice(0, 7),
     closeKey: closeKey.slice(0, 7),
@@ -117,7 +117,7 @@ export function monthRangeFromKey(monthKey) {
   const part = parseDateKeyParts(`${String(monthKey || '').slice(0, 7)}-01`);
   const startKey = dateKeyFromParts(part.year, part.monthIndex, 1);
   const endKey = dateKeyFromParts(part.year, part.monthIndex + 1, 0);
-  const closeDate = dateKeyFromParts(part.year, part.monthIndex, 23);
+  const closeDate = dateKeyFromParts(part.year, part.monthIndex, 22);
   return {
     key: startKey.slice(0, 7),
     startKey,
@@ -170,10 +170,10 @@ export function maxDateKey(a, b) {
 export function nextFinancialClose(date) {
   const today = localDateKey(date || new Date());
   const parts = parseDateKeyParts(today);
-  const thisMonthClose = dateKeyFromParts(parts.year, parts.monthIndex, 23);
+  const thisMonthClose = dateKeyFromParts(parts.year, parts.monthIndex, 22);
   const closeDate = today <= thisMonthClose
     ? thisMonthClose
-    : dateKeyFromParts(parts.year, parts.monthIndex + 1, 23);
+    : dateKeyFromParts(parts.year, parts.monthIndex + 1, 22);
 
   return {
     closeDate,
