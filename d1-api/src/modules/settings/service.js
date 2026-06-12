@@ -169,7 +169,7 @@ export function normalizeSettingsConfig(value) {
     emergencyBufferAmount: round(Math.max(0, parseAmount(value.emergencyBufferAmount ?? value.emergency_buffer_amount ?? 0))),
     investorProfile: profile,
     investmentHorizon: horizon,
-    cycleIncomeLeadDays: clamp(Number(value.cycleIncomeLeadDays ?? value.cycle_income_lead_days ?? 1), 0, 7),
+    cycleIncomeLeadDays: clamp(Number(value.cycleIncomeLeadDays ?? value.cycle_income_lead_days ?? 0), 0, 7),
   };
 }
 
@@ -412,6 +412,6 @@ export function userSettingsToConfig(settings) {
     emergencyBufferAmount: Number(settings.emergency_buffer_amount || 0),
     investorProfile: settings.investor_profile || 'conservador',
     investmentHorizon: settings.investment_horizon || 'corto',
-    cycleIncomeLeadDays: Number(settings.cycle_income_lead_days ?? 1),
+    cycleIncomeLeadDays: Number(settings.cycle_income_lead_days ?? 0),
   };
 }
