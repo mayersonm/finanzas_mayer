@@ -328,8 +328,8 @@ export default function App() {
   const showInitialSkeleton = configured && Boolean(token) && !hasLoadedData && status !== 'error';
 
   return (
-    <main className="min-h-screen px-3 py-3 sm:px-6 sm:py-5 lg:px-6 xl:px-8">
-      <div className={`mx-auto flex w-full max-w-[96rem] gap-5 ${showPasswordPanel ? 'pointer-events-none blur-sm' : ''}`}>
+    <main className="min-h-screen px-3 py-3 sm:px-5 sm:py-5 lg:px-6 xl:px-7">
+      <div className={`mx-auto flex w-full max-w-[92rem] gap-4 ${showPasswordPanel ? 'pointer-events-none blur-sm' : ''}`}>
         <DashboardSidebar activeTab={tab} onTabChange={setTab} />
 
         <div className="min-w-0 flex-1">
