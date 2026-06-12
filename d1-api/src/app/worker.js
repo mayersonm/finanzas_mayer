@@ -596,7 +596,7 @@ async function dashboard(env, params) {
   const user = await ensureUserForChat(env, chatId);
   const settings = normalizeSettingsConfig(userSettingsToConfig(await getUserSettings(env, user.id)));
   const cycleStartParts = parseDateKeyParts(calendarMonth.startKey);
-  const cycleIncomeLeadDays = clamp(Number(settings.cycleIncomeLeadDays ?? 1), 0, 7);
+  const cycleIncomeLeadDays = clamp(Number(settings.cycleIncomeLeadDays ?? 0), 0, 7);
   const cycleIncomeStartKey = dateKeyFromParts(
     cycleStartParts.year,
     cycleStartParts.monthIndex,

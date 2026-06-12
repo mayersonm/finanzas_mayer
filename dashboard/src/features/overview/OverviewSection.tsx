@@ -269,12 +269,12 @@ export function OverviewSection({
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <ClosureMetric label="Ingresos ciclo" value={formatMoney(closure.ingresos)} tone="text-emerald-300" detail={incomePeriodLabel} />
             <ClosureMetric label="Gastos ciclo" value={formatMoney(closure.gastos)} tone="text-rose-300" detail={expensePeriodLabel} />
-            <ClosureMetric label="Caja registrada" value={formatMoney(cashBalance)} tone={cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'} detail="Calculada en D1, no flujo del ciclo" />
+            <ClosureMetric label="Resultado ciclo" value={formatMoney(closure.balance)} tone={closure.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'} detail="Entradas menos salidas del ciclo" />
           </div>
 
           <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+            <ClosureLine label="Caja registrada" value={cashBalance} strong />
             <ClosureLine label="Fijos pendientes" value={closure.fijosPendientes} />
-            <ClosureLine label="Flujo registrado del ciclo" value={closure.balance} />
             <ClosureLine label="Presupuesto pendiente" value={closure.presupuestoRestante} strong />
             <ClosureLine label="Deudas pendientes" value={closure.deudasPendientes} />
             <ClosureLine label="Total pendiente" value={closure.pendienteComprometido} strong />
