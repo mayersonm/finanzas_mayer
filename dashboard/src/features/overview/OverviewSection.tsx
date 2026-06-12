@@ -122,20 +122,20 @@ export function OverviewSection({
 
           <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
             <div className="min-w-0">
-              <Text>Caja actual</Text>
+              <Text>Caja registrada</Text>
               <p className={`mt-2 truncate font-mono text-4xl font-semibold sm:text-5xl ${cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                 {formatMoney(cashBalance)}
               </p>
               <p className="mt-3 max-w-2xl text-sm text-slate-400">
-                Saldo real registrado en D1. Esta es la base para decidir cuanto puedes gastar hoy.
+                Saldo calculado con movimientos en D1. No es lectura directa del banco.
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
               <FocusMetric
-                label="Libre actual"
+                label="Libre proyectado"
                 value={formatMoney(projectedFree)}
-                detail="Despues de compromisos y presupuesto"
+                detail="Caja menos compromisos y presupuesto"
                 tone={projectedFree >= 0 ? 'text-emerald-300' : 'text-rose-300'}
               />
               <FocusMetric
@@ -269,11 +269,12 @@ export function OverviewSection({
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <ClosureMetric label="Ingresos ciclo" value={formatMoney(closure.ingresos)} tone="text-emerald-300" detail={incomePeriodLabel} />
             <ClosureMetric label="Gastos ciclo" value={formatMoney(closure.gastos)} tone="text-rose-300" detail={expensePeriodLabel} />
-            <ClosureMetric label="Balance ciclo" value={formatMoney(closure.balance)} tone={closure.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
+            <ClosureMetric label="Caja registrada" value={formatMoney(cashBalance)} tone={cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'} detail="Calculada en D1, no flujo del ciclo" />
           </div>
 
           <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
             <ClosureLine label="Fijos pendientes" value={closure.fijosPendientes} />
+            <ClosureLine label="Flujo registrado del ciclo" value={closure.balance} />
             <ClosureLine label="Presupuesto pendiente" value={closure.presupuestoRestante} strong />
             <ClosureLine label="Deudas pendientes" value={closure.deudasPendientes} />
             <ClosureLine label="Total pendiente" value={closure.pendienteComprometido} strong />
@@ -393,10 +394,10 @@ function AutomationPanel({
                 tone="text-cyan-300"
               />
               <FocusMetric
-                label="Sync Sheets"
+                label="Respaldo Sheets"
                 value={automation.sync.statusLabel}
                 detail={automation.sync.lastAt ? formatUpdatedAt(automation.sync.lastAt) : 'Sin registro'}
-                tone={automation.sync.status === 'ok' ? 'text-emerald-300' : 'text-amber-300'}
+                tone={automation.sync.status === 'error' ? 'text-rose-300' : automation.sync.status === 'stale' ? 'text-slate-300' : 'text-emerald-300'}
               />
             </div>
           </div>

@@ -344,8 +344,13 @@ export default {
 
       if (url.pathname === '/api/receipts' && request.method === 'POST') {
         requireAdminKey(request, env);
-        const payload = await request.json();
-        return json(await uploadReceipt(env, payload), 201);
+        const payload = await safeJson(request);
+        try {
+          return json(await uploadReceipt(env, payload), 201);
+        } catch (error) {
+          await logReceiptError(env, payload, 'api_receipts', error);
+          throw error;
+        }
       }
 
       if (receiptFileMatch && request.method === 'GET') {
@@ -383,26 +388,12 @@ async function health(env) {
   return {
     ok: true,
     database: 'finanzas_mayeson',
-    environment: workerEnvironment(env),
     transactions: row?.total || 0,
     fixedExpenses: fixed?.total || 0,
     receipts: receipts?.total || 0,
     debts: debts?.total || 0,
     checkedAt: new Date().toISOString(),
   };
-}
-
-function workerEnvironment(env) {
-  return String(env.ENVIRONMENT || '').trim().toLowerCase() || 'production';
-}
-
-function isQaEnv(env) {
-  return workerEnvironment(env) === 'qa';
-}
-
-function gasActionHasSideEffects(action) {
-  const clean = String(action || '').trim().toLowerCase();
-  return !['health', 'dashboard', 'txs'].includes(clean);
 }
 
 async function systemHealth(env) {
@@ -512,16 +503,6 @@ async function systemHealth(env) {
 }
 
 async function gasConfigRequest(env, action, extraParams = new URLSearchParams()) {
-  if (isQaEnv(env) && gasActionHasSideEffects(action)) {
-    return {
-      ok: true,
-      skipped: true,
-      environment: 'qa',
-      action,
-      message: 'Accion externa bloqueada en QA para no afectar Apps Script, correos, Telegram ni Sheets de produccion.',
-    };
-  }
-
   if (!env.GAS_API_URL || !env.GAS_API_KEY) {
     throw httpError(400, 'Faltan secrets GAS_API_URL o GAS_API_KEY');
   }
@@ -1793,6 +1774,16 @@ async function uploadReceipt(env, payload) {
       storedBase64 = null;
     } catch (error) {
       storageWarning = `R2 no disponible, guardado en D1: ${error.message || String(error)}`;
+      await logReceiptError(env, {
+        ...payload,
+        id: receiptId,
+        chat_id: chatId,
+        transaction_id: transactionId,
+        file_name: fileName,
+        content_type: contentType,
+        size: bytes.byteLength,
+        r2_key: r2Key,
+      }, 'r2_put', error);
     }
   }
 
@@ -1853,6 +1844,50 @@ async function uploadReceipt(env, payload) {
       warning: storageWarning,
     },
   };
+}
+
+async function logReceiptError(env, payload = {}, stage = 'unknown', error = null, extra = {}) {
+  try {
+    if (!env.DB) return;
+
+    const chatId = String(payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+    const transactionId = String(payload.transaction_id || payload.transactionId || '').trim();
+    const receiptId = String(payload.id || payload.receipt_id || payload.receiptId || '').trim();
+    const message = error instanceof Error
+      ? error.message
+      : String(error || 'Error desconocido');
+    const details = {
+      stage,
+      name: error?.name || '',
+      status: error?.status || '',
+      stack: error?.stack ? String(error.stack).slice(0, 1200) : '',
+      fileName: payload.file_name || payload.fileName || '',
+      contentType: payload.content_type || payload.contentType || payload.mimeType || '',
+      size: payload.size || '',
+      telegramFileId: payload.telegram_file_id || payload.telegramFileId || '',
+      telegramFilePath: payload.telegram_file_path || payload.telegramFilePath || '',
+      r2Key: payload.r2_key || payload.r2Key || '',
+      extra,
+    };
+    const id = `receipt_error:${Date.now()}:${crypto.randomUUID()}`.slice(0, 180);
+
+    await env.DB.prepare(`
+      INSERT INTO receipt_error_logs (
+        id, chat_id, transaction_id, receipt_id, stage, message, details_json, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).bind(
+      id,
+      chatId,
+      transactionId,
+      receiptId,
+      String(stage || 'unknown').slice(0, 80),
+      message.slice(0, 1000),
+      JSON.stringify(details),
+    ).run();
+  } catch (_ignored) {
+    // El log nunca debe romper el registro del recibo.
+  }
 }
 
 async function receiptFile(env, receiptId) {
@@ -2013,15 +2048,6 @@ async function emailConfigFromGas(env) {
 }
 
 async function deleteTransactionFromGas(env, tx) {
-  if (isQaEnv(env)) {
-    return {
-      ok: true,
-      skipped: true,
-      environment: 'qa',
-      reason: 'QA no borra movimientos en Apps Script/Sheets.',
-    };
-  }
-
   if (!env.GAS_API_URL || !env.GAS_API_KEY) {
     return { ok: false, skipped: true, reason: 'GAS_API_URL o GAS_API_KEY no configurado' };
   }

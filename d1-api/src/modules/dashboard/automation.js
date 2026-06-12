@@ -103,21 +103,21 @@ async function syncStatus(env, chatId, now) {
   const ageHours = round(ageDays * 24);
   const status = latest.status !== 'ok'
     ? 'error'
-    : ageHours > 24
+    : ageHours > 168
       ? 'stale'
       : 'ok';
 
   return {
     status,
-    statusLabel: status === 'ok' ? 'Al dia' : status === 'stale' ? 'Atrasado' : 'Revisar',
+    statusLabel: status === 'ok' ? 'Respaldo OK' : status === 'stale' ? 'Backup viejo' : 'Revisar',
     lastAt: latest.created_at || '',
     ageHours,
     source: latest.source || 'gas',
     details: safeJson(latest.details),
     message: status === 'ok'
-      ? 'Sheets y D1 tienen sync reciente.'
+      ? 'D1 esta al dia; Sheets queda como respaldo.'
       : status === 'stale'
-        ? 'Conviene sincronizar para evitar diferencias con Sheets.'
+        ? 'D1 es la fuente principal. Sincroniza solo si hubo cambios manuales en Sheets.'
         : 'La ultima sync no quedo OK.',
   };
 }
@@ -270,7 +270,7 @@ function budgetWatchList(budgets) {
 function automationActions({ sync, ruleStats, budgetWatch, alerts, freeMoney, cierre, cierreAutomatico, topFugas, fixedSummary, deudaPendiente }) {
   const actions = [];
 
-  if (sync.status !== 'ok') {
+  if (sync.status === 'error' || sync.status === 'missing') {
     actions.push({
       id: 'sync-now',
       type: 'sync',
@@ -390,7 +390,7 @@ function automationActions({ sync, ruleStats, budgetWatch, alerts, freeMoney, ci
 function automationScore({ sync, ruleStats, budgetWatch, freeMoney, cierre, alerts }) {
   let score = 100;
   if (sync.status === 'missing') score -= 18;
-  if (sync.status === 'stale') score -= 12;
+  if (sync.status === 'stale') score -= 3;
   if (sync.status === 'error') score -= 22;
   score -= Math.min(25, Math.max(0, 100 - Number(ruleStats.coveragePct || 0)) / 2);
   score -= Math.min(22, budgetWatch.reduce((total, item) => total + (item.status === 'over' ? 10 : 5), 0));
