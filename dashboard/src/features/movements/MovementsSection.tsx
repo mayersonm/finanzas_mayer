@@ -19,7 +19,7 @@ export function MovementsSection({
   const [transactions, setTransactions] = useState<Transaction[]>(data.transacciones);
   const [filters, setFilters] = useState({
     q: '',
-    month: data.mesKey || '',
+    month: currentMonthKey(),
     category: '',
     type: '',
     payment: '',
@@ -89,14 +89,14 @@ export function MovementsSection({
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const month = filters.month || data.mesKey || new Date().toISOString().slice(0, 7);
+    const month = filters.month || 'historico';
     link.href = url;
     link.download = `movimientos-filtrados-${month}-${transactions.length}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-  }, [data.mesKey, filters.month, transactions]);
+  }, [filters.month, transactions]);
 
   return (
     <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
@@ -115,15 +115,31 @@ export function MovementsSection({
             <RiDownloadLine className="h-4 w-4 shrink-0" aria-hidden="true" />
             Exportar Movimiento
           </button>
-          <span className="inline-flex h-10 w-full min-w-[7rem] items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-300 shadow-sm min-[420px]:w-auto">
-            Mes: {data.mes}
+          <span className="inline-flex h-10 w-full min-w-[8.5rem] items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-300 shadow-sm min-[420px]:w-auto">
+            Filtro: {filters.month ? formatMonthFilter(filters.month) : 'Historico'}
           </span>
         </div>
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-3 lg:grid-cols-6">
         <input className="form-input" placeholder="Buscar" value={filters.q} onChange={(event) => setFilters((current) => ({ ...current, q: event.target.value }))} />
-        <input className="form-input" type="month" value={filters.month} onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))} />
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2 md:col-span-2 lg:col-span-2">
+          <input className="form-input min-w-0" type="month" value={filters.month} onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))} />
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/30"
+            onClick={() => setFilters((current) => ({ ...current, month: currentMonthKey() }))}
+          >
+            Actual
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-sky-500/50 hover:bg-sky-500/10 hover:text-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+            onClick={() => setFilters((current) => ({ ...current, month: '' }))}
+          >
+            Todos
+          </button>
+        </div>
         <select className="form-input" value={filters.category} onChange={(event) => setFilters((current) => ({ ...current, category: event.target.value }))}>
           <option value="">Categoria</option>
           {categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
@@ -161,4 +177,15 @@ export function MovementsSection({
 function csvCell(value: unknown) {
   const text = String(value ?? '').replace(/\r?\n/g, ' ').trim();
   return `"${text.replace(/"/g, '""')}"`;
+}
+
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMonthFilter(value: string) {
+  const [year, month] = value.split('-');
+  if (!year || !month) return value;
+  return `${month}/${year}`;
 }
