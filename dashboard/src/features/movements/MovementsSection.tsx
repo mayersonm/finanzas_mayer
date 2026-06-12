@@ -123,22 +123,25 @@ export function MovementsSection({
 
       <div className="mt-4 grid gap-2 md:grid-cols-3 lg:grid-cols-6">
         <input className="form-input" placeholder="Buscar" value={filters.q} onChange={(event) => setFilters((current) => ({ ...current, q: event.target.value }))} />
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2 md:col-span-2 lg:col-span-2">
-          <input className="form-input min-w-0" type="month" value={filters.month} onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))} />
-          <button
-            type="button"
-            className="inline-flex h-10 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/30"
-            onClick={() => setFilters((current) => ({ ...current, month: currentMonthKey() }))}
+        <div className="grid grid-cols-[minmax(8rem,0.85fr)_minmax(0,1fr)] gap-2 md:col-span-2 lg:col-span-2">
+          <select
+            className="form-input"
+            value={filters.month ? 'month' : 'all'}
+            onChange={(event) => {
+              const mode = event.target.value;
+              setFilters((current) => ({ ...current, month: mode === 'all' ? '' : current.month || currentMonthKey() }));
+            }}
           >
-            Actual
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-10 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:border-sky-500/50 hover:bg-sky-500/10 hover:text-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
-            onClick={() => setFilters((current) => ({ ...current, month: '' }))}
-          >
-            Todos
-          </button>
+            <option value="month">Mes especifico</option>
+            <option value="all">Todos los meses</option>
+          </select>
+          <input
+            className="form-input min-w-0 disabled:cursor-not-allowed disabled:opacity-55"
+            type="month"
+            value={filters.month}
+            disabled={!filters.month}
+            onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value || currentMonthKey() }))}
+          />
         </div>
         <select className="form-input" value={filters.category} onChange={(event) => setFilters((current) => ({ ...current, category: event.target.value }))}>
           <option value="">Categoria</option>
