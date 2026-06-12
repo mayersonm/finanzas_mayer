@@ -38,7 +38,7 @@ export function AppHeader({
       : 'bg-slate-500/15 text-slate-300';
 
   return (
-    <section className="mb-4 rounded-tremor-default border border-slate-800 bg-slate-950/80 p-4 sm:mb-5 sm:p-6">
+    <section className="mb-4 rounded-tremor-default border border-slate-800 bg-slate-950/80 p-4 sm:mb-5 sm:p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -127,7 +127,7 @@ function HeaderButton({
   return (
     <button
       type="button"
-      className={`inline-flex h-10 w-full min-w-[9.5rem] items-center justify-center gap-2 rounded-tremor-default border px-3 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-wait disabled:opacity-55 min-[420px]:w-auto ${className}`}
+      className={`inline-flex h-10 w-full min-w-[8.75rem] items-center justify-center gap-2 rounded-tremor-default border px-3 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-wait disabled:opacity-55 min-[420px]:w-auto ${className}`}
       onClick={onClick}
       disabled={disabled}
     >
