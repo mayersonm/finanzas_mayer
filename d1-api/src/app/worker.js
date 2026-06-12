@@ -5,6 +5,7 @@ import { round, parseAmount, currencyToPen, formatCurrency } from '../shared/mon
 import { clamp, normalizeCurrency, normalizeDateOnly, normalizeMonthKey, normalizePaymentMethod, normalizeKey, title } from '../shared/normalizers.js';
 import { cleanBase64, base64ToBytes, imageExtension, normalizeImageContentType, safeFileName, safeHeaderFileName, safeObjectSegment, stableTransactionId } from '../shared/files.js';
 import { dateFromKey, dateKeyFromParts, daysBetween, formatMonth, localDateKey, localIso, monthLongName, monthLongNameFromKey, monthRangeFromKey, monthShortNameFromKey, parseDateKeyParts, payCycleFromDate, payCycleRelative } from '../shared/dates.js';
+import { sha256Hex } from '../shared/crypto.js';
 import { budgetRulesForDashboard, budgetSpendWithRules, classifyCategory, classifyCategoryFromLoadedRules, loadBudgetRules, loadCategoryRules, normalizeBaseCategory, normalizeCategory, normalizeRuleKeyword, safeRuleId } from '../shared/categories.js';
 import { getAppSetting, readJsonCache, setAppSetting, setJsonCache, timeoutSignal } from '../shared/settings-store.js';
 import { changePassword, login, requireAdminKey, requireDashboardAccess, requireDashboardOrAdminAccess } from '../auth/service.js';
