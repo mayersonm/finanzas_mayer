@@ -10,18 +10,3 @@ database_id = "7964ac92-2d13-4103-8b63-d9235e8cd526"
 [[r2_buckets]]
 binding = "RECEIPTS_BUCKET"
 bucket_name = "finanzas-mayeson-receipts"
-
-[env.qa]
-name = "finanzas-d1-api-qa"
-
-[env.qa.vars]
-ENVIRONMENT = "qa"
-
-[[env.qa.d1_databases]]
-binding = "DB"
-database_name = "finanzas_mayeson_qa"
-database_id = "ffbd7ef3-2bb6-4924-9a07-c945015d59b9"
-
-[[env.qa.r2_buckets]]
-binding = "RECEIPTS_BUCKET"
-bucket_name = "finanzas-mayeson-receipts-qa"

@@ -6,10 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:prod": "tsc -b && vite build --mode production",
-    "build:qa": "tsc -b && vite build --mode qa",
-    "deploy:prod": "npm run build:prod && npx wrangler@4.98.0 pages deploy dist --project-name finanzas-dashboard --branch main",
-    "deploy:qa": "npm run build:qa && npx wrangler@4.98.0 pages deploy dist --project-name finanzas-dashboard --branch qa",
     "preview": "vite preview"
   },
   "dependencies": {
