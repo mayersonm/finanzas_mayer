@@ -1,10 +1,21 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react';
 import { Badge, Card, Text, Title } from '@tremor/react';
 import { RiAddLine, RiDeleteBinLine, RiNotification3Line, RiRefreshLine } from '@remixicon/react';
 import { apiEndpoint } from '../../app/api';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatMoney, formatUpdatedAt } from '../../lib/formatters';
-import type { CryptoAlert, CryptoOperation, CryptoPortfolioData, CryptoPosition, CryptoPrice } from '../../types/dashboard';
+import type {
+  CryptoAlert,
+  CryptoOperation,
+  CryptoPortfolioData,
+  CryptoPosition,
+  CryptoPrice,
+  TradingAnalysisItem,
+  TradingBotData,
+  TradingPaperOrder,
+  TradingSignal,
+  TradingStrategy,
+} from '../../types/dashboard';
 
 interface OperationDraft {
   symbol: string;
@@ -21,6 +32,17 @@ interface AlertDraft {
   condition: 'below' | 'above';
   targetPriceUsd: string;
   notes: string;
+}
+
+interface TradingStrategyDraft {
+  mode: 'off' | 'paper' | 'confirm';
+  symbols: string;
+  allocationUsd: string;
+  buyDropPct: string;
+  takeProfitPct: string;
+  stopLossPct: string;
+  maxTradesPerDay: string;
+  cooldownMinutes: string;
 }
 
 const emptyData: CryptoPortfolioData = {
@@ -53,6 +75,42 @@ const emptyData: CryptoPortfolioData = {
 
 const defaultSymbols = ['BTC', 'ETH', 'SOL', 'USDT', 'USDC', 'BNB', 'XRP', 'ADA'];
 
+const defaultTradingStrategy: TradingStrategy = {
+  id: '',
+  name: 'Bot cripto seguro',
+  mode: 'paper',
+  symbols: ['BTC', 'ETH', 'SOL'],
+  baseCurrency: 'USDT',
+  allocationUsd: 10,
+  maxDailyLossUsd: 5,
+  maxTradesPerDay: 2,
+  buyDropPct: 3,
+  takeProfitPct: 3,
+  stopLossPct: 1.5,
+  trailingStopPct: 1.2,
+  rsiBuyBelow: 35,
+  cooldownMinutes: 240,
+  active: true,
+  notes: '',
+};
+
+const emptyTradingData: TradingBotData = {
+  strategy: defaultTradingStrategy,
+  summary: {
+    signals: 0,
+    openOrders: 0,
+    closedOrders: 0,
+    openExposureUsd: 0,
+    realizedPnlUsd: 0,
+    winRatePct: 0,
+    pendingApproval: 0,
+  },
+  signals: [],
+  orders: [],
+  analysis: [],
+  safety: [],
+};
+
 export function CryptoInvestmentsPanel({
   authToken,
   chatId,
@@ -82,6 +140,11 @@ export function CryptoInvestmentsPanel({
     targetPriceUsd: '',
     notes: '',
   });
+  const [trading, setTrading] = useState<TradingBotData>(emptyTradingData);
+  const [tradingDraft, setTradingDraft] = useState<TradingStrategyDraft>(() => strategyDraft(defaultTradingStrategy));
+  const [tradingLoading, setTradingLoading] = useState(false);
+  const [tradingSaving, setTradingSaving] = useState(false);
+  const [lastAnalysis, setLastAnalysis] = useState<TradingAnalysisItem[]>([]);
 
   const load = useCallback(async (refresh = false) => {
     if (!authToken) return;
@@ -112,6 +175,33 @@ export function CryptoInvestmentsPanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadTrading = useCallback(async () => {
+    if (!authToken) return;
+    setTradingLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (chatId) params.set('chat_id', chatId);
+      const response = await fetch(`${apiEndpoint('trading')}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const result = await response.json() as TradingBotData;
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo cargar bot trader');
+      setTrading(mergeTradingData(result));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cargar bot trader');
+    } finally {
+      setTradingLoading(false);
+    }
+  }, [authToken, chatId]);
+
+  useEffect(() => {
+    void loadTrading();
+  }, [loadTrading]);
+
+  useEffect(() => {
+    setTradingDraft(strategyDraft(trading.strategy || defaultTradingStrategy));
+  }, [trading.strategy]);
 
   const priceBySymbol = useMemo(() => {
     return Object.fromEntries(data.prices.map((item) => [item.symbol, item]));
@@ -235,6 +325,99 @@ export function CryptoInvestmentsPanel({
   const useCurrentPrice = () => {
     if (!selectedPrice?.priceUsd) return;
     setOperation((current) => ({ ...current, unitPriceUsd: String(selectedPrice.priceUsd) }));
+  };
+
+  const saveTradingStrategy = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!authToken) return;
+    setTradingSaving(true);
+    setMessage('');
+    setError('');
+    try {
+      const params = chatId ? `?chat_id=${encodeURIComponent(chatId)}` : '';
+      const response = await fetch(`${apiEndpoint('trading/strategy')}${params}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mode: tradingDraft.mode,
+          symbols: tradingDraft.symbols,
+          allocationUsd: Number(tradingDraft.allocationUsd || 0),
+          buyDropPct: Number(tradingDraft.buyDropPct || 0),
+          takeProfitPct: Number(tradingDraft.takeProfitPct || 0),
+          stopLossPct: Number(tradingDraft.stopLossPct || 0),
+          maxTradesPerDay: Number(tradingDraft.maxTradesPerDay || 0),
+          cooldownMinutes: Number(tradingDraft.cooldownMinutes || 0),
+        }),
+      });
+      const result = await response.json() as TradingBotData;
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo guardar estrategia');
+      setTrading(mergeTradingData(result));
+      setMessage('Estrategia del bot actualizada.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar estrategia');
+    } finally {
+      setTradingSaving(false);
+    }
+  };
+
+  const runTradingAnalysis = async () => {
+    if (!authToken) return;
+    setTradingSaving(true);
+    setMessage('');
+    setError('');
+    try {
+      const params = chatId ? `?chat_id=${encodeURIComponent(chatId)}` : '';
+      const response = await fetch(`${apiEndpoint('trading/run')}${params}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh: true }),
+      });
+      const result = await response.json() as TradingBotData;
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo analizar trading');
+      const merged = mergeTradingData(result);
+      setTrading(merged);
+      setLastAnalysis(result.analysis || []);
+      setMessage(result.message || 'Analisis del bot actualizado.');
+      await load(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo analizar trading');
+    } finally {
+      setTradingSaving(false);
+    }
+  };
+
+  const closePaperOrder = async (item: TradingPaperOrder) => {
+    if (!authToken) return;
+    const ok = window.confirm(`Cerrar paper order ${item.symbol}?`);
+    if (!ok) return;
+    setTradingSaving(true);
+    setMessage('');
+    setError('');
+    try {
+      const params = chatId ? `?chat_id=${encodeURIComponent(chatId)}` : '';
+      const response = await fetch(`${apiEndpoint(`trading/orders/${encodeURIComponent(item.id)}/close`)}${params}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason: 'Cierre manual desde dashboard' }),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string; message?: string };
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo cerrar paper order');
+      setMessage(result.message || 'Paper order cerrada.');
+      await loadTrading();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cerrar paper order');
+    } finally {
+      setTradingSaving(false);
+    }
   };
 
   return (
@@ -393,6 +576,18 @@ export function CryptoInvestmentsPanel({
         </div>
       </div>
 
+      <TradingBotPanel
+        trading={trading}
+        draft={tradingDraft}
+        lastAnalysis={lastAnalysis}
+        loading={tradingLoading}
+        saving={tradingSaving}
+        onDraftChange={setTradingDraft}
+        onSaveStrategy={saveTradingStrategy}
+        onRun={runTradingAnalysis}
+        onCloseOrder={closePaperOrder}
+      />
+
       <div className="grid gap-3 sm:gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <Title>Historial cripto</Title>
@@ -453,6 +648,211 @@ export function CryptoInvestmentsPanel({
         {defaultSymbols.map((symbol) => <option key={symbol} value={symbol} />)}
       </datalist>
     </section>
+  );
+}
+
+function TradingBotPanel({
+  trading,
+  draft,
+  lastAnalysis,
+  loading,
+  saving,
+  onDraftChange,
+  onSaveStrategy,
+  onRun,
+  onCloseOrder,
+}: {
+  trading: TradingBotData;
+  draft: TradingStrategyDraft;
+  lastAnalysis: TradingAnalysisItem[];
+  loading: boolean;
+  saving: boolean;
+  onDraftChange: Dispatch<SetStateAction<TradingStrategyDraft>>;
+  onSaveStrategy: (event: FormEvent<HTMLFormElement>) => void;
+  onRun: () => void;
+  onCloseOrder: (item: TradingPaperOrder) => void;
+}) {
+  const strategy = trading.strategy || defaultTradingStrategy;
+  const analysis = lastAnalysis.length ? lastAnalysis : trading.analysis || [];
+  const openOrders = (trading.orders || []).filter((item) => item.status === 'open');
+  const recentSignals = (trading.signals || []).slice(0, 5);
+
+  return (
+    <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Title>Bot Trader</Title>
+            <Badge color={strategy.mode === 'off' ? 'slate' : strategy.mode === 'paper' ? 'cyan' : 'amber'}>
+              {tradingModeLabel(strategy.mode)}
+            </Badge>
+          </div>
+          <Text>Senales con datos reales, operaciones simuladas y aprobacion manual.</Text>
+        </div>
+        <button
+          type="button"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60"
+          onClick={onRun}
+          disabled={saving || loading}
+        >
+          <RiRefreshLine className="h-4 w-4" />
+          Analizar ahora
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <BotMetric label="Exposicion paper" value={formatMoney(trading.summary.openExposureUsd, 'USD')} sub={`${trading.summary.openOrders} abiertas`} />
+        <BotMetric label="PnL paper" value={formatMoney(trading.summary.realizedPnlUsd, 'USD')} sub={`${trading.summary.winRatePct.toFixed(0)}% win rate`} tone={trading.summary.realizedPnlUsd >= 0 ? 'emerald' : 'rose'} />
+        <BotMetric label="Riesgo por entrada" value={formatMoney(strategy.allocationUsd, 'USD')} sub={`${strategy.maxTradesPerDay} trades/dia`} />
+        <BotMetric label="Regla compra" value={`-${strategy.buyDropPct.toFixed(1)}%`} sub={`TP ${strategy.takeProfitPct}% · SL ${strategy.stopLossPct}%`} />
+      </div>
+
+      <form className="mt-5 grid gap-3" onSubmit={onSaveStrategy}>
+        <div className="grid gap-3 md:grid-cols-4">
+          <Field label="Modo">
+            <select className="form-input" value={draft.mode} onChange={(event) => onDraftChange((current) => ({ ...current, mode: event.target.value as TradingStrategyDraft['mode'] }))}>
+              <option value="off">Apagado</option>
+              <option value="paper">Paper trading</option>
+              <option value="confirm">Confirmacion</option>
+            </select>
+          </Field>
+          <Field label="Monedas">
+            <input className="form-input uppercase" value={draft.symbols} onChange={(event) => onDraftChange((current) => ({ ...current, symbols: event.target.value.toUpperCase() }))} />
+          </Field>
+          <Field label="Monto por entrada USD">
+            <input className="form-input" type="number" min="1" step="1" value={draft.allocationUsd} onChange={(event) => onDraftChange((current) => ({ ...current, allocationUsd: event.target.value }))} />
+          </Field>
+          <Field label="Trades por dia">
+            <input className="form-input" type="number" min="1" step="1" value={draft.maxTradesPerDay} onChange={(event) => onDraftChange((current) => ({ ...current, maxTradesPerDay: event.target.value }))} />
+          </Field>
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          <Field label="Compra si baja %">
+            <input className="form-input" type="number" min="0.5" step="0.1" value={draft.buyDropPct} onChange={(event) => onDraftChange((current) => ({ ...current, buyDropPct: event.target.value }))} />
+          </Field>
+          <Field label="Take profit %">
+            <input className="form-input" type="number" min="0.5" step="0.1" value={draft.takeProfitPct} onChange={(event) => onDraftChange((current) => ({ ...current, takeProfitPct: event.target.value }))} />
+          </Field>
+          <Field label="Stop loss %">
+            <input className="form-input" type="number" min="0.5" step="0.1" value={draft.stopLossPct} onChange={(event) => onDraftChange((current) => ({ ...current, stopLossPct: event.target.value }))} />
+          </Field>
+          <Field label="Cooldown min">
+            <input className="form-input" type="number" min="15" step="15" value={draft.cooldownMinutes} onChange={(event) => onDraftChange((current) => ({ ...current, cooldownMinutes: event.target.value }))} />
+          </Field>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Text className="text-xs">
+            Seguridad: no ejecuta orden real en Binance. Paper abre/cierra simulaciones; confirmacion deja senales pendientes.
+          </Text>
+          <button className="inline-flex h-10 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60" disabled={saving || loading}>
+            Guardar estrategia
+          </button>
+        </div>
+      </form>
+
+      <div className="mt-5 grid gap-3 xl:grid-cols-[1fr_1fr]">
+        <div className="rounded-tremor-default border border-slate-800 bg-slate-900/35 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <Text className="font-semibold text-slate-100">Ultimo analisis</Text>
+            {loading ? <Badge color="slate">Cargando</Badge> : null}
+          </div>
+          <div className="mt-3 grid gap-2">
+            {analysis.length ? analysis.map((item) => <TradingAnalysisRow key={item.symbol} item={item} />) : (
+              <EmptyState>Ejecuta un analisis para ver oportunidades.</EmptyState>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-tremor-default border border-slate-800 bg-slate-900/35 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <Text className="font-semibold text-slate-100">Paper orders y senales</Text>
+            {trading.summary.pendingApproval ? <Badge color="amber">{trading.summary.pendingApproval} pendientes</Badge> : null}
+          </div>
+          <div className="mt-3 grid gap-2">
+            {openOrders.length ? openOrders.map((item) => (
+              <TradingOrderRow key={item.id} item={item} onClose={onCloseOrder} />
+            )) : recentSignals.length ? recentSignals.map((item) => (
+              <TradingSignalRow key={item.id} item={item} />
+            )) : (
+              <EmptyState>Sin senales todavia.</EmptyState>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {trading.safety?.length ? (
+        <div className="mt-4 grid gap-2 text-xs text-slate-400">
+          {trading.safety.slice(0, 3).map((item) => <p key={item}>{item}</p>)}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function BotMetric({ label, value, sub, tone = 'slate' }: { label: string; value: string; sub: string; tone?: 'slate' | 'emerald' | 'rose' }) {
+  const text = tone === 'emerald' ? 'text-emerald-300' : tone === 'rose' ? 'text-rose-300' : 'text-slate-100';
+  return (
+    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/35 p-3">
+      <Text>{label}</Text>
+      <div className={`mt-2 text-lg font-semibold ${text}`}>{value}</div>
+      <Text className="mt-1 text-xs">{sub}</Text>
+    </div>
+  );
+}
+
+function TradingAnalysisRow({ item }: { item: TradingAnalysisItem }) {
+  const actionColor = item.action === 'buy' ? 'emerald' : item.action === 'watch' ? 'amber' : 'slate';
+  return (
+    <div className="rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Text className="font-semibold text-slate-100">{item.symbol}</Text>
+          <Badge color={actionColor}>{tradingActionLabel(item.action)}</Badge>
+        </div>
+        <Text className="font-mono text-xs text-slate-300">{formatMoney(item.priceUsd, 'USD')}</Text>
+      </div>
+      <Text className="mt-2 text-xs">{item.reason}</Text>
+      <div className="mt-2 grid gap-2 text-xs text-slate-400 sm:grid-cols-3">
+        <span>24h: <b className={item.change24h < 0 ? 'text-rose-300' : 'text-emerald-300'}>{item.change24h.toFixed(2)}%</b></span>
+        <span>Confianza: <b className="text-slate-100">{item.confidence.toFixed(0)}%</b></span>
+        <span>Entrada: <b className="text-slate-100">{formatMoney(item.notionalUsd, 'USD')}</b></span>
+      </div>
+    </div>
+  );
+}
+
+function TradingOrderRow({ item, onClose }: { item: TradingPaperOrder; onClose: (item: TradingPaperOrder) => void }) {
+  return (
+    <div className="grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge color="cyan">Paper abierta</Badge>
+          <Text className="font-semibold text-slate-100">{item.symbol}</Text>
+          <Text className="text-xs">{formatUpdatedAt(item.openedAt)}</Text>
+        </div>
+        <Text className="mt-1 text-xs">
+          {item.quantity.toLocaleString('es-PE', { maximumFractionDigits: 8 })} unidades · entrada {formatMoney(item.priceUsd, 'USD')} · {formatMoney(item.notionalUsd, 'USD')}
+        </Text>
+      </div>
+      <button type="button" className="inline-flex h-9 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:bg-slate-800" onClick={() => onClose(item)}>
+        Cerrar paper
+      </button>
+    </div>
+  );
+}
+
+function TradingSignalRow({ item }: { item: TradingSignal }) {
+  return (
+    <div className="rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge color={item.status === 'pending_approval' ? 'amber' : item.side === 'sell' ? 'rose' : 'emerald'}>{tradingStatusLabel(item.status)}</Badge>
+          <Text className="font-semibold text-slate-100">{item.symbol}</Text>
+        </div>
+        <Text className="font-mono text-xs text-slate-300">{formatMoney(item.signalPriceUsd, 'USD')}</Text>
+      </div>
+      <Text className="mt-2 text-xs">{item.reason}</Text>
+    </div>
   );
 }
 
@@ -557,6 +957,59 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </label>
   );
+}
+
+function mergeTradingData(result: TradingBotData): TradingBotData {
+  return {
+    ...emptyTradingData,
+    ...result,
+    strategy: {
+      ...defaultTradingStrategy,
+      ...(result.strategy || {}),
+    },
+    summary: {
+      ...emptyTradingData.summary,
+      ...(result.summary || {}),
+    },
+    signals: result.signals || [],
+    orders: result.orders || [],
+    analysis: result.analysis || [],
+    safety: result.safety || [],
+  };
+}
+
+function strategyDraft(strategy: TradingStrategy): TradingStrategyDraft {
+  return {
+    mode: strategy.mode === 'off' || strategy.mode === 'confirm' ? strategy.mode : 'paper',
+    symbols: (strategy.symbols?.length ? strategy.symbols : defaultTradingStrategy.symbols).join(','),
+    allocationUsd: String(strategy.allocationUsd || defaultTradingStrategy.allocationUsd),
+    buyDropPct: String(strategy.buyDropPct || defaultTradingStrategy.buyDropPct),
+    takeProfitPct: String(strategy.takeProfitPct || defaultTradingStrategy.takeProfitPct),
+    stopLossPct: String(strategy.stopLossPct || defaultTradingStrategy.stopLossPct),
+    maxTradesPerDay: String(strategy.maxTradesPerDay || defaultTradingStrategy.maxTradesPerDay),
+    cooldownMinutes: String(strategy.cooldownMinutes || defaultTradingStrategy.cooldownMinutes),
+  };
+}
+
+function tradingModeLabel(mode: string) {
+  if (mode === 'off') return 'Apagado';
+  if (mode === 'confirm') return 'Confirmacion';
+  return 'Paper';
+}
+
+function tradingActionLabel(action: string) {
+  if (action === 'buy') return 'Comprar paper';
+  if (action === 'watch') return 'Mirar';
+  return 'Esperar';
+}
+
+function tradingStatusLabel(status: string) {
+  if (status === 'paper_open') return 'Paper abierta';
+  if (status === 'paper_closed') return 'Paper cerrada';
+  if (status === 'pending_approval') return 'Pendiente';
+  if (status === 'approved') return 'Aprobada';
+  if (status === 'rejected') return 'Rechazada';
+  return status;
 }
 
 function suggestionColor(level: string) {

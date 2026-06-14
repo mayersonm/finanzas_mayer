@@ -12,6 +12,7 @@ import { settingsRoutes } from './settings.js';
 import { syncRoutes } from './sync.js';
 import { systemRoutes } from './system.js';
 import { transactionsRoutes } from './transactions.js';
+import { tradingRoutes } from './trading.js';
 
 export const routeHandlers = [
   authRoutes,
@@ -25,6 +26,7 @@ export const routeHandlers = [
   commitmentsRoutes,
   receiptsRoutes,
   cryptoRoutes,
+  tradingRoutes,
   investmentsRoutes,
   appsScriptRoutes,
 ];

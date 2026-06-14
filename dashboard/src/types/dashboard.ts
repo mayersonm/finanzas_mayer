@@ -265,6 +265,106 @@ export interface CryptoPortfolioData {
   error?: string;
 }
 
+export type TradingMode = 'off' | 'paper' | 'confirm' | string;
+
+export interface TradingStrategy {
+  id: string;
+  chatId?: string;
+  name: string;
+  mode: TradingMode;
+  symbols: string[];
+  baseCurrency: 'USDT' | 'USDC' | 'USD' | string;
+  allocationUsd: number;
+  maxDailyLossUsd: number;
+  maxTradesPerDay: number;
+  buyDropPct: number;
+  takeProfitPct: number;
+  stopLossPct: number;
+  trailingStopPct: number;
+  rsiBuyBelow: number;
+  cooldownMinutes: number;
+  active: boolean;
+  notes?: string;
+  updatedAt?: string;
+}
+
+export interface TradingAnalysisItem {
+  symbol: string;
+  action: 'buy' | 'watch' | 'wait' | string;
+  side: 'buy' | 'sell' | string;
+  priceUsd: number;
+  change24h: number;
+  confidence: number;
+  notionalUsd: number;
+  quantity: number;
+  takeProfitPriceUsd: number;
+  stopLossPriceUsd: number;
+  reason: string;
+  source?: string;
+}
+
+export interface TradingSignal {
+  id: string;
+  strategyId: string;
+  symbol: string;
+  side: 'buy' | 'sell' | string;
+  status: 'paper_open' | 'paper_closed' | 'pending_approval' | 'approved' | 'rejected' | string;
+  mode: TradingMode;
+  signalPriceUsd: number;
+  quantity: number;
+  notionalUsd: number;
+  confidence: number;
+  reason: string;
+  takeProfitPriceUsd: number;
+  stopLossPriceUsd: number;
+  details?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TradingPaperOrder {
+  id: string;
+  signalId?: string;
+  strategyId: string;
+  symbol: string;
+  side: 'buy' | 'sell' | string;
+  mode: TradingMode;
+  status: 'open' | 'closed' | string;
+  priceUsd: number;
+  quantity: number;
+  notionalUsd: number;
+  feeUsd: number;
+  pnlUsd: number;
+  openedAt: string;
+  closedAt?: string;
+  closePriceUsd?: number;
+  reason?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface TradingBotData {
+  ok?: boolean;
+  strategy: TradingStrategy;
+  summary: {
+    signals: number;
+    openOrders: number;
+    closedOrders: number;
+    openExposureUsd: number;
+    realizedPnlUsd: number;
+    winRatePct: number;
+    pendingApproval: number;
+  };
+  signals: TradingSignal[];
+  orders: TradingPaperOrder[];
+  analysis?: TradingAnalysisItem[];
+  generatedSignals?: TradingSignal[];
+  closedOrders?: TradingPaperOrder[];
+  safety?: string[];
+  message?: string;
+  updatedAt?: string;
+  error?: string;
+}
+
 export interface NetWorthCompositionItem {
   label: string;
   value: number;
