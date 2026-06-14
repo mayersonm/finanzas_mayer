@@ -46,6 +46,9 @@ export default function App() {
   const [token, setToken] = useState<string | null>(() => window.localStorage.getItem(SESSION_STORAGE_KEY));
   const [loginEmail, setLoginEmail] = useState(() => window.localStorage.getItem(LOGIN_EMAIL_STORAGE_KEY) || DEFAULT_LOGIN_EMAIL);
   const [password, setPassword] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [requires2fa, setRequires2fa] = useState(false);
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [showPasswordPanel, setShowPasswordPanel] = useState(false);
@@ -55,6 +58,13 @@ export default function App() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [twoFactorStatus, setTwoFactorStatus] = useState<{ enabled: boolean; pending: boolean } | null>(null);
+  const [twoFactorSetup, setTwoFactorSetup] = useState<{ secret: string; otpauthUrl: string } | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorPassword, setTwoFactorPassword] = useState('');
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
+  const [twoFactorMessage, setTwoFactorMessage] = useState('');
+  const [twoFactorError, setTwoFactorError] = useState('');
   const [theme, setTheme] = useState<Theme>(() => getInitialTheme());
   const [users, setUsers] = useState<DashboardUser[]>([]);
   const [selectedChatId, setSelectedChatId] = useState('');
@@ -182,18 +192,32 @@ export default function App() {
     event.preventDefault();
     const cleanEmail = loginEmail.trim().toLowerCase();
     const cleanPassword = password.trim();
-    if (!cleanEmail || !cleanPassword) return;
+    if (requires2fa) {
+      if (!twoFactorChallenge || otpCode.trim().length !== 6) return;
+    } else if (!cleanEmail || !cleanPassword) {
+      return;
+    }
 
     setAuthLoading(true);
     setAuthError('');
 
     try {
-      const response = await fetch(apiEndpoint('login'), {
+      const response = await fetch(apiEndpoint(requires2fa ? 'login/2fa' : 'login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
+        body: JSON.stringify(requires2fa
+          ? { challengeToken: twoFactorChallenge, code: otpCode }
+          : { email: cleanEmail, password: cleanPassword }),
       });
-      const result = await response.json() as { ok?: boolean; token?: string; error?: string };
+      const result = await response.json() as { ok?: boolean; token?: string; error?: string; requires2fa?: boolean; challengeToken?: string };
+
+      if (result.ok && result.requires2fa && result.challengeToken) {
+        setRequires2fa(true);
+        setTwoFactorChallenge(result.challengeToken);
+        setOtpCode('');
+        setPassword('');
+        return;
+      }
 
       if (!response.ok || !result.ok || !result.token) {
         throw new Error(result.error || 'No se pudo iniciar sesion');
@@ -205,14 +229,25 @@ export default function App() {
       setHasLoadedData(false);
       setLoginEmail(cleanEmail);
       setPassword('');
+      setOtpCode('');
+      setRequires2fa(false);
+      setTwoFactorChallenge('');
       setStatus('demo');
     } catch (error) {
       console.error('Login error:', error);
-      setAuthError('Usuario, clave o API no disponible.');
+      setAuthError(requires2fa ? 'Codigo 2FA invalido o expirado.' : 'Usuario, clave o API no disponible.');
     } finally {
       setAuthLoading(false);
     }
-  }, [loginEmail, password]);
+  }, [loginEmail, otpCode, password, requires2fa, twoFactorChallenge]);
+
+  const resetTwoFactorLogin = useCallback(() => {
+    setRequires2fa(false);
+    setTwoFactorChallenge('');
+    setOtpCode('');
+    setPassword('');
+    setAuthError('');
+  }, []);
 
   const handleLogout = useCallback(() => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -221,11 +256,107 @@ export default function App() {
     setHasLoadedData(false);
     setStatus('demo');
     setAuthError('');
+    resetTwoFactorLogin();
     setUsers([]);
     selectedChatIdRef.current = '';
     setSelectedChatId('');
     void fetch(apiEndpoint('logout'), { method: 'POST' }).catch(() => undefined);
-  }, []);
+  }, [resetTwoFactorLogin]);
+
+  const loadTwoFactorStatus = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(apiEndpoint('2fa/status'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await response.json() as { ok?: boolean; enabled?: boolean; pending?: boolean };
+      if (response.ok && result.ok !== false) {
+        setTwoFactorStatus({ enabled: Boolean(result.enabled), pending: Boolean(result.pending) });
+      }
+    } catch (error) {
+      console.warn('2FA status error:', error);
+    }
+  }, [token]);
+
+  const handleTwoFactorSetup = useCallback(async () => {
+    if (!token) return;
+    setTwoFactorLoading(true);
+    setTwoFactorError('');
+    setTwoFactorMessage('');
+    try {
+      const response = await fetch(apiEndpoint('2fa/setup'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await response.json() as { ok?: boolean; secret?: string; otpauthUrl?: string; error?: string };
+      if (!response.ok || result.ok === false || !result.secret || !result.otpauthUrl) {
+        throw new Error(result.error || 'No se pudo generar 2FA');
+      }
+      setTwoFactorSetup({ secret: result.secret, otpauthUrl: result.otpauthUrl });
+      setTwoFactorCode('');
+      setTwoFactorMessage('Agrega este secreto en Google Authenticator o Authy y valida el codigo.');
+      await loadTwoFactorStatus();
+    } catch (error) {
+      setTwoFactorError(error instanceof Error ? error.message : 'No se pudo generar 2FA');
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  }, [loadTwoFactorStatus, token]);
+
+  const handleTwoFactorEnable = useCallback(async () => {
+    if (!token || twoFactorCode.trim().length !== 6) return;
+    setTwoFactorLoading(true);
+    setTwoFactorError('');
+    setTwoFactorMessage('');
+    try {
+      const response = await fetch(apiEndpoint('2fa/enable'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code: twoFactorCode }),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo activar 2FA');
+      setTwoFactorSetup(null);
+      setTwoFactorCode('');
+      setTwoFactorMessage('2FA activado. En el proximo login se pedira el codigo.');
+      await loadTwoFactorStatus();
+    } catch (error) {
+      setTwoFactorError(error instanceof Error ? error.message : 'Codigo 2FA invalido');
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  }, [loadTwoFactorStatus, token, twoFactorCode]);
+
+  const handleTwoFactorDisable = useCallback(async () => {
+    if (!token) return;
+    setTwoFactorLoading(true);
+    setTwoFactorError('');
+    setTwoFactorMessage('');
+    try {
+      const response = await fetch(apiEndpoint('2fa/disable'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: twoFactorPassword, code: twoFactorCode }),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo desactivar 2FA');
+      setTwoFactorSetup(null);
+      setTwoFactorCode('');
+      setTwoFactorPassword('');
+      setTwoFactorMessage('2FA desactivado.');
+      await loadTwoFactorStatus();
+    } catch (error) {
+      setTwoFactorError(error instanceof Error ? error.message : 'No se pudo desactivar 2FA');
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  }, [loadTwoFactorStatus, token, twoFactorCode, twoFactorPassword]);
 
   const handleChangePassword = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -316,10 +447,14 @@ export default function App() {
       <LoginScreen
         email={loginEmail}
         password={password}
+        otpCode={otpCode}
+        requires2fa={requires2fa}
         error={authError}
         loading={authLoading}
         onEmailChange={setLoginEmail}
         onPasswordChange={setPassword}
+        onOtpCodeChange={setOtpCode}
+        onReset2fa={resetTwoFactorLogin}
         onSubmit={handleLogin}
       />
     );
@@ -352,6 +487,9 @@ export default function App() {
             onTogglePasswordPanel={() => {
               setPasswordError('');
               setPasswordSuccess('');
+              setTwoFactorError('');
+              setTwoFactorMessage('');
+              void loadTwoFactorStatus();
               setShowPasswordPanel(true);
             }}
             onLogout={handleLogout}
@@ -425,6 +563,18 @@ export default function App() {
               onConfirmPasswordChange={setConfirmPassword}
               onSubmit={handleChangePassword}
               onClose={() => setShowPasswordPanel(false)}
+              twoFactorStatus={twoFactorStatus}
+              twoFactorSetup={twoFactorSetup}
+              twoFactorCode={twoFactorCode}
+              twoFactorPassword={twoFactorPassword}
+              twoFactorLoading={twoFactorLoading}
+              twoFactorMessage={twoFactorMessage}
+              twoFactorError={twoFactorError}
+              onTwoFactorSetup={handleTwoFactorSetup}
+              onTwoFactorEnable={handleTwoFactorEnable}
+              onTwoFactorDisable={handleTwoFactorDisable}
+              onTwoFactorCodeChange={(value) => setTwoFactorCode(value.replace(/\D/g, '').slice(0, 6))}
+              onTwoFactorPasswordChange={setTwoFactorPassword}
             />
           </div>
         </div>

@@ -4,6 +4,7 @@ import { localDateKey } from '../../shared/dates.js';
 import { normalizeCurrency, normalizeDateOnly, normalizeKey, title } from '../../shared/normalizers.js';
 import { getChatId } from '../../shared/request.js';
 import { getAppSetting, timeoutSignal } from '../../shared/settings-store.js';
+import { hmacSha256Hex } from '../../shared/crypto.js';
 
 const DEFAULT_SYMBOLS = ['BTC', 'ETH', 'SOL', 'USDT'];
 const CACHE_MINUTES = 5;
@@ -48,7 +49,8 @@ export async function cryptoPortfolio(env, params, options = {}) {
   const prices = await cryptoPrices(env, symbols, { refresh });
   const priceMap = Object.fromEntries(prices.map((item) => [item.symbol, item]));
   const positions = buildPositions(operations, priceMap, exchangeRate);
-  const summary = buildSummary(positions, exchangeRate);
+  const binance = await binanceAccountSnapshot(env, symbols, priceMap, exchangeRate);
+  const summary = buildSummary(positions, exchangeRate, binance);
   const enrichedAlerts = alerts.map((alert) => alertShape(alert, priceMap[alert.symbol]));
 
   return {
@@ -59,6 +61,7 @@ export async function cryptoPortfolio(env, params, options = {}) {
     positions,
     operations: operations.map(operationShape),
     alerts: enrichedAlerts,
+    binance,
     summary,
     suggestions: cryptoSuggestions({ summary, positions, alerts: enrichedAlerts }),
     updatedAt: new Date().toISOString(),
@@ -269,6 +272,127 @@ async function fetchProviderPrices(env, symbols) {
   return fetchCoinGeckoPrices(config, symbols);
 }
 
+async function binanceAccountSnapshot(env, symbols, priceMap, exchangeRate) {
+  const config = await binanceConfig(env);
+  if (!config.apiKey || !config.apiSecret) {
+    return {
+      configured: false,
+      balances: [],
+      summary: emptyBinanceSummary(),
+    };
+  }
+
+  try {
+    const account = await fetchBinanceAccount(config);
+    const balances = (account.balances || [])
+      .map((row) => ({
+        asset: normalizeSymbol(row.asset),
+        free: Number(row.free || 0),
+        locked: Number(row.locked || 0),
+      }))
+      .map((row) => ({ ...row, total: roundQuantity(row.free + row.locked) }))
+      .filter((row) => row.asset && row.total > 0.00000001);
+
+    const missingSymbols = balances
+      .map((row) => row.asset)
+      .filter((symbol) => !priceMap[symbol]?.priceUsd);
+    const fetchedPrices = await fetchBinanceTickerPrices(config, missingSymbols);
+    const mergedPriceMap = {
+      ...priceMap,
+      ...Object.fromEntries(fetchedPrices.map((item) => [item.symbol, item])),
+    };
+
+    const shapedBalances = balances
+      .map((row) => {
+        const priceUsd = stableUsdAsset(row.asset) ? 1 : Number(mergedPriceMap[row.asset]?.priceUsd || 0);
+        const valueUsd = row.total * priceUsd;
+        return {
+          asset: row.asset,
+          free: roundQuantity(row.free),
+          locked: roundQuantity(row.locked),
+          total: roundQuantity(row.total),
+          priceUsd: round(priceUsd),
+          valueUsd: round(valueUsd),
+          valuePen: round(valueUsd * exchangeRate),
+        };
+      })
+      .filter((row) => row.valueUsd > 0 || row.total > 0)
+      .sort((a, b) => b.valueUsd - a.valueUsd || a.asset.localeCompare(b.asset));
+
+    const totalValueUsd = round(shapedBalances.reduce((sum, row) => sum + row.valueUsd, 0));
+    return {
+      configured: true,
+      accountType: account.accountType || 'SPOT',
+      balances: shapedBalances,
+      summary: {
+        assets: shapedBalances.length,
+        totalValueUsd,
+        totalValuePen: round(totalValueUsd * exchangeRate),
+      },
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.warn(JSON.stringify({
+      event: 'binance_account_failed',
+      message: error.message || String(error),
+    }));
+    return {
+      configured: true,
+      error: binanceFriendlyError(error),
+      balances: [],
+      summary: emptyBinanceSummary(),
+    };
+  }
+}
+
+async function fetchBinanceAccount(config) {
+  const query = `timestamp=${Date.now()}&recvWindow=5000`;
+  const signature = await hmacSha256Hex(query, config.apiSecret);
+  const response = await fetch(`${config.apiUrl}/api/v3/account?${query}&signature=${signature}`, {
+    headers: {
+      accept: 'application/json',
+      'X-MBX-APIKEY': config.apiKey,
+    },
+    signal: timeoutSignal(7000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.msg ? `Binance HTTP ${response.status}: ${data.msg}` : `Binance HTTP ${response.status}`);
+  }
+  return data;
+}
+
+async function fetchBinanceTickerPrices(config, symbols) {
+  const cleanSymbols = uniqueSymbols(symbols).filter((symbol) => !stableUsdAsset(symbol));
+  if (!cleanSymbols.length) return [];
+
+  const pairs = cleanSymbols.map((symbol) => `${symbol}USDT`);
+  const url = new URL(`${config.apiUrl}/api/v3/ticker/price`);
+  url.searchParams.set('symbols', JSON.stringify(pairs));
+  const response = await fetch(url.toString(), {
+    headers: { accept: 'application/json' },
+    signal: timeoutSignal(7000),
+  });
+  const data = await response.json().catch(() => []);
+  if (!response.ok) throw new Error(`Binance ticker HTTP ${response.status}`);
+  return (Array.isArray(data) ? data : [])
+    .map((row) => {
+      const symbol = String(row.symbol || '').replace(/USDT$/i, '').toUpperCase();
+      return {
+        symbol,
+        assetId: symbol,
+        name: title(symbol),
+        priceUsd: round(row.price || 0),
+        change24h: 0,
+        marketCapUsd: 0,
+        volume24hUsd: 0,
+        source: 'binance',
+        fetchedAt: new Date().toISOString(),
+      };
+    })
+    .filter((item) => item.symbol && item.priceUsd > 0);
+}
+
 async function fetchCoinGeckoPrices(config, symbols) {
   const idPairs = symbols
     .map((symbol) => [symbol, ASSET_IDS[symbol]])
@@ -361,6 +485,14 @@ async function cryptoProviderConfig(env) {
   };
 }
 
+async function binanceConfig(env) {
+  return {
+    apiUrl: String(await getAppSetting(env, 'binance_api_url') || env.BINANCE_API_URL || 'https://api.binance.com').trim().replace(/\/+$/g, ''),
+    apiKey: String(env.BINANCE_API_KEY || '').trim(),
+    apiSecret: String(env.BINANCE_API_SECRET || '').trim(),
+  };
+}
+
 async function cryptoCacheMinutes(env) {
   const configured = Number(await getAppSetting(env, 'crypto_price_cache_minutes') || env.CRYPTO_PRICE_CACHE_MINUTES || CACHE_MINUTES);
   if (!Number.isFinite(configured)) return CACHE_MINUTES;
@@ -433,10 +565,12 @@ function buildPositions(operations, priceMap, exchangeRate) {
     .sort((a, b) => b.currentValueUsd - a.currentValueUsd || a.symbol.localeCompare(b.symbol));
 }
 
-function buildSummary(positions, exchangeRate) {
+function buildSummary(positions, exchangeRate, binance) {
   const totalInvestedUsd = round(positions.reduce((sum, item) => sum + item.investedUsd, 0));
   const totalValueUsd = round(positions.reduce((sum, item) => sum + item.currentValueUsd, 0));
   const gainUsd = round(totalValueUsd - totalInvestedUsd + positions.reduce((sum, item) => sum + item.realizedUsd, 0));
+  const binanceValueUsd = round(binance?.summary?.totalValueUsd || 0);
+  const binanceValuePen = round(binance?.summary?.totalValuePen || binanceValueUsd * exchangeRate);
   return {
     totalInvestedUsd,
     totalValueUsd,
@@ -445,6 +579,10 @@ function buildSummary(positions, exchangeRate) {
     totalInvestedPen: round(totalInvestedUsd * exchangeRate),
     totalValuePen: round(totalValueUsd * exchangeRate),
     gainPen: round(gainUsd * exchangeRate),
+    binanceValueUsd,
+    binanceValuePen,
+    totalCryptoValueUsd: round(totalValueUsd + binanceValueUsd),
+    totalCryptoValuePen: round((totalValueUsd * exchangeRate) + binanceValuePen),
     positions: positions.length,
   };
 }
@@ -617,6 +755,26 @@ function emptyPrice(symbol) {
     source: 'sin precio',
     fetchedAt: '',
   };
+}
+
+function emptyBinanceSummary() {
+  return {
+    assets: 0,
+    totalValueUsd: 0,
+    totalValuePen: 0,
+  };
+}
+
+function stableUsdAsset(symbol) {
+  return ['USDT', 'USDC', 'BUSD', 'TUSD', 'FDUSD', 'DAI', 'USD'].includes(normalizeSymbol(symbol));
+}
+
+function binanceFriendlyError(error) {
+  const message = error.message || String(error);
+  if (/ip|restricted|permission|api-key|invalid/i.test(message)) {
+    return `${message}. Revisa permisos y restriccion IP: Cloudflare Worker no sale desde una IP local como 192.168.x.x.`;
+  }
+  return message;
 }
 
 function normalizeSymbol(value) {

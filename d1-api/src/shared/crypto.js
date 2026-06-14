@@ -10,11 +10,32 @@ export async function hmacSha256(value, secret) {
   return base64UrlEncodeBytes(new Uint8Array(signature));
 }
 
+export async function hmacSha256Hex(value, secret) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    utf8Bytes(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, utf8Bytes(value));
+  return bytesToHex(new Uint8Array(signature));
+}
+
+export async function hmacSha1Bytes(bytes, secretBytes) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    secretBytes,
+    { name: 'HMAC', hash: 'SHA-1' },
+    false,
+    ['sign'],
+  );
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, bytes));
+}
+
 export async function sha256Hex(value) {
   const digest = await crypto.subtle.digest('SHA-256', utf8Bytes(value));
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
+  return bytesToHex(new Uint8Array(digest));
 }
 
 export function utf8Bytes(value) {
@@ -60,4 +81,10 @@ export function constantTimeEqual(a, b) {
   }
 
   return diff === 0;
+}
+
+export function bytesToHex(bytes) {
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
