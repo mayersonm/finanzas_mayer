@@ -38,7 +38,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (url.pathname === '/api/binance/time') {
-      return proxyJson(response, `${binanceApiUrl}/api/v3/time`, false);
+      return await proxyJson(response, `${binanceApiUrl}/api/v3/time`, false);
     }
 
     if (url.pathname === '/api/binance/account') {
@@ -55,11 +55,11 @@ const server = http.createServer(async (request, response) => {
       const symbols = parseSymbols(url.searchParams.get('symbols') || url.searchParams.get('pairs') || '');
       const tickerUrl = new URL(`${binanceApiUrl}/api/v3/ticker/price`);
       if (symbols.length) tickerUrl.searchParams.set('symbols', JSON.stringify(symbols));
-      return proxyJson(response, tickerUrl.toString(), false);
+      return await proxyJson(response, tickerUrl.toString(), false);
     }
 
     if (url.pathname === '/binance') {
-      return legacyProxy(request, response, url);
+      return await legacyProxy(request, response, url);
     }
 
     return send(response, 404, { ok: false, error: 'Not found' });
@@ -176,12 +176,17 @@ async function fetchWithTimeout(url, options = {}) {
 function isAuthorized(request, url) {
   if (!proxyKey) return false;
   const provided = String(
-    request.headers.get('x-proxy-key')
-      || bearerToken(request.headers.get('authorization'))
+    headerValue(request, 'x-proxy-key')
+      || bearerToken(headerValue(request, 'authorization'))
       || url.searchParams.get('key')
       || '',
   );
   return timingSafeEqual(provided, proxyKey);
+}
+
+function headerValue(request, name) {
+  const value = request.headers?.[String(name).toLowerCase()];
+  return Array.isArray(value) ? value[0] : String(value || '');
 }
 
 function bearerToken(value) {
