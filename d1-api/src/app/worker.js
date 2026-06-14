@@ -8,7 +8,7 @@ import { dateFromKey, dateKeyFromParts, daysBetween, formatMonth, localDateKey, 
 import { sha256Hex } from '../shared/crypto.js';
 import { budgetRulesForDashboard, budgetSpendWithRules, classifyCategory, classifyCategoryFromLoadedRules, loadBudgetRules, loadCategoryRules, normalizeBaseCategory, normalizeCategory, normalizeRuleKeyword, safeRuleId } from '../shared/categories.js';
 import { getAppSetting, readJsonCache, setAppSetting, setJsonCache, timeoutSignal } from '../shared/settings-store.js';
-import { changePassword, login, requireAdminKey, requireDashboardAccess, requireDashboardOrAdminAccess } from '../auth/service.js';
+import { changePassword, disableTwoFactor, enableTwoFactor, login, requireAdminKey, requireDashboardAccess, requireDashboardOrAdminAccess, setupTwoFactor, twoFactorStatus, verifyTwoFactorLogin } from '../auth/service.js';
 import { categoryDefinitions, dashboardSettings, disableCategoryDefinition, ensureUserForChat, getUserSettings, linkTelegramUser, normalizeSettingsConfig, profile, updateDashboardSettings, upsertCategoryDefinition, userSettingsToConfig, usersList } from '../modules/settings/service.js';
 import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPlan, monthlyCalendar, netWorthInsights, realExpenses, smartAlerts, smartInsights, weeklyGoalPlan } from '../modules/dashboard/planning.js';
 import { automationCenter } from '../modules/dashboard/automation.js';
@@ -42,6 +42,11 @@ export default {
         return json(await login(env, payload));
       }
 
+      if (url.pathname === '/api/login/2fa' && request.method === 'POST') {
+        const payload = await request.json();
+        return json(await verifyTwoFactorLogin(env, payload));
+      }
+
       if (url.pathname === '/api/session' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json({ ok: true, authenticated: true });
@@ -55,6 +60,28 @@ export default {
         await requireDashboardAccess(request, env);
         const payload = await request.json();
         return json(await changePassword(env, payload));
+      }
+
+      if (url.pathname === '/api/2fa/status' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await twoFactorStatus(env));
+      }
+
+      if (url.pathname === '/api/2fa/setup' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        return json(await setupTwoFactor(env));
+      }
+
+      if (url.pathname === '/api/2fa/enable' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await enableTwoFactor(env, payload));
+      }
+
+      if (url.pathname === '/api/2fa/disable' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await disableTwoFactor(env, payload));
       }
 
       if (url.pathname === '/api/settings' && request.method === 'GET') {
@@ -3268,7 +3295,7 @@ async function netWorth(env, params) {
 
   const investmentValue = round(investments.reduce((total, item) => (
     total + currencyToPen(Number(item.currentValue || 0), item.currency || 'PEN', rate)
-  ), 0) + Number(cryptoSummary.totalValuePen || 0));
+  ), 0) + Number(cryptoSummary.totalCryptoValuePen ?? cryptoSummary.totalValuePen ?? 0));
   const investmentCost = round(investments.reduce((total, item) => (
     total + currencyToPen(Number(item.amount || 0), item.currency || 'PEN', rate)
   ), 0) + Number(cryptoSummary.totalInvestedPen || 0));

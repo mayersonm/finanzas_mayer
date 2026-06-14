@@ -39,6 +39,15 @@ const emptyData: CryptoPortfolioData = {
     gainPen: 0,
     positions: 0,
   },
+  binance: {
+    configured: false,
+    balances: [],
+    summary: {
+      assets: 0,
+      totalValueUsd: 0,
+      totalValuePen: 0,
+    },
+  },
   suggestions: [],
 };
 
@@ -110,6 +119,8 @@ export function CryptoInvestmentsPanel({
 
   const selectedPrice = priceBySymbol[operation.symbol.toUpperCase()];
   const gainTone = data.summary.gainPen >= 0 ? 'good' : 'bad';
+  const binanceValuePen = data.binance?.summary?.totalValuePen || data.summary.binanceValuePen || 0;
+  const totalCryptoValuePen = data.summary.totalCryptoValuePen ?? (data.summary.totalValuePen + binanceValuePen);
 
   const saveOperation = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -229,7 +240,7 @@ export function CryptoInvestmentsPanel({
   return (
     <section className="grid gap-3 sm:gap-4">
       <div className="grid gap-3 sm:grid-cols-3">
-        <SummaryCard label="Cripto actual" value={formatMoney(data.summary.totalValuePen)} caption={formatMoney(data.summary.totalValueUsd, 'USD')} />
+        <SummaryCard label="Cripto total" value={formatMoney(totalCryptoValuePen)} caption="Manual + Binance" />
         <SummaryCard label="Invertido cripto" value={formatMoney(data.summary.totalInvestedPen)} caption={formatMoney(data.summary.totalInvestedUsd, 'USD')} />
         <SummaryCard label="Resultado cripto" value={`${formatMoney(data.summary.gainPen)} · ${data.summary.gainPct.toFixed(1)}%`} tone={gainTone} caption={formatMoney(data.summary.gainUsd, 'USD')} />
       </div>
@@ -270,6 +281,51 @@ export function CryptoInvestmentsPanel({
         </Card>
 
         <div className="grid gap-3 sm:gap-4">
+          <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Title>Saldo Binance</Title>
+                <Text>{data.binance?.configured ? `${data.binance.summary.assets} activos detectados` : 'Configura secrets para leer tu cuenta'}</Text>
+              </div>
+              <Badge color={data.binance?.configured ? (data.binance.error ? 'rose' : 'emerald') : 'slate'}>
+                {data.binance?.configured ? (data.binance.error ? 'Error' : 'Conectado') : 'Sin secrets'}
+              </Badge>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
+                <Text>Total en Binance</Text>
+                <div className="mt-2 text-xl font-semibold text-slate-100">{formatMoney(data.binance?.summary?.totalValuePen || 0)}</div>
+                <Text className="mt-1 text-xs">{formatMoney(data.binance?.summary?.totalValueUsd || 0, 'USD')}</Text>
+              </div>
+
+              {data.binance?.error ? (
+                <div className="rounded-tremor-default border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">
+                  {data.binance.error}
+                </div>
+              ) : null}
+
+              {!data.binance?.configured ? (
+                <div className="rounded-tremor-default border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+                  Agrega `BINANCE_API_KEY` y `BINANCE_API_SECRET` como secrets del Worker.
+                </div>
+              ) : null}
+
+              {data.binance?.balances?.length ? data.binance.balances.slice(0, 8).map((item) => (
+                <div key={item.asset} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
+                  <div>
+                    <Text className="font-semibold text-slate-100">{item.asset}</Text>
+                    <Text className="text-xs">{item.total.toLocaleString('es-PE', { maximumFractionDigits: 8 })} unidades</Text>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-semibold text-slate-100">{formatMoney(item.valuePen)}</div>
+                    <Text className="text-xs">{formatMoney(item.valueUsd, 'USD')}</Text>
+                  </div>
+                </div>
+              )) : null}
+            </div>
+          </Card>
+
           <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
             <div className="flex items-start justify-between gap-4">
               <div>

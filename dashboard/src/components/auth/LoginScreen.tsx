@@ -4,18 +4,26 @@ import { ShieldIcon } from '../common/AppIcons';
 export function LoginScreen({
   email,
   password,
+  otpCode,
+  requires2fa,
   error,
   loading,
   onEmailChange,
   onPasswordChange,
+  onOtpCodeChange,
+  onReset2fa,
   onSubmit,
 }: {
   email: string;
   password: string;
+  otpCode: string;
+  requires2fa: boolean;
   error: string;
   loading: boolean;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
+  onOtpCodeChange: (value: string) => void;
+  onReset2fa: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
@@ -39,31 +47,55 @@ export function LoginScreen({
         <p className="mt-2 text-sm text-slate-400">Dashboard personal para revisar gastos, compromisos y metas.</p>
 
         <form className="mt-6 space-y-4 sm:mt-7" onSubmit={onSubmit}>
-          <label className="block text-sm font-semibold text-slate-200" htmlFor="email">
-            Usuario
-          </label>
-          <input
-            id="email"
-            autoComplete="username"
-            autoFocus
-            type="email"
-            value={email}
-            onChange={(event) => onEmailChange(event.target.value)}
-            placeholder="tu correo"
-            className="block h-10 w-full rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500 sm:h-11"
-          />
-          <label className="block text-sm font-semibold text-slate-200" htmlFor="password">
-            Clave privada
-          </label>
-          <input
-            id="password"
-            autoComplete="current-password"
-            type="password"
-            value={password}
-            onChange={(event) => onPasswordChange(event.target.value)}
-            placeholder="Ingresa tu clave"
-            className="block h-10 w-full rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500 sm:h-11"
-          />
+          {!requires2fa ? (
+            <>
+              <label className="block text-sm font-semibold text-slate-200" htmlFor="email">
+                Usuario
+              </label>
+              <input
+                id="email"
+                autoComplete="username"
+                autoFocus
+                type="email"
+                value={email}
+                onChange={(event) => onEmailChange(event.target.value)}
+                placeholder="tu correo"
+                className="block h-10 w-full rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500 sm:h-11"
+              />
+              <label className="block text-sm font-semibold text-slate-200" htmlFor="password">
+                Clave privada
+              </label>
+              <input
+                id="password"
+                autoComplete="current-password"
+                type="password"
+                value={password}
+                onChange={(event) => onPasswordChange(event.target.value)}
+                placeholder="Ingresa tu clave"
+                className="block h-10 w-full rounded-tremor-default border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500 sm:h-11"
+              />
+            </>
+          ) : (
+            <>
+              <div className="rounded-tremor-default border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+                Clave correcta. Ingresa el codigo de tu app 2FA para terminar.
+              </div>
+              <label className="block text-sm font-semibold text-slate-200" htmlFor="otpCode">
+                Codigo 2FA
+              </label>
+              <input
+                id="otpCode"
+                autoComplete="one-time-code"
+                autoFocus
+                inputMode="numeric"
+                maxLength={6}
+                value={otpCode}
+                onChange={(event) => onOtpCodeChange(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+                className="block h-11 w-full rounded-tremor-default border-slate-700 bg-slate-900 text-center text-lg font-semibold tracking-[0.25em] text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500"
+              />
+            </>
+          )}
           {error ? (
             <div className="rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
               {error}
@@ -71,10 +103,19 @@ export function LoginScreen({
           ) : null}
           <button
             className="h-11 w-full rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!email.trim() || !password.trim() || loading}
+            disabled={requires2fa ? otpCode.trim().length !== 6 || loading : !email.trim() || !password.trim() || loading}
           >
-            {loading ? 'Validando...' : 'Entrar'}
+            {loading ? 'Validando...' : requires2fa ? 'Validar 2FA' : 'Entrar'}
           </button>
+          {requires2fa ? (
+            <button
+              type="button"
+              className="h-10 w-full rounded-tremor-default border border-slate-700 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-900"
+              onClick={onReset2fa}
+            >
+              Cambiar usuario
+            </button>
+          ) : null}
         </form>
       </section>
     </main>
