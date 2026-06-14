@@ -13,6 +13,7 @@ import type {
   TradingAnalysisItem,
   TradingBotData,
   TradingPaperOrder,
+  TradingScalperRun,
   TradingSignal,
   TradingStrategy,
 } from '../../types/dashboard';
@@ -43,6 +44,12 @@ interface TradingStrategyDraft {
   stopLossPct: string;
   maxTradesPerDay: string;
   cooldownMinutes: string;
+  scalperTicks: string;
+  scalperTakeProfitPct: string;
+  scalperStopLossPct: string;
+  scalperFeePct: string;
+  scalperSpreadPct: string;
+  scalperMaxRoundTrips: string;
 }
 
 const emptyData: CryptoPortfolioData = {
@@ -90,6 +97,12 @@ const defaultTradingStrategy: TradingStrategy = {
   trailingStopPct: 1.2,
   rsiBuyBelow: 35,
   cooldownMinutes: 240,
+  scalperTicks: 12,
+  scalperTakeProfitPct: 0.6,
+  scalperStopLossPct: 0.4,
+  scalperFeePct: 0.1,
+  scalperSpreadPct: 0.05,
+  scalperMaxRoundTrips: 6,
   active: true,
   notes: '',
 };
@@ -107,6 +120,7 @@ const emptyTradingData: TradingBotData = {
   },
   signals: [],
   orders: [],
+  scalperRuns: [],
   analysis: [],
   safety: [],
 };
@@ -350,6 +364,12 @@ export function CryptoInvestmentsPanel({
           stopLossPct: Number(tradingDraft.stopLossPct || 0),
           maxTradesPerDay: Number(tradingDraft.maxTradesPerDay || 0),
           cooldownMinutes: Number(tradingDraft.cooldownMinutes || 0),
+          scalperTicks: Number(tradingDraft.scalperTicks || 0),
+          scalperTakeProfitPct: Number(tradingDraft.scalperTakeProfitPct || 0),
+          scalperStopLossPct: Number(tradingDraft.scalperStopLossPct || 0),
+          scalperFeePct: Number(tradingDraft.scalperFeePct || 0),
+          scalperSpreadPct: Number(tradingDraft.scalperSpreadPct || 0),
+          scalperMaxRoundTrips: Number(tradingDraft.scalperMaxRoundTrips || 0),
         }),
       });
       const result = await response.json() as TradingBotData;
@@ -387,6 +407,43 @@ export function CryptoInvestmentsPanel({
       await load(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo analizar trading');
+    } finally {
+      setTradingSaving(false);
+    }
+  };
+
+  const runScalperPaper = async () => {
+    if (!authToken) return;
+    setTradingSaving(true);
+    setMessage('');
+    setError('');
+    try {
+      const params = chatId ? `?chat_id=${encodeURIComponent(chatId)}` : '';
+      const response = await fetch(`${apiEndpoint('trading/scalper/run')}${params}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          symbols: tradingDraft.symbols,
+          ticks: Number(tradingDraft.scalperTicks || 0),
+          allocationUsd: Number(tradingDraft.allocationUsd || 0),
+          takeProfitPct: Number(tradingDraft.scalperTakeProfitPct || 0),
+          stopLossPct: Number(tradingDraft.scalperStopLossPct || 0),
+          feePct: Number(tradingDraft.scalperFeePct || 0),
+          spreadPct: Number(tradingDraft.scalperSpreadPct || 0),
+          maxRoundTrips: Number(tradingDraft.scalperMaxRoundTrips || 0),
+        }),
+      });
+      const result = await response.json() as TradingBotData;
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo ejecutar scalper paper');
+      const merged = mergeTradingData(result);
+      setTrading(merged);
+      setMessage(result.message || 'Scalper paper ejecutado.');
+      await load(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo ejecutar scalper paper');
     } finally {
       setTradingSaving(false);
     }
@@ -538,6 +595,7 @@ export function CryptoInvestmentsPanel({
         onDraftChange={setTradingDraft}
         onSaveStrategy={saveTradingStrategy}
         onRun={runTradingAnalysis}
+        onRunScalper={runScalperPaper}
         onCloseOrder={closePaperOrder}
       />
 
@@ -667,6 +725,7 @@ function TradingBotPanel({
   onDraftChange,
   onSaveStrategy,
   onRun,
+  onRunScalper,
   onCloseOrder,
 }: {
   trading: TradingBotData;
@@ -677,12 +736,14 @@ function TradingBotPanel({
   onDraftChange: Dispatch<SetStateAction<TradingStrategyDraft>>;
   onSaveStrategy: (event: FormEvent<HTMLFormElement>) => void;
   onRun: () => void;
+  onRunScalper: () => void;
   onCloseOrder: (item: TradingPaperOrder) => void;
 }) {
   const strategy = trading.strategy || defaultTradingStrategy;
   const analysis = lastAnalysis.length ? lastAnalysis : trading.analysis || [];
   const openOrders = (trading.orders || []).filter((item) => item.status === 'open');
   const recentSignals = (trading.signals || []).slice(0, 5);
+  const latestScalper = trading.scalper || trading.scalperRuns?.[0] || null;
 
   return (
     <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
@@ -747,15 +808,42 @@ function TradingBotPanel({
             <input className="form-input" type="number" min="15" step="15" value={draft.cooldownMinutes} onChange={(event) => onDraftChange((current) => ({ ...current, cooldownMinutes: event.target.value }))} />
           </Field>
         </div>
+        <div className="grid gap-3 md:grid-cols-6">
+          <Field label="Ticks scalper">
+            <input className="form-input" type="number" min="3" step="1" value={draft.scalperTicks} onChange={(event) => onDraftChange((current) => ({ ...current, scalperTicks: event.target.value }))} />
+          </Field>
+          <Field label="Cierres max">
+            <input className="form-input" type="number" min="1" step="1" value={draft.scalperMaxRoundTrips} onChange={(event) => onDraftChange((current) => ({ ...current, scalperMaxRoundTrips: event.target.value }))} />
+          </Field>
+          <Field label="Scalp TP %">
+            <input className="form-input" type="number" min="0.05" step="0.05" value={draft.scalperTakeProfitPct} onChange={(event) => onDraftChange((current) => ({ ...current, scalperTakeProfitPct: event.target.value }))} />
+          </Field>
+          <Field label="Scalp SL %">
+            <input className="form-input" type="number" min="0.05" step="0.05" value={draft.scalperStopLossPct} onChange={(event) => onDraftChange((current) => ({ ...current, scalperStopLossPct: event.target.value }))} />
+          </Field>
+          <Field label="Fee %">
+            <input className="form-input" type="number" min="0" step="0.01" value={draft.scalperFeePct} onChange={(event) => onDraftChange((current) => ({ ...current, scalperFeePct: event.target.value }))} />
+          </Field>
+          <Field label="Spread %">
+            <input className="form-input" type="number" min="0" step="0.01" value={draft.scalperSpreadPct} onChange={(event) => onDraftChange((current) => ({ ...current, scalperSpreadPct: event.target.value }))} />
+          </Field>
+        </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Text className="text-xs">
             Seguridad: no ejecuta orden real en Binance. Paper abre/cierra simulaciones; confirmacion deja senales pendientes.
           </Text>
-          <button className="inline-flex h-10 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60" disabled={saving || loading}>
-            Guardar estrategia
-          </button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button type="button" className="inline-flex h-10 items-center justify-center rounded-tremor-default border border-cyan-400/40 bg-cyan-400/10 px-4 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:opacity-60" disabled={saving || loading} onClick={onRunScalper}>
+              Ejecutar scalper
+            </button>
+            <button className="inline-flex h-10 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60" disabled={saving || loading}>
+              Guardar estrategia
+            </button>
+          </div>
         </div>
       </form>
+
+      <ScalperRunPanel run={latestScalper} />
 
       <div className="mt-5 grid gap-3 xl:grid-cols-[1fr_1fr]">
         <div className="rounded-tremor-default border border-slate-800 bg-slate-900/35 p-3">
@@ -859,6 +947,39 @@ function TradingSignalRow({ item }: { item: TradingSignal }) {
         <Text className="font-mono text-xs text-slate-300">{formatMoney(item.signalPriceUsd, 'USD')}</Text>
       </div>
       <Text className="mt-2 text-xs">{item.reason}</Text>
+    </div>
+  );
+}
+
+function ScalperRunPanel({ run }: { run: TradingScalperRun | null }) {
+  if (!run) {
+    return (
+      <div className="mt-5 rounded-tremor-default border border-dashed border-slate-800 bg-slate-900/20 p-4">
+        <Text className="font-semibold text-slate-100">Scalper paper</Text>
+        <Text className="mt-1 text-xs">Ejecuta una rafaga para abrir/cerrar operaciones simuladas por segundos.</Text>
+      </div>
+    );
+  }
+
+  const positive = run.netPnlUsd >= 0;
+  return (
+    <div className="mt-5 rounded-tremor-default border border-slate-800 bg-slate-900/35 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <Text className="font-semibold text-slate-100">Ultima rafaga scalper</Text>
+          <Text className="mt-1 text-xs">
+            {run.ticks} ticks · {run.closedOrders} cierres · {formatUpdatedAt(run.finishedAt || run.startedAt)}
+          </Text>
+        </div>
+        <Badge color={positive ? 'emerald' : 'rose'}>{positive ? 'Neto positivo' : 'Neto negativo'}</Badge>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <BotMetric label="Neto" value={formatMoney(run.netPnlUsd, 'USD')} sub="despues de fees/spread" tone={positive ? 'emerald' : 'rose'} />
+        <BotMetric label="Bruto" value={formatMoney(run.grossPnlUsd, 'USD')} sub="sin comisiones" />
+        <BotMetric label="Fees" value={formatMoney(run.feesUsd, 'USD')} sub="entrada + salida" tone="rose" />
+        <BotMetric label="Mejor trade" value={formatMoney(run.bestTradeUsd, 'USD')} sub="cierre paper" tone={run.bestTradeUsd >= 0 ? 'emerald' : 'rose'} />
+        <BotMetric label="Peor trade" value={formatMoney(run.worstTradeUsd, 'USD')} sub="cierre paper" tone={run.worstTradeUsd >= 0 ? 'emerald' : 'rose'} />
+      </div>
     </div>
   );
 }
@@ -980,6 +1101,8 @@ function mergeTradingData(result: TradingBotData): TradingBotData {
     },
     signals: result.signals || [],
     orders: result.orders || [],
+    scalperRuns: result.scalperRuns || [],
+    scalper: result.scalper || null,
     analysis: result.analysis || [],
     safety: result.safety || [],
   };
@@ -995,6 +1118,12 @@ function strategyDraft(strategy: TradingStrategy): TradingStrategyDraft {
     stopLossPct: String(strategy.stopLossPct || defaultTradingStrategy.stopLossPct),
     maxTradesPerDay: String(strategy.maxTradesPerDay || defaultTradingStrategy.maxTradesPerDay),
     cooldownMinutes: String(strategy.cooldownMinutes || defaultTradingStrategy.cooldownMinutes),
+    scalperTicks: String(strategy.scalperTicks || defaultTradingStrategy.scalperTicks),
+    scalperTakeProfitPct: String(strategy.scalperTakeProfitPct || defaultTradingStrategy.scalperTakeProfitPct),
+    scalperStopLossPct: String(strategy.scalperStopLossPct || defaultTradingStrategy.scalperStopLossPct),
+    scalperFeePct: String(strategy.scalperFeePct || defaultTradingStrategy.scalperFeePct),
+    scalperSpreadPct: String(strategy.scalperSpreadPct || defaultTradingStrategy.scalperSpreadPct),
+    scalperMaxRoundTrips: String(strategy.scalperMaxRoundTrips || defaultTradingStrategy.scalperMaxRoundTrips),
   };
 }
 

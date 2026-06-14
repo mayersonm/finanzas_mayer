@@ -10,9 +10,10 @@ const DEFAULT_STRATEGY_NAME = 'Bot cripto seguro';
 export async function tradingDashboard(env, params) {
   const chatId = getChatId(env, params);
   const strategy = await ensureDefaultStrategy(env, chatId);
-  const [signals, orders] = await Promise.all([
+  const [signals, orders, scalperRuns] = await Promise.all([
     tradingSignalsList(env, chatId),
     tradingOrdersList(env, chatId),
+    tradingScalperRunsList(env, chatId),
   ]);
 
   return {
@@ -21,6 +22,7 @@ export async function tradingDashboard(env, params) {
     summary: tradingSummary(signals, orders),
     signals: signals.map(signalShape),
     orders: orders.map(orderShape),
+    scalperRuns: scalperRuns.map(scalperRunShape),
     safety: safetyNotes(strategy),
     updatedAt: new Date().toISOString(),
   };
@@ -36,9 +38,11 @@ export async function upsertTradingStrategy(env, payload, params) {
       id, chat_id, name, mode, symbols, base_currency, allocation_usd,
       max_daily_loss_usd, max_trades_per_day, buy_drop_pct, take_profit_pct,
       stop_loss_pct, trailing_stop_pct, rsi_buy_below, cooldown_minutes,
+      scalper_ticks, scalper_take_profit_pct, scalper_stop_loss_pct,
+      scalper_fee_pct, scalper_spread_pct, scalper_max_round_trips,
       active, notes, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       mode = excluded.mode,
@@ -53,6 +57,12 @@ export async function upsertTradingStrategy(env, payload, params) {
       trailing_stop_pct = excluded.trailing_stop_pct,
       rsi_buy_below = excluded.rsi_buy_below,
       cooldown_minutes = excluded.cooldown_minutes,
+      scalper_ticks = excluded.scalper_ticks,
+      scalper_take_profit_pct = excluded.scalper_take_profit_pct,
+      scalper_stop_loss_pct = excluded.scalper_stop_loss_pct,
+      scalper_fee_pct = excluded.scalper_fee_pct,
+      scalper_spread_pct = excluded.scalper_spread_pct,
+      scalper_max_round_trips = excluded.scalper_max_round_trips,
       active = excluded.active,
       notes = excluded.notes,
       updated_at = CURRENT_TIMESTAMP
@@ -72,11 +82,145 @@ export async function upsertTradingStrategy(env, payload, params) {
     strategy.trailing_stop_pct,
     strategy.rsi_buy_below,
     strategy.cooldown_minutes,
+    strategy.scalper_ticks,
+    strategy.scalper_take_profit_pct,
+    strategy.scalper_stop_loss_pct,
+    strategy.scalper_fee_pct,
+    strategy.scalper_spread_pct,
+    strategy.scalper_max_round_trips,
     strategy.active,
     strategy.notes,
   ).run();
 
   return tradingDashboard(env, params);
+}
+
+export async function runPaperScalper(env, params, payload = {}) {
+  const chatId = getChatId(env, params);
+  const strategy = await ensureDefaultStrategy(env, chatId);
+  const shapedStrategy = strategyShape(strategy);
+
+  if (!shapedStrategy.active || shapedStrategy.mode === 'off') {
+    return {
+      ...(await tradingDashboard(env, params)),
+      scalper: null,
+      message: 'Scalper apagado. Activa Paper para ejecutar rafagas simuladas.',
+    };
+  }
+
+  const config = normalizeScalperConfig(payload, shapedStrategy);
+  const portfolioParams = new URLSearchParams(params);
+  portfolioParams.set('chat_id', chatId);
+  portfolioParams.set('symbols', config.symbols.join(','));
+  portfolioParams.set('refresh', '1');
+  const portfolio = await cryptoPortfolio(env, portfolioParams, { refresh: true });
+  const priceMap = Object.fromEntries((portfolio.prices || []).map((item) => [item.symbol, item]));
+  const runId = `scalper-run:${chatId}:${crypto.randomUUID()}`;
+  const startedAt = new Date();
+  const states = buildScalperStates(config.symbols, priceMap);
+  const openBySymbol = {};
+  const closedTrades = [];
+  const openedTrades = [];
+  const events = [];
+
+  for (let tick = 0; tick < config.ticks; tick += 1) {
+    for (const symbol of config.symbols) {
+      const state = states[symbol];
+      if (!state || state.priceUsd <= 0) continue;
+
+      const tickTime = new Date(startedAt.getTime() + tick * 1000);
+      const priceUsd = nextScalperPrice(state, tick, config);
+      const open = openBySymbol[symbol];
+
+      if (open) {
+        const exit = scalperExit(open, priceUsd, tick, config, tick === config.ticks - 1);
+        if (exit) {
+          delete openBySymbol[symbol];
+          closedTrades.push(exit);
+          events.push({
+            tick,
+            symbol,
+            type: 'close',
+            reason: exit.reason,
+            priceUsd: exit.close_price_usd,
+            pnlUsd: exit.pnl_usd,
+          });
+          await insertScalperClosedOrder(env, {
+            ...exit,
+            id: `trading-order:${chatId}:${crypto.randomUUID()}`,
+            chat_id: chatId,
+            signal_id: '',
+            strategy_id: strategy.id,
+            side: 'buy',
+            mode: 'paper_scalper',
+            status: 'closed',
+            opened_at: sqlDateTime(open.openedAt),
+            closed_at: sqlDateTime(tickTime),
+            details_json: JSON.stringify({
+              runId,
+              entryTick: open.entryTick,
+              exitTick: tick,
+              grossPnlUsd: exit.gross_pnl_usd,
+              feePct: config.feePct,
+              spreadPct: config.spreadPct,
+            }),
+          });
+          await insertSignal(env, scalperSignal(chatId, strategy.id, exit, 'sell', 'paper_closed', `Scalper cerro por ${exit.reason}`, runId));
+        }
+        continue;
+      }
+
+      if (openedTrades.length >= config.maxRoundTrips) continue;
+      if (!shouldOpenScalper(state, tick, config)) continue;
+
+      const entryPriceUsd = round(priceUsd * (1 + config.spreadPct / 200));
+      const notionalUsd = config.allocationUsd;
+      const quantity = roundQuantity(notionalUsd / entryPriceUsd);
+      const feeUsd = round(notionalUsd * config.feePct / 100);
+      const openTrade = {
+        symbol,
+        entryTick: tick,
+        openedAt: tickTime,
+        price_usd: entryPriceUsd,
+        quantity,
+        notional_usd: notionalUsd,
+        fee_entry_usd: feeUsd,
+        take_profit_price_usd: round(entryPriceUsd * (1 + config.takeProfitPct / 100)),
+        stop_loss_price_usd: round(entryPriceUsd * (1 - config.stopLossPct / 100)),
+        reason: `Scalper paper abrio por micro-caida en ${symbol}.`,
+      };
+      openBySymbol[symbol] = openTrade;
+      openedTrades.push(openTrade);
+      events.push({
+        tick,
+        symbol,
+        type: 'open',
+        priceUsd: entryPriceUsd,
+        notionalUsd,
+      });
+      await insertSignal(env, scalperSignal(chatId, strategy.id, openTrade, 'buy', 'paper_open', openTrade.reason, runId));
+    }
+  }
+
+  const run = scalperRunSummary({
+    runId,
+    chatId,
+    strategyId: strategy.id,
+    config,
+    startedAt,
+    closedTrades,
+    openedTrades,
+    events,
+  });
+  await insertScalperRun(env, run);
+
+  return {
+    ...(await tradingDashboard(env, params)),
+    scalper: scalperRunShape(run),
+    message: run.closed_orders
+      ? `Scalper paper completo: ${run.closed_orders} cierres, neto ${formatUsd(run.net_pnl_usd)}.`
+      : 'Scalper paper completo: no hubo entradas claras en esta rafaga.',
+  };
 }
 
 export async function runTradingBot(env, params, payload = {}) {
@@ -280,6 +424,17 @@ async function tradingOrdersList(env, chatId) {
   return rows.results || [];
 }
 
+async function tradingScalperRunsList(env, chatId) {
+  const rows = await env.DB.prepare(`
+    SELECT *
+    FROM trading_scalper_runs
+    WHERE chat_id = ?
+    ORDER BY created_at DESC
+    LIMIT 10
+  `).bind(chatId).all();
+  return rows.results || [];
+}
+
 async function openOrdersTodayCount(env, chatId) {
   const start = sqlStartOfToday();
   const row = await env.DB.prepare(`
@@ -405,6 +560,64 @@ async function insertOrder(env, order) {
     order.pnl_usd,
     order.reason,
     order.details_json,
+  ).run();
+}
+
+async function insertScalperClosedOrder(env, order) {
+  await env.DB.prepare(`
+    INSERT INTO trading_orders (
+      id, chat_id, signal_id, strategy_id, symbol, side, mode, status,
+      price_usd, quantity, notional_usd, fee_usd, pnl_usd, opened_at,
+      closed_at, close_price_usd, reason, details_json, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).bind(
+    order.id,
+    order.chat_id,
+    order.signal_id,
+    order.strategy_id,
+    order.symbol,
+    order.side,
+    order.mode,
+    order.status,
+    order.price_usd,
+    order.quantity,
+    order.notional_usd,
+    order.fee_usd,
+    order.pnl_usd,
+    order.opened_at,
+    order.closed_at,
+    order.close_price_usd,
+    order.reason,
+    order.details_json,
+  ).run();
+}
+
+async function insertScalperRun(env, run) {
+  await env.DB.prepare(`
+    INSERT INTO trading_scalper_runs (
+      id, chat_id, strategy_id, status, symbols, ticks, opened_orders,
+      closed_orders, gross_pnl_usd, fees_usd, net_pnl_usd, best_trade_usd,
+      worst_trade_usd, started_at, finished_at, details_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    run.id,
+    run.chat_id,
+    run.strategy_id,
+    run.status,
+    run.symbols,
+    run.ticks,
+    run.opened_orders,
+    run.closed_orders,
+    run.gross_pnl_usd,
+    run.fees_usd,
+    run.net_pnl_usd,
+    run.best_trade_usd,
+    run.worst_trade_usd,
+    run.started_at,
+    run.finished_at,
+    run.details_json,
   ).run();
 }
 
@@ -589,6 +802,12 @@ function normalizeStrategy(payload, chatId, current) {
     trailing_stop_pct: clamp(parseAmount(payload.trailingStopPct ?? payload.trailing_stop_pct ?? current.trailing_stop_pct), 0.2, 50, 1.2),
     rsi_buy_below: clamp(parseAmount(payload.rsiBuyBelow ?? payload.rsi_buy_below ?? current.rsi_buy_below), 10, 70, 35),
     cooldown_minutes: clampInt(payload.cooldownMinutes ?? payload.cooldown_minutes ?? current.cooldown_minutes, 15, 10080, 240),
+    scalper_ticks: clampInt(payload.scalperTicks ?? payload.scalper_ticks ?? current.scalper_ticks, 3, 60, 12),
+    scalper_take_profit_pct: clamp(parseAmount(payload.scalperTakeProfitPct ?? payload.scalper_take_profit_pct ?? current.scalper_take_profit_pct), 0.05, 5, 0.6),
+    scalper_stop_loss_pct: clamp(parseAmount(payload.scalperStopLossPct ?? payload.scalper_stop_loss_pct ?? current.scalper_stop_loss_pct), 0.05, 5, 0.4),
+    scalper_fee_pct: clamp(parseAmount(payload.scalperFeePct ?? payload.scalper_fee_pct ?? current.scalper_fee_pct), 0, 1, 0.1),
+    scalper_spread_pct: clamp(parseAmount(payload.scalperSpreadPct ?? payload.scalper_spread_pct ?? current.scalper_spread_pct), 0, 2, 0.05),
+    scalper_max_round_trips: clampInt(payload.scalperMaxRoundTrips ?? payload.scalper_max_round_trips ?? current.scalper_max_round_trips, 1, 30, 6),
     active: payload.active === false || payload.active === 0 ? 0 : 1,
     notes: String(payload.notes ?? payload.notas ?? current.notes ?? '').trim().slice(0, 240),
   };
@@ -611,6 +830,12 @@ function defaultStrategy(chatId) {
     trailing_stop_pct: 1.2,
     rsi_buy_below: 35,
     cooldown_minutes: 240,
+    scalper_ticks: 12,
+    scalper_take_profit_pct: 0.6,
+    scalper_stop_loss_pct: 0.4,
+    scalper_fee_pct: 0.1,
+    scalper_spread_pct: 0.05,
+    scalper_max_round_trips: 6,
     active: 1,
     notes: 'Estrategia segura: primero paper trading y confirmacion manual.',
   };
@@ -633,6 +858,12 @@ function strategyShape(row) {
     trailingStopPct: round(row.trailing_stop_pct || 0),
     rsiBuyBelow: round(row.rsi_buy_below || 0),
     cooldownMinutes: Number(row.cooldown_minutes || 0),
+    scalperTicks: Number(row.scalper_ticks || 12),
+    scalperTakeProfitPct: round(row.scalper_take_profit_pct || 0.6),
+    scalperStopLossPct: round(row.scalper_stop_loss_pct || 0.4),
+    scalperFeePct: round(row.scalper_fee_pct || 0.1),
+    scalperSpreadPct: round(row.scalper_spread_pct || 0.05),
+    scalperMaxRoundTrips: Number(row.scalper_max_round_trips || 6),
     active: row.active !== 0,
     notes: row.notes || '',
     updatedAt: row.updated_at || row.updatedAt || '',
@@ -682,14 +913,166 @@ function orderShape(row) {
   };
 }
 
+function scalperRunShape(row) {
+  const details = parseDetails(row.details_json);
+  return {
+    id: row.id,
+    strategyId: row.strategy_id,
+    status: row.status,
+    symbols: parseSymbols(row.symbols),
+    ticks: Number(row.ticks || 0),
+    openedOrders: Number(row.opened_orders || 0),
+    closedOrders: Number(row.closed_orders || 0),
+    grossPnlUsd: round(row.gross_pnl_usd || 0),
+    feesUsd: round(row.fees_usd || 0),
+    netPnlUsd: round(row.net_pnl_usd || 0),
+    bestTradeUsd: round(row.best_trade_usd || 0),
+    worstTradeUsd: round(row.worst_trade_usd || 0),
+    startedAt: row.started_at || '',
+    finishedAt: row.finished_at || '',
+    details,
+  };
+}
+
+function normalizeScalperConfig(payload, strategy) {
+  const symbols = parseSymbols(payload.symbols || strategy.symbols.join(','));
+  return {
+    symbols: symbols.length ? symbols : DEFAULT_SYMBOLS,
+    ticks: clampInt(payload.ticks ?? strategy.scalperTicks, 3, 60, 12),
+    allocationUsd: clamp(parseAmount(payload.allocationUsd ?? strategy.allocationUsd), 1, 1000, 10),
+    takeProfitPct: clamp(parseAmount(payload.takeProfitPct ?? strategy.scalperTakeProfitPct), 0.05, 5, 0.6),
+    stopLossPct: clamp(parseAmount(payload.stopLossPct ?? strategy.scalperStopLossPct), 0.05, 5, 0.4),
+    feePct: clamp(parseAmount(payload.feePct ?? strategy.scalperFeePct), 0, 1, 0.1),
+    spreadPct: clamp(parseAmount(payload.spreadPct ?? strategy.scalperSpreadPct), 0, 2, 0.05),
+    maxRoundTrips: clampInt(payload.maxRoundTrips ?? strategy.scalperMaxRoundTrips, 1, 30, 6),
+  };
+}
+
+function buildScalperStates(symbols, priceMap) {
+  return Object.fromEntries(symbols.map((symbol) => {
+    const price = priceMap[symbol] || {};
+    return [symbol, {
+      symbol,
+      initialPriceUsd: Number(price.priceUsd || 0),
+      priceUsd: Number(price.priceUsd || 0),
+      change24h: Number(price.change24h || 0),
+      seed: symbolSeed(symbol),
+      lastMovePct: 0,
+    }];
+  }));
+}
+
+function nextScalperPrice(state, tick, config) {
+  const volatilityPct = bounded(Math.abs(state.change24h) * 0.08 + 0.12, 0.08, 0.75);
+  const trendPct = bounded(state.change24h / 180, -0.12, 0.12);
+  const wave = Math.sin((tick + 1) * 1.618 + state.seed) * volatilityPct;
+  const snap = Math.cos((tick + 2) * 0.91 + state.seed / 3) * volatilityPct * 0.45;
+  const feePressure = config.spreadPct * 0.08;
+  const movePct = bounded(trendPct + wave + snap - feePressure, -1.2, 1.2);
+  state.priceUsd = round(Math.max(state.priceUsd * (1 + movePct / 100), 0));
+  state.lastMovePct = movePct;
+  return state.priceUsd;
+}
+
+function shouldOpenScalper(state, tick, config) {
+  const triggerPct = bounded(config.takeProfitPct / 3, 0.08, 0.35);
+  if (tick === 0) return true;
+  if (state.lastMovePct <= -triggerPct) return true;
+  const discountFromStartPct = state.initialPriceUsd > 0
+    ? ((state.priceUsd - state.initialPriceUsd) / state.initialPriceUsd) * 100
+    : 0;
+  return discountFromStartPct <= -triggerPct * 1.5;
+}
+
+function scalperExit(open, priceUsd, tick, config, forceClose) {
+  const closePriceUsd = round(priceUsd * (1 - config.spreadPct / 200));
+  const hitTakeProfit = closePriceUsd >= open.take_profit_price_usd;
+  const hitStopLoss = closePriceUsd <= open.stop_loss_price_usd;
+  if (!hitTakeProfit && !hitStopLoss && !forceClose) return null;
+
+  const exitNotionalUsd = closePriceUsd * open.quantity;
+  const feeExitUsd = round(exitNotionalUsd * config.feePct / 100);
+  const grossPnlUsd = round((closePriceUsd - open.price_usd) * open.quantity);
+  const feeUsd = round(open.fee_entry_usd + feeExitUsd);
+  const pnlUsd = round(grossPnlUsd - feeUsd);
+  return {
+    symbol: open.symbol,
+    entry_tick: open.entryTick,
+    exit_tick: tick,
+    price_usd: open.price_usd,
+    close_price_usd: closePriceUsd,
+    quantity: open.quantity,
+    notional_usd: open.notional_usd,
+    fee_usd: feeUsd,
+    gross_pnl_usd: grossPnlUsd,
+    pnl_usd: pnlUsd,
+    reason: hitTakeProfit ? 'take profit' : hitStopLoss ? 'stop loss' : 'cierre de rafaga',
+  };
+}
+
+function scalperSignal(chatId, strategyId, trade, side, status, reason, runId) {
+  const price = side === 'sell' ? trade.close_price_usd : trade.price_usd;
+  return {
+    id: `trading-signal:${chatId}:${crypto.randomUUID()}`,
+    chat_id: chatId,
+    strategy_id: strategyId,
+    symbol: trade.symbol,
+    side,
+    status,
+    mode: 'paper_scalper',
+    signal_price_usd: round(price || 0),
+    quantity: roundQuantity(trade.quantity || 0),
+    notional_usd: round(trade.notional_usd || 0),
+    confidence: side === 'sell' ? 100 : 70,
+    reason,
+    take_profit_price_usd: round(trade.take_profit_price_usd || 0),
+    stop_loss_price_usd: round(trade.stop_loss_price_usd || 0),
+    details_json: JSON.stringify({
+      source: 'paper_scalper',
+      runId,
+      pnlUsd: trade.pnl_usd,
+    }),
+  };
+}
+
+function scalperRunSummary({ runId, chatId, strategyId, config, startedAt, closedTrades, openedTrades, events }) {
+  const gross = round(closedTrades.reduce((sum, item) => sum + Number(item.gross_pnl_usd || 0), 0));
+  const fees = round(closedTrades.reduce((sum, item) => sum + Number(item.fee_usd || 0), 0));
+  const net = round(closedTrades.reduce((sum, item) => sum + Number(item.pnl_usd || 0), 0));
+  const pnlValues = closedTrades.map((item) => Number(item.pnl_usd || 0));
+  const finishedAt = new Date(startedAt.getTime() + config.ticks * 1000);
+  return {
+    id: runId,
+    chat_id: chatId,
+    strategy_id: strategyId,
+    status: 'completed',
+    symbols: config.symbols.join(','),
+    ticks: config.ticks,
+    opened_orders: openedTrades.length,
+    closed_orders: closedTrades.length,
+    gross_pnl_usd: gross,
+    fees_usd: fees,
+    net_pnl_usd: net,
+    best_trade_usd: pnlValues.length ? round(Math.max(...pnlValues)) : 0,
+    worst_trade_usd: pnlValues.length ? round(Math.min(...pnlValues)) : 0,
+    started_at: sqlDateTime(startedAt),
+    finished_at: sqlDateTime(finishedAt),
+    details_json: JSON.stringify({
+      config,
+      events: events.slice(-80),
+      closedTrades: closedTrades.slice(-30),
+    }),
+  };
+}
+
 function safetyNotes(strategy) {
   const mode = normalizeMode(strategy.mode);
   return [
     mode === 'paper'
       ? 'Modo paper: simula compras y ventas, no toca Binance.'
       : 'Modo confirmacion: crea senales para aprobar manualmente, no ejecuta orden real.',
+    'Scalper paper registra rafagas simuladas con fee y spread; no envia orden real.',
     'Usa montos pequenos y respeta presupuesto; cripto puede caer fuerte en minutos.',
-    'Las claves de Binance deben quedar solo como secrets del proxy/VPS, nunca en el frontend.',
   ];
 }
 
@@ -724,7 +1107,7 @@ function parseSymbols(value) {
 
 function clamp(value, min, max, fallback) {
   const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return fallback;
+  if (!Number.isFinite(number)) return fallback;
   return round(Math.max(min, Math.min(max, number)));
 }
 
@@ -740,6 +1123,21 @@ function parseDetails(value) {
   } catch {
     return {};
   }
+}
+
+function bounded(value, min, max) {
+  return Math.max(min, Math.min(max, Number(value) || 0));
+}
+
+function symbolSeed(symbol) {
+  return String(symbol || '')
+    .split('')
+    .reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 1), 0) / 17;
+}
+
+function formatUsd(value) {
+  const sign = Number(value || 0) < 0 ? '-' : '';
+  return `${sign}US$ ${Math.abs(round(value)).toFixed(2)}`;
 }
 
 function roundQuantity(value) {

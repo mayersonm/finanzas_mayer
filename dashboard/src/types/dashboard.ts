@@ -283,6 +283,12 @@ export interface TradingStrategy {
   trailingStopPct: number;
   rsiBuyBelow: number;
   cooldownMinutes: number;
+  scalperTicks: number;
+  scalperTakeProfitPct: number;
+  scalperStopLossPct: number;
+  scalperFeePct: number;
+  scalperSpreadPct: number;
+  scalperMaxRoundTrips: number;
   active: boolean;
   notes?: string;
   updatedAt?: string;
@@ -342,6 +348,28 @@ export interface TradingPaperOrder {
   details?: Record<string, unknown>;
 }
 
+export interface TradingScalperRun {
+  id: string;
+  strategyId: string;
+  status: 'completed' | 'running' | 'error' | string;
+  symbols: string[];
+  ticks: number;
+  openedOrders: number;
+  closedOrders: number;
+  grossPnlUsd: number;
+  feesUsd: number;
+  netPnlUsd: number;
+  bestTradeUsd: number;
+  worstTradeUsd: number;
+  startedAt: string;
+  finishedAt?: string;
+  details?: {
+    config?: Record<string, unknown>;
+    events?: Array<Record<string, unknown>>;
+    closedTrades?: Array<Record<string, unknown>>;
+  } | Record<string, unknown>;
+}
+
 export interface TradingBotData {
   ok?: boolean;
   strategy: TradingStrategy;
@@ -356,6 +384,8 @@ export interface TradingBotData {
   };
   signals: TradingSignal[];
   orders: TradingPaperOrder[];
+  scalperRuns?: TradingScalperRun[];
+  scalper?: TradingScalperRun | null;
   analysis?: TradingAnalysisItem[];
   generatedSignals?: TradingSignal[];
   closedOrders?: TradingPaperOrder[];
