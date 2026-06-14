@@ -351,13 +351,16 @@ async function fetchBinanceAccount(config) {
   const response = await fetch(`${config.apiUrl}/api/v3/account?${query}&signature=${signature}`, {
     headers: {
       accept: 'application/json',
+      'User-Agent': 'FinanzasMayeson/1.0 (+https://finanzas-dashboard-4d5.pages.dev)',
       'X-MBX-APIKEY': config.apiKey,
     },
     signal: timeoutSignal(7000),
   });
-  const data = await response.json().catch(() => ({}));
+  const text = await response.text();
+  const data = safeJson(text);
   if (!response.ok) {
-    throw new Error(data?.msg ? `Binance HTTP ${response.status}: ${data.msg}` : `Binance HTTP ${response.status}`);
+    const detail = data?.msg || cleanErrorBody(text);
+    throw new Error(detail ? `Binance HTTP ${response.status}: ${detail}` : `Binance HTTP ${response.status}`);
   }
   return data;
 }
@@ -370,11 +373,18 @@ async function fetchBinanceTickerPrices(config, symbols) {
   const url = new URL(`${config.apiUrl}/api/v3/ticker/price`);
   url.searchParams.set('symbols', JSON.stringify(pairs));
   const response = await fetch(url.toString(), {
-    headers: { accept: 'application/json' },
+    headers: {
+      accept: 'application/json',
+      'User-Agent': 'FinanzasMayeson/1.0 (+https://finanzas-dashboard-4d5.pages.dev)',
+    },
     signal: timeoutSignal(7000),
   });
-  const data = await response.json().catch(() => []);
-  if (!response.ok) throw new Error(`Binance ticker HTTP ${response.status}`);
+  const text = await response.text();
+  const data = safeJson(text) || [];
+  if (!response.ok) {
+    const detail = Array.isArray(data) ? '' : data?.msg || cleanErrorBody(text);
+    throw new Error(detail ? `Binance ticker HTTP ${response.status}: ${detail}` : `Binance ticker HTTP ${response.status}`);
+  }
   return (Array.isArray(data) ? data : [])
     .map((row) => {
       const symbol = String(row.symbol || '').replace(/USDT$/i, '').toUpperCase();
@@ -771,10 +781,29 @@ function stableUsdAsset(symbol) {
 
 function binanceFriendlyError(error) {
   const message = error.message || String(error);
+  if (/restricted location|eligibility|service unavailable/i.test(message)) {
+    return `${message}. Binance esta bloqueando la region/IP de salida de Cloudflare. Usa un proxy/VPS con IP publica fija permitida o cambia el endpoint/proveedor.`;
+  }
   if (/ip|restricted|permission|api-key|invalid/i.test(message)) {
     return `${message}. Revisa permisos y restriccion IP: Cloudflare Worker no sale desde una IP local como 192.168.x.x.`;
   }
   return message;
+}
+
+function safeJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function cleanErrorBody(text) {
+  return String(text || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 240);
 }
 
 function normalizeSymbol(value) {
