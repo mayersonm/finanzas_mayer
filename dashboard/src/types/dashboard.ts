@@ -150,6 +150,93 @@ export interface Investment {
   updatedAt?: string;
 }
 
+export interface CryptoPrice {
+  symbol: string;
+  assetId?: string;
+  name: string;
+  priceUsd: number;
+  change24h: number;
+  marketCapUsd?: number;
+  volume24hUsd?: number;
+  source?: string;
+  fetchedAt?: string;
+}
+
+export interface CryptoOperation {
+  id: string;
+  symbol: string;
+  assetName?: string;
+  type: 'buy' | 'sell' | string;
+  quantity: number;
+  unitPriceUsd: number;
+  totalAmount: number;
+  currency: Currency | 'PEN' | 'USD';
+  operationDate: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CryptoPosition {
+  symbol: string;
+  name: string;
+  quantity: number;
+  currentPriceUsd: number;
+  investedUsd: number;
+  currentValueUsd: number;
+  currentValuePen: number;
+  gainUsd: number;
+  gainPen: number;
+  gainPct: number;
+  change24h: number;
+  realizedUsd?: number;
+  source?: string;
+  updatedAt?: string;
+  buys?: number;
+  sells?: number;
+}
+
+export interface CryptoAlert {
+  id: string;
+  symbol: string;
+  condition: 'above' | 'below' | string;
+  targetPriceUsd: number;
+  currentPriceUsd?: number;
+  triggered?: boolean;
+  active?: boolean;
+  notes?: string;
+  updatedAt?: string;
+}
+
+export interface CryptoSuggestion {
+  level: 'success' | 'info' | 'warning' | 'danger' | string;
+  title: string;
+  message: string;
+}
+
+export interface CryptoPortfolioData {
+  ok?: boolean;
+  exchangeRate: number;
+  cacheMinutes?: number;
+  prices: CryptoPrice[];
+  positions: CryptoPosition[];
+  operations: CryptoOperation[];
+  alerts: CryptoAlert[];
+  summary: {
+    totalInvestedUsd: number;
+    totalValueUsd: number;
+    gainUsd: number;
+    gainPct: number;
+    totalInvestedPen: number;
+    totalValuePen: number;
+    gainPen: number;
+    positions: number;
+  };
+  suggestions: CryptoSuggestion[];
+  updatedAt?: string;
+  error?: string;
+}
+
 export interface NetWorthCompositionItem {
   label: string;
   value: number;
