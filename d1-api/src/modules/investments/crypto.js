@@ -348,7 +348,8 @@ async function binanceAccountSnapshot(env, symbols, priceMap, exchangeRate) {
 async function fetchBinanceAccount(config) {
   const query = `timestamp=${Date.now()}&recvWindow=5000`;
   const signature = await hmacSha256Hex(query, config.apiSecret);
-  const response = await fetch(`${config.apiUrl}/api/v3/account?${query}&signature=${signature}`, {
+  const targetUrl = `${config.apiUrl}/api/v3/account?${query}&signature=${signature}`;
+  const response = await fetch(targetUrl, {
     headers: {
       accept: 'application/json',
       'User-Agent': 'FinanzasMayeson/1.0 (+https://finanzas-dashboard-4d5.pages.dev)',
@@ -359,6 +360,9 @@ async function fetchBinanceAccount(config) {
   const text = await response.text();
   const data = safeJson(text);
   if (!response.ok) {
+    if (response.status === 403 && config.proxyUrl && config.proxyKey) {
+      return fetchBinanceAccountViaProxy(config, targetUrl);
+    }
     const detail = data?.msg || cleanErrorBody(text);
     throw new Error(detail ? `Binance HTTP ${response.status}: ${detail}` : `Binance HTTP ${response.status}`);
   }
@@ -382,9 +386,63 @@ async function fetchBinanceTickerPrices(config, symbols) {
   const text = await response.text();
   const data = safeJson(text) || [];
   if (!response.ok) {
+    if (response.status === 403 && config.proxyUrl && config.proxyKey) {
+      const proxied = await fetchBinancePublicViaProxy(config, url.toString());
+      return shapeBinanceTickerRows(proxied);
+    }
     const detail = Array.isArray(data) ? '' : data?.msg || cleanErrorBody(text);
     throw new Error(detail ? `Binance ticker HTTP ${response.status}: ${detail}` : `Binance ticker HTTP ${response.status}`);
   }
+  return shapeBinanceTickerRows(data);
+}
+
+async function fetchBinanceAccountViaProxy(config, targetUrl) {
+  const result = await binanceProxyFetch(config, targetUrl, config.apiKey);
+  const data = safeJson(result.body);
+  if (result.status < 200 || result.status >= 300) {
+    const detail = data?.msg || cleanErrorBody(result.body);
+    throw new Error(detail ? `Binance proxy HTTP ${result.status}: ${detail}` : `Binance proxy HTTP ${result.status}`);
+  }
+  return data;
+}
+
+async function fetchBinancePublicViaProxy(config, targetUrl) {
+  const result = await binanceProxyFetch(config, targetUrl, '');
+  const data = safeJson(result.body) || [];
+  if (result.status < 200 || result.status >= 300) {
+    const detail = Array.isArray(data) ? '' : data?.msg || cleanErrorBody(result.body);
+    throw new Error(detail ? `Binance proxy ticker HTTP ${result.status}: ${detail}` : `Binance proxy ticker HTTP ${result.status}`);
+  }
+  return data;
+}
+
+async function binanceProxyFetch(config, targetUrl, apiKey) {
+  const url = new URL(config.proxyUrl);
+  url.searchParams.set('action', 'binance_proxy');
+  url.searchParams.set('key', config.proxyKey);
+  url.searchParams.set('url', targetUrl);
+  if (apiKey) url.searchParams.set('apiKey', apiKey);
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+    },
+    signal: timeoutSignal(12000),
+  });
+  const text = await response.text();
+  const body = safeJson(text);
+  if (!response.ok || !body || body.ok === false) {
+    const detail = body?.error || cleanErrorBody(text);
+    throw new Error(detail ? `Binance proxy error: ${detail}` : `Binance proxy HTTP ${response.status}`);
+  }
+  return {
+    status: Number(body.status || 0),
+    body: String(body.body || ''),
+  };
+}
+
+function shapeBinanceTickerRows(data) {
   return (Array.isArray(data) ? data : [])
     .map((row) => {
       const symbol = String(row.symbol || '').replace(/USDT$/i, '').toUpperCase();
@@ -500,6 +558,8 @@ async function binanceConfig(env) {
     apiUrl: String(await getAppSetting(env, 'binance_api_url') || env.BINANCE_API_URL || 'https://api.binance.com').trim().replace(/\/+$/g, ''),
     apiKey: String(env.BINANCE_API_KEY || '').trim(),
     apiSecret: String(env.BINANCE_API_SECRET || '').trim(),
+    proxyUrl: String(await getAppSetting(env, 'binance_proxy_url') || env.BINANCE_PROXY_URL || env.GAS_API_URL || '').trim(),
+    proxyKey: String(env.BINANCE_PROXY_KEY || env.GAS_API_KEY || '').trim(),
   };
 }
 
