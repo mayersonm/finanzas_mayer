@@ -526,53 +526,6 @@ export function CryptoInvestmentsPanel({
               )}
             </div>
           </Card>
-
-          <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-            <Title>Registrar compra / venta</Title>
-            <Text>Guarda tus operaciones; la cartera se calcula sola.</Text>
-            <form className="mt-5 grid gap-3" onSubmit={saveOperation}>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Simbolo">
-                  <input className="form-input uppercase" list="crypto-symbols" value={operation.symbol} onChange={(event) => setOperation((current) => ({ ...current, symbol: event.target.value.toUpperCase() }))} required />
-                </Field>
-                <Field label="Operacion">
-                  <select className="form-input" value={operation.type} onChange={(event) => setOperation((current) => ({ ...current, type: event.target.value as 'buy' | 'sell' }))}>
-                    <option value="buy">Compra</option>
-                    <option value="sell">Venta</option>
-                  </select>
-                </Field>
-                <Field label="Fecha">
-                  <input className="form-input" type="date" value={operation.operationDate} onChange={(event) => setOperation((current) => ({ ...current, operationDate: event.target.value }))} required />
-                </Field>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Cantidad">
-                  <input className="form-input" type="number" min="0" step="0.00000001" value={operation.quantity} onChange={(event) => setOperation((current) => ({ ...current, quantity: event.target.value }))} required />
-                </Field>
-                <Field label="Precio USD">
-                  <div className="grid gap-2">
-                    <input className="form-input" type="number" min="0" step="0.01" value={operation.unitPriceUsd} onChange={(event) => setOperation((current) => ({ ...current, unitPriceUsd: event.target.value }))} required />
-                    <button type="button" className="inline-flex h-8 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-2 text-xs font-semibold text-slate-200 disabled:opacity-50" onClick={useCurrentPrice} disabled={!selectedPrice?.priceUsd}>
-                      Usar actual
-                    </button>
-                  </div>
-                </Field>
-                <Field label="Moneda pagada">
-                  <select className="form-input" value={operation.currency} onChange={(event) => setOperation((current) => ({ ...current, currency: event.target.value as 'USD' | 'PEN' }))}>
-                    <option value="USD">USD</option>
-                    <option value="PEN">PEN</option>
-                  </select>
-                </Field>
-              </div>
-              <Field label="Notas">
-                <input className="form-input" value={operation.notes} onChange={(event) => setOperation((current) => ({ ...current, notes: event.target.value }))} placeholder="exchange, wallet, razon de compra..." />
-              </Field>
-              <button className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60" disabled={saving || !authToken}>
-                <RiAddLine className="h-4 w-4" />
-                Registrar operacion
-              </button>
-            </form>
-          </Card>
         </div>
       </div>
 
@@ -588,25 +541,79 @@ export function CryptoInvestmentsPanel({
         onCloseOrder={closePaperOrder}
       />
 
-      <div className="grid gap-3 sm:gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid gap-3 sm:gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <Title>Historial cripto</Title>
-          <Text>{data.operations.length} operaciones registradas</Text>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <Title>Operacion cripto</Title>
+              <Text>Registro manual para la cartera cripto.</Text>
+            </div>
+            <Badge color="cyan">Cripto</Badge>
+          </div>
+          <form className="mt-5 grid gap-3" onSubmit={saveOperation}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="Cripto">
+                <input className="form-input uppercase" list="crypto-symbols" value={operation.symbol} onChange={(event) => setOperation((current) => ({ ...current, symbol: event.target.value.toUpperCase() }))} required />
+              </Field>
+              <Field label="Tipo">
+                <select className="form-input" value={operation.type} onChange={(event) => setOperation((current) => ({ ...current, type: event.target.value as 'buy' | 'sell' }))}>
+                  <option value="buy">Compra</option>
+                  <option value="sell">Venta</option>
+                </select>
+              </Field>
+              <Field label="Fecha operacion">
+                <input className="form-input" type="date" value={operation.operationDate} onChange={(event) => setOperation((current) => ({ ...current, operationDate: event.target.value }))} required />
+              </Field>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="Unidades">
+                <input className="form-input" type="number" min="0" step="0.00000001" value={operation.quantity} onChange={(event) => setOperation((current) => ({ ...current, quantity: event.target.value }))} required />
+              </Field>
+              <Field label="Precio unitario USD">
+                <div className="grid gap-2">
+                  <input className="form-input" type="number" min="0" step="0.01" value={operation.unitPriceUsd} onChange={(event) => setOperation((current) => ({ ...current, unitPriceUsd: event.target.value }))} required />
+                  <button type="button" className="inline-flex h-8 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-2 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-50" onClick={useCurrentPrice} disabled={!selectedPrice?.priceUsd}>
+                    Usar precio actual
+                  </button>
+                </div>
+              </Field>
+              <Field label="Moneda usada">
+                <select className="form-input" value={operation.currency} onChange={(event) => setOperation((current) => ({ ...current, currency: event.target.value as 'USD' | 'PEN' }))}>
+                  <option value="USD">USD</option>
+                  <option value="PEN">PEN</option>
+                </select>
+              </Field>
+            </div>
+            <Field label="Nota cripto">
+              <input className="form-input" value={operation.notes} onChange={(event) => setOperation((current) => ({ ...current, notes: event.target.value }))} placeholder="Binance, wallet, DCA, toma de ganancia..." />
+            </Field>
+            <button className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60" disabled={saving || !authToken}>
+              <RiAddLine className="h-4 w-4" />
+              Registrar cripto
+            </button>
+          </form>
+        </Card>
+
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+          <Title>Historial de operaciones cripto</Title>
+          <Text>{data.operations.length} compras/ventas manuales</Text>
           <div className="mt-5 grid gap-3">
             {data.operations.length ? data.operations.slice().reverse().map((item) => (
               <OperationRow key={item.id} item={item} onDelete={removeOperation} />
             )) : <EmptyState>Sin operaciones cripto.</EmptyState>}
           </div>
         </Card>
+      </div>
 
+      <div className="grid gap-3 sm:gap-4">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <div className="flex items-start gap-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-tremor-default bg-amber-500/15 text-amber-200">
               <RiNotification3Line className="h-5 w-5" />
             </div>
             <div>
-              <Title>Alertas de precio</Title>
-              <Text>Define precios de compra o salida.</Text>
+              <Title>Alertas cripto</Title>
+              <Text>Precios objetivo para compra o salida.</Text>
             </div>
           </div>
 
