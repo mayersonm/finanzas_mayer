@@ -13,6 +13,7 @@ import { categoryDefinitions, dashboardSettings, disableCategoryDefinition, ensu
 import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPlan, monthlyCalendar, netWorthInsights, realExpenses, smartAlerts, smartInsights, weeklyGoalPlan } from '../modules/dashboard/planning.js';
 import { automationCenter } from '../modules/dashboard/automation.js';
 import { advisorResponse } from '../modules/ai/advisor.js';
+import { createCryptoAlert, createCryptoOperation, cryptoPortfolio, deleteCryptoAlert, deleteCryptoOperation } from '../modules/investments/crypto.js';
 
 export default {
   async fetch(request, env) {
@@ -24,6 +25,8 @@ export default {
     const debtMatch = url.pathname.match(/^\/api\/debts\/([^/]+)$/);
     const debtPaymentMatch = url.pathname.match(/^\/api\/debts\/([^/]+)\/payments$/);
     const investmentMatch = url.pathname.match(/^\/api\/investments\/([^/]+)$/);
+    const cryptoOperationMatch = url.pathname.match(/^\/api\/crypto\/operations\/([^/]+)$/);
+    const cryptoAlertMatch = url.pathname.match(/^\/api\/crypto\/alerts\/([^/]+)$/);
 
     if (request.method === 'OPTIONS') {
       return corsResponse(null, 204);
@@ -341,6 +344,33 @@ export default {
       if (investmentMatch && request.method === 'DELETE') {
         await requireDashboardAccess(request, env);
         return json(await deleteInvestment(env, decodeURIComponent(investmentMatch[1]), url.searchParams));
+      }
+
+      if (url.pathname === '/api/crypto' && request.method === 'GET') {
+        await requireDashboardAccess(request, env);
+        return json(await cryptoPortfolio(env, url.searchParams));
+      }
+
+      if (url.pathname === '/api/crypto/operations' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await createCryptoOperation(env, payload, url.searchParams), 201);
+      }
+
+      if (cryptoOperationMatch && request.method === 'DELETE') {
+        await requireDashboardAccess(request, env);
+        return json(await deleteCryptoOperation(env, decodeURIComponent(cryptoOperationMatch[1]), url.searchParams));
+      }
+
+      if (url.pathname === '/api/crypto/alerts' && request.method === 'POST') {
+        await requireDashboardAccess(request, env);
+        const payload = await request.json();
+        return json(await createCryptoAlert(env, payload, url.searchParams), 201);
+      }
+
+      if (cryptoAlertMatch && request.method === 'DELETE') {
+        await requireDashboardAccess(request, env);
+        return json(await deleteCryptoAlert(env, decodeURIComponent(cryptoAlertMatch[1]), url.searchParams));
       }
 
       if (url.pathname === '/api/receipts' && request.method === 'POST') {
@@ -3221,13 +3251,27 @@ async function netWorth(env, params) {
   const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, rate, cycle);
   const fixedSummary = fixedExpensesSummary(fixedExpenses, rate);
   const cash = round(incomePen - expensesPen - fixedSummary.paid);
+  let cryptoSummary = {
+    totalValuePen: 0,
+    totalInvestedPen: 0,
+  };
+
+  try {
+    const crypto = await cryptoPortfolio(env, params, { exchangeRate: rate, refresh: false });
+    cryptoSummary = crypto.summary || cryptoSummary;
+  } catch (error) {
+    console.warn(JSON.stringify({
+      event: 'crypto_net_worth_skipped',
+      message: error.message || String(error),
+    }));
+  }
 
   const investmentValue = round(investments.reduce((total, item) => (
     total + currencyToPen(Number(item.currentValue || 0), item.currency || 'PEN', rate)
-  ), 0));
+  ), 0) + Number(cryptoSummary.totalValuePen || 0));
   const investmentCost = round(investments.reduce((total, item) => (
     total + currencyToPen(Number(item.amount || 0), item.currency || 'PEN', rate)
-  ), 0));
+  ), 0) + Number(cryptoSummary.totalInvestedPen || 0));
   const goalsSaved = round(goals.reduce((total, item) => total + Number(item.ahorrado || 0), 0));
   const debtPending = round(debts
     .filter((item) => item.estado !== 'pagada')

@@ -5,6 +5,7 @@ import { apiEndpoint } from '../../app/api';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatMoney, convertCurrency } from '../../lib/formatters';
 import type { Currency, Investment } from '../../types/dashboard';
+import { CryptoInvestmentsPanel } from './CryptoInvestmentsPanel';
 
 interface Draft {
   id?: string;
@@ -40,6 +41,7 @@ export function InvestmentsSection({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [mode, setMode] = useState<'general' | 'crypto'>('general');
 
   const load = useCallback(async () => {
     if (!authToken) return;
@@ -163,6 +165,33 @@ export function InvestmentsSection({
 
   return (
     <section className="grid gap-3 sm:gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Title>Inversiones</Title>
+          <Text>Capital, cripto y alertas de precio.</Text>
+        </div>
+        <div className="grid grid-cols-2 rounded-tremor-default border border-slate-800 bg-slate-950/50 p-1 text-sm font-semibold sm:w-72">
+          <button
+            type="button"
+            className={`h-9 rounded-tremor-default px-3 transition ${mode === 'general' ? 'bg-emerald-500/15 text-emerald-100' : 'text-slate-400 hover:text-slate-100'}`}
+            onClick={() => setMode('general')}
+          >
+            General
+          </button>
+          <button
+            type="button"
+            className={`h-9 rounded-tremor-default px-3 transition ${mode === 'crypto' ? 'bg-emerald-500/15 text-emerald-100' : 'text-slate-400 hover:text-slate-100'}`}
+            onClick={() => setMode('crypto')}
+          >
+            Cripto
+          </button>
+        </div>
+      </div>
+
+      {mode === 'crypto' ? (
+        <CryptoInvestmentsPanel authToken={authToken} chatId={chatId} exchangeRate={exchangeRate} />
+      ) : (
+        <>
       <div className="grid gap-3 sm:grid-cols-3">
         <SummaryCard label="Invertido" value={formatMoney(totals.invested)} />
         <SummaryCard label="Valor actual" value={formatMoney(totals.value)} />
@@ -233,6 +262,8 @@ export function InvestmentsSection({
           </div>
         </Card>
       </div>
+        </>
+      )}
     </section>
   );
 }
