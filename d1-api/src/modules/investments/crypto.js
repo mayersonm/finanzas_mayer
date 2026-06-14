@@ -274,7 +274,7 @@ async function fetchProviderPrices(env, symbols) {
 
 async function binanceAccountSnapshot(env, symbols, priceMap, exchangeRate) {
   const config = await binanceConfig(env);
-  if (!config.apiKey || !config.apiSecret) {
+  if (!config.apiKey && !config.proxyUrl) {
     return {
       configured: false,
       balances: [],
@@ -346,6 +346,13 @@ async function binanceAccountSnapshot(env, symbols, priceMap, exchangeRate) {
 }
 
 async function fetchBinanceAccount(config) {
+  if (config.proxyUrl && config.proxyKey && (!config.apiKey || !config.apiSecret || config.proxyFirst)) {
+    return fetchBinanceAccountViaProxy(config);
+  }
+  if (!config.apiKey || !config.apiSecret) {
+    throw new Error('BINANCE_API_KEY y BINANCE_API_SECRET requeridos si no usas proxy Fly');
+  }
+
   const query = `timestamp=${Date.now()}&recvWindow=5000`;
   const signature = await hmacSha256Hex(query, config.apiSecret);
   const targetUrl = `${config.apiUrl}/api/v3/account?${query}&signature=${signature}`;
@@ -376,6 +383,11 @@ async function fetchBinanceTickerPrices(config, symbols) {
   const pairs = cleanSymbols.map((symbol) => `${symbol}USDT`);
   const url = new URL(`${config.apiUrl}/api/v3/ticker/price`);
   url.searchParams.set('symbols', JSON.stringify(pairs));
+  if (config.proxyUrl && config.proxyKey && config.proxyFirst) {
+    const proxied = await fetchBinancePublicViaProxy(config, url.toString());
+    return shapeBinanceTickerRows(proxied);
+  }
+
   const response = await fetch(url.toString(), {
     headers: {
       accept: 'application/json',
@@ -396,7 +408,12 @@ async function fetchBinanceTickerPrices(config, symbols) {
   return shapeBinanceTickerRows(data);
 }
 
-async function fetchBinanceAccountViaProxy(config, targetUrl) {
+async function fetchBinanceAccountViaProxy(config, targetUrl = '') {
+  if (!targetUrl) {
+    const data = await binanceProxyJson(config, '/api/binance/account');
+    return data.account || data.data || data;
+  }
+
   const result = await binanceProxyFetch(config, targetUrl, config.apiKey);
   const data = safeJson(result.body);
   if (result.status < 200 || result.status >= 300) {
@@ -440,6 +457,30 @@ async function binanceProxyFetch(config, targetUrl, apiKey) {
     status: Number(body.status || 0),
     body: String(body.body || ''),
   };
+}
+
+async function binanceProxyJson(config, pathname) {
+  const url = proxyEndpoint(config, pathname);
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      'x-proxy-key': config.proxyKey,
+    },
+    signal: timeoutSignal(12000),
+  });
+  const text = await response.text();
+  const body = safeJson(text);
+  if (!response.ok || !body || body.ok === false) {
+    const detail = body?.error || cleanErrorBody(text);
+    throw new Error(detail ? `Binance proxy error: ${detail}` : `Binance proxy HTTP ${response.status}`);
+  }
+  return body;
+}
+
+function proxyEndpoint(config, pathname) {
+  const base = new URL(config.proxyUrl);
+  return new URL(pathname, `${base.protocol}//${base.host}`);
 }
 
 function shapeBinanceTickerRows(data) {
@@ -554,12 +595,15 @@ async function cryptoProviderConfig(env) {
 }
 
 async function binanceConfig(env) {
+  const proxyUrl = String(await getAppSetting(env, 'binance_proxy_url') || env.BINANCE_PROXY_URL || env.GAS_API_URL || '').trim();
+  const proxyFirstRaw = String(await getAppSetting(env, 'binance_proxy_first') || env.BINANCE_PROXY_FIRST || '').trim().toLowerCase();
   return {
     apiUrl: String(await getAppSetting(env, 'binance_api_url') || env.BINANCE_API_URL || 'https://api.binance.com').trim().replace(/\/+$/g, ''),
     apiKey: String(env.BINANCE_API_KEY || '').trim(),
     apiSecret: String(env.BINANCE_API_SECRET || '').trim(),
-    proxyUrl: String(await getAppSetting(env, 'binance_proxy_url') || env.BINANCE_PROXY_URL || env.GAS_API_URL || '').trim(),
+    proxyUrl,
     proxyKey: String(env.BINANCE_PROXY_KEY || env.GAS_API_KEY || '').trim(),
+    proxyFirst: proxyFirstRaw === 'true' || proxyFirstRaw === '1' || Boolean(proxyUrl && proxyUrl.includes('.fly.dev')),
   };
 }
 
