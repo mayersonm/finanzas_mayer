@@ -8,12 +8,17 @@ import { dateFromKey, dateKeyFromParts, daysBetween, formatMonth, localDateKey, 
 import { sha256Hex } from '../shared/crypto.js';
 import { budgetRulesForDashboard, budgetSpendWithRules, classifyCategory, classifyCategoryFromLoadedRules, loadBudgetRules, loadCategoryRules, normalizeBaseCategory, normalizeCategory, normalizeRuleKeyword, safeRuleId } from '../shared/categories.js';
 import { getAppSetting, readJsonCache, setAppSetting, setJsonCache, timeoutSignal } from '../shared/settings-store.js';
-import { changePassword, disableTwoFactor, enableTwoFactor, login, requireAdminKey, requireDashboardAccess, requireDashboardOrAdminAccess, setupTwoFactor, twoFactorStatus, verifyTwoFactorLogin } from '../auth/service.js';
-import { categoryDefinitions, dashboardSettings, disableCategoryDefinition, ensureUserForChat, getUserSettings, linkTelegramUser, normalizeSettingsConfig, profile, updateDashboardSettings, upsertCategoryDefinition, userSettingsToConfig, usersList } from '../modules/settings/service.js';
+import { requireAdminKey, requireDashboardAccess, requireDashboardOrAdminAccess } from '../auth/service.js';
+import { ensureUserForChat, getUserSettings, normalizeSettingsConfig, userSettingsToConfig } from '../modules/settings/service.js';
 import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPlan, monthlyCalendar, netWorthInsights, realExpenses, smartAlerts, smartInsights, weeklyGoalPlan } from '../modules/dashboard/planning.js';
 import { automationCenter } from '../modules/dashboard/automation.js';
 import { advisorResponse } from '../modules/ai/advisor.js';
-import { createCryptoAlert, createCryptoOperation, cryptoPortfolio, deleteCryptoAlert, deleteCryptoOperation } from '../modules/investments/crypto.js';
+import { cryptoPortfolio } from '../modules/investments/crypto.js';
+import { gasConfigRequest } from '../modules/system/gas.js';
+import { appsScriptRoutes } from './routes/apps-script.js';
+import { authRoutes } from './routes/auth.js';
+import { cryptoRoutes } from './routes/crypto.js';
+import { settingsRoutes } from './routes/settings.js';
 
 export default {
   async fetch(request, env) {
@@ -25,8 +30,6 @@ export default {
     const debtMatch = url.pathname.match(/^\/api\/debts\/([^/]+)$/);
     const debtPaymentMatch = url.pathname.match(/^\/api\/debts\/([^/]+)\/payments$/);
     const investmentMatch = url.pathname.match(/^\/api\/investments\/([^/]+)$/);
-    const cryptoOperationMatch = url.pathname.match(/^\/api\/crypto\/operations\/([^/]+)$/);
-    const cryptoAlertMatch = url.pathname.match(/^\/api\/crypto\/alerts\/([^/]+)$/);
 
     if (request.method === 'OPTIONS') {
       return corsResponse(null, 204);
@@ -37,114 +40,21 @@ export default {
         return json(await health(env));
       }
 
-      if (url.pathname === '/api/login' && request.method === 'POST') {
-        const payload = await request.json();
-        return json(await login(env, payload));
-      }
+      const authResponse = await authRoutes(request, env, url);
+      if (authResponse) return authResponse;
 
-      if (url.pathname === '/api/login/2fa' && request.method === 'POST') {
-        const payload = await request.json();
-        return json(await verifyTwoFactorLogin(env, payload));
-      }
+      const settingsResponse = await settingsRoutes(request, env, url);
+      if (settingsResponse) return settingsResponse;
 
-      if (url.pathname === '/api/session' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json({ ok: true, authenticated: true });
-      }
+      const cryptoResponse = await cryptoRoutes(request, env, url);
+      if (cryptoResponse) return cryptoResponse;
 
-      if (url.pathname === '/api/logout' && request.method === 'POST') {
-        return json({ ok: true });
-      }
-
-      if (url.pathname === '/api/password' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        const payload = await request.json();
-        return json(await changePassword(env, payload));
-      }
-
-      if (url.pathname === '/api/2fa/status' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await twoFactorStatus(env));
-      }
-
-      if (url.pathname === '/api/2fa/setup' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        return json(await setupTwoFactor(env));
-      }
-
-      if (url.pathname === '/api/2fa/enable' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        const payload = await request.json();
-        return json(await enableTwoFactor(env, payload));
-      }
-
-      if (url.pathname === '/api/2fa/disable' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        const payload = await request.json();
-        return json(await disableTwoFactor(env, payload));
-      }
-
-      if (url.pathname === '/api/settings' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await dashboardSettings(env, url.searchParams));
-      }
-
-      if (url.pathname === '/api/settings' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        const payload = await request.json();
-        return json(await updateDashboardSettings(env, payload, url.searchParams));
-      }
-
-      if (url.pathname === '/api/profile' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await profile(env, url.searchParams));
-      }
-
-      if (url.pathname === '/api/categories' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await categoryDefinitions(env, url.searchParams));
-      }
-
-      if (url.pathname === '/api/categories' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        const payload = await request.json();
-        return json(await upsertCategoryDefinition(env, payload, url.searchParams), 201);
-      }
-
-      if (url.pathname === '/api/categories/delete' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        const payload = await request.json();
-        return json(await disableCategoryDefinition(env, payload, url.searchParams));
-      }
+      const appsScriptResponse = await appsScriptRoutes(request, env, url);
+      if (appsScriptResponse) return appsScriptResponse;
 
       if (url.pathname === '/api/system-health' && request.method === 'GET') {
         await requireDashboardAccess(request, env);
         return json(await systemHealth(env));
-      }
-
-      if (url.pathname === '/api/apps-script/setup-triggers' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        return json(await gasConfigRequest(env, 'setup_triggers'));
-      }
-
-      if (url.pathname === '/api/apps-script/send-daily-email' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        return json(await gasConfigRequest(env, 'send_daily_email'));
-      }
-
-      if (url.pathname === '/api/apps-script/send-monthly-email' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        return json(await gasConfigRequest(env, 'send_monthly_email', url.searchParams));
-      }
-
-      if (url.pathname === '/api/apps-script/send-yearly-email' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        return json(await gasConfigRequest(env, 'send_yearly_email', url.searchParams));
-      }
-
-      if (url.pathname === '/api/apps-script/send-daily-telegram' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        return json(await gasConfigRequest(env, 'send_daily_telegram', url.searchParams));
       }
 
       if (url.pathname === '/api/exchange-rate' && request.method === 'GET') {
@@ -243,17 +153,6 @@ export default {
       if (url.pathname === '/api/transactions' && request.method === 'GET') {
         await requireDashboardOrAdminAccess(request, env);
         return json(await transactions(env, url.searchParams));
-      }
-
-      if (url.pathname === '/api/users' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await usersList(env));
-      }
-
-      if (url.pathname === '/api/users/link' && request.method === 'POST') {
-        requireAdminKey(request, env);
-        const payload = await request.json();
-        return json(await linkTelegramUser(env, payload), 201);
       }
 
       if (url.pathname === '/api/transactions' && request.method === 'POST') {
@@ -371,33 +270,6 @@ export default {
       if (investmentMatch && request.method === 'DELETE') {
         await requireDashboardAccess(request, env);
         return json(await deleteInvestment(env, decodeURIComponent(investmentMatch[1]), url.searchParams));
-      }
-
-      if (url.pathname === '/api/crypto' && request.method === 'GET') {
-        await requireDashboardAccess(request, env);
-        return json(await cryptoPortfolio(env, url.searchParams));
-      }
-
-      if (url.pathname === '/api/crypto/operations' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        const payload = await request.json();
-        return json(await createCryptoOperation(env, payload, url.searchParams), 201);
-      }
-
-      if (cryptoOperationMatch && request.method === 'DELETE') {
-        await requireDashboardAccess(request, env);
-        return json(await deleteCryptoOperation(env, decodeURIComponent(cryptoOperationMatch[1]), url.searchParams));
-      }
-
-      if (url.pathname === '/api/crypto/alerts' && request.method === 'POST') {
-        await requireDashboardAccess(request, env);
-        const payload = await request.json();
-        return json(await createCryptoAlert(env, payload, url.searchParams), 201);
-      }
-
-      if (cryptoAlertMatch && request.method === 'DELETE') {
-        await requireDashboardAccess(request, env);
-        return json(await deleteCryptoAlert(env, decodeURIComponent(cryptoAlertMatch[1]), url.searchParams));
       }
 
       if (url.pathname === '/api/receipts' && request.method === 'POST') {
@@ -558,28 +430,6 @@ async function systemHealth(env) {
     gasHealth,
     checkedAt: new Date().toISOString(),
   };
-}
-
-async function gasConfigRequest(env, action, extraParams = new URLSearchParams()) {
-  if (!env.GAS_API_URL || !env.GAS_API_KEY) {
-    throw httpError(400, 'Faltan secrets GAS_API_URL o GAS_API_KEY');
-  }
-
-  const url = new URL(env.GAS_API_URL);
-  url.searchParams.set('action', action);
-  url.searchParams.set('key', env.GAS_API_KEY);
-  for (const [key, value] of extraParams.entries()) {
-    url.searchParams.set(key, value);
-  }
-
-  const response = await fetch(url.toString());
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok || data.ok === false) {
-    throw httpError(502, data.error || 'No se pudo leer configuracion desde Apps Script');
-  }
-
-  return data;
 }
 
 function serviceLabel(name) {
