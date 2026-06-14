@@ -101,10 +101,14 @@ function handleDashboardApi(e) {
       return dashJson_(dashAiAdvisor_(params, body));
     }
 
+    if (action === 'binance_proxy') {
+      return dashJson_(dashBinanceProxy_(body, params));
+    }
+
     return dashJson_({
       ok: false,
       error: 'Accion no valida',
-      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email', 'send_monthly_email', 'send_yearly_email', 'send_daily_telegram', 'ai_advisor'],
+      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email', 'send_monthly_email', 'send_yearly_email', 'send_daily_telegram', 'ai_advisor', 'binance_proxy'],
     });
   } catch (err) {
     Logger.log('Dashboard API error: ' + (err && err.stack ? err.stack : err));
@@ -113,6 +117,38 @@ function handleDashboardApi(e) {
       error: String(err && err.message ? err.message : err),
     });
   }
+}
+
+function dashBinanceProxy_(body, params) {
+  const targetUrl = String((body && body.url) || (params && params.url) || '').trim();
+  const apiKey = String((body && body.apiKey) || (params && params.apiKey) || '').trim();
+  if (!targetUrl) throw new Error('Falta url Binance');
+
+  const pathMatch = targetUrl.match(/^https:\/\/api\.binance\.com(\/api\/v3\/(?:account|ticker\/price))(?:\?|$)/);
+  if (!pathMatch) throw new Error('URL Binance no permitida');
+  const targetPath = pathMatch[1];
+
+  const headers = {
+    accept: 'application/json',
+    'User-Agent': 'FinanzasMayesonAppsScript/1.0',
+  };
+  if (apiKey && targetPath === '/api/v3/account') {
+    headers['X-MBX-APIKEY'] = apiKey;
+  }
+
+  const resp = UrlFetchApp.fetch(targetUrl, {
+    method: 'get',
+    headers: headers,
+    muteHttpExceptions: true,
+  });
+
+  return {
+    ok: true,
+    status: resp.getResponseCode(),
+    body: resp.getContentText(),
+    source: 'apps_script_binance_proxy',
+    fetchedAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
+  };
 }
 
 function dashDashboardData_(params) {
