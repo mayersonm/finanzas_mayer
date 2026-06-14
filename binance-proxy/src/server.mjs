@@ -23,6 +23,13 @@ const server = http.createServer(async (request, response) => {
       return send(response, 405, { ok: false, error: 'Method not allowed' });
     }
 
+    if (url.pathname === '/' && url.searchParams.get('action') === 'binance_proxy') {
+      if (!isAuthorized(request, url)) {
+        return send(response, 401, { ok: false, error: 'Unauthorized' });
+      }
+      return await legacyProxy(request, response, url);
+    }
+
     if (url.pathname === '/' || url.pathname === '/health') {
       return send(response, 200, {
         ok: true,
