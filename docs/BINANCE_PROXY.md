@@ -10,10 +10,10 @@ Por eso la firma HMAC, la API key y el endpoint estan bien. El problema es la re
 
 ## Arquitectura recomendada sin tunel temporal
 
-Usar un proxy propio en un VPS con IP publica fija:
+Usar un proxy propio con IP publica fija. La opcion elegida para este proyecto es Fly.io con static egress IP:
 
 ```txt
-Dashboard -> Worker -> VPS proxy -> Binance
+Dashboard -> Worker -> Fly.io proxy -> Binance
 ```
 
 Ventajas:
@@ -25,12 +25,17 @@ Ventajas:
 
 ## Proxy incluido
 
-El repo trae dos proxies locales en `tools/`:
+El repo trae un proxy deployable en Fly:
+
+- `binance-proxy/`
+- Guia completa: `docs/FLY_BINANCE_PROXY.md`
+
+Tambien hay dos proxies locales en `tools/` para pruebas:
 
 - `tools/binance-proxy.mjs` para Node.js.
 - `tools/binance_proxy.py` para Python.
 
-El recomendado es Node.js porque no requiere dependencias externas.
+El recomendado para produccion es `binance-proxy/` en Fly.io.
 
 ## Variables del proxy
 
@@ -41,6 +46,15 @@ BINANCE_PROXY_PORT=8789
 ```
 
 En VPS se debe ejecutar con HTTPS delante, por ejemplo Nginx/Caddy o el proxy del proveedor.
+
+En Fly.io se usa el HTTPS propio de Fly y una static egress IP:
+
+```bash
+fly ips allocate-egress --app finanzas-mayeson-binance-proxy -r gru
+fly ips list --app finanzas-mayeson-binance-proxy
+```
+
+La IPv4 egress que aparezca en `fly ips list` es la que debe ir en Binance API Management.
 
 ## Worker
 
@@ -54,10 +68,18 @@ npx wrangler@4.100.0 secret put BINANCE_PROXY_KEY
 `BINANCE_PROXY_URL` debe ser la URL publica del VPS, por ejemplo:
 
 ```txt
-https://binance-proxy.tudominio.com
+https://finanzas-mayeson-binance-proxy.fly.dev
 ```
 
 `BINANCE_PROXY_KEY` debe ser la misma clave configurada en el proxy.
+
+Con Fly, el Worker puede consultar el proxy nuevo directamente y las claves de Binance pueden vivir solo en Fly como secrets:
+
+```bash
+fly secrets set BINANCE_API_KEY="..."
+fly secrets set BINANCE_API_SECRET="..."
+fly secrets set PROXY_KEY="..."
+```
 
 ## Seguridad
 
