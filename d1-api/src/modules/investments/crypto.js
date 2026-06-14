@@ -384,7 +384,7 @@ async function fetchBinanceTickerPrices(config, symbols) {
   const url = new URL(`${config.apiUrl}/api/v3/ticker/price`);
   url.searchParams.set('symbols', JSON.stringify(pairs));
   if (config.proxyUrl && config.proxyKey && config.proxyFirst) {
-    const proxied = await fetchBinancePublicViaProxy(config, url.toString());
+    const proxied = await binanceProxyTicker(config, cleanSymbols);
     return shapeBinanceTickerRows(proxied);
   }
 
@@ -433,6 +433,13 @@ async function fetchBinancePublicViaProxy(config, targetUrl) {
   return data;
 }
 
+async function binanceProxyTicker(config, symbols) {
+  const endpoint = proxyEndpoint(config, '/api/binance/ticker');
+  endpoint.searchParams.set('symbols', symbols.join(','));
+  const data = await binanceProxyJson(config, endpoint);
+  return data.data || [];
+}
+
 async function binanceProxyFetch(config, targetUrl, apiKey) {
   const url = new URL(config.proxyUrl);
   url.searchParams.set('action', 'binance_proxy');
@@ -460,7 +467,7 @@ async function binanceProxyFetch(config, targetUrl, apiKey) {
 }
 
 async function binanceProxyJson(config, pathname) {
-  const url = proxyEndpoint(config, pathname);
+  const url = pathname instanceof URL ? pathname : proxyEndpoint(config, pathname);
   const response = await fetch(url.toString(), {
     method: 'GET',
     headers: {
