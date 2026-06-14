@@ -50,14 +50,16 @@ export async function cryptoPortfolio(env, params, options = {}) {
   const priceMap = Object.fromEntries(prices.map((item) => [item.symbol, item]));
   const positions = buildPositions(operations, priceMap, exchangeRate);
   const binance = await binanceAccountSnapshot(env, symbols, priceMap, exchangeRate);
+  const visiblePrices = mergePrices(prices, binance.prices || []);
+  const visiblePriceMap = Object.fromEntries(visiblePrices.map((item) => [item.symbol, item]));
   const summary = buildSummary(positions, exchangeRate, binance);
-  const enrichedAlerts = alerts.map((alert) => alertShape(alert, priceMap[alert.symbol]));
+  const enrichedAlerts = alerts.map((alert) => alertShape(alert, visiblePriceMap[alert.symbol]));
 
   return {
     ok: true,
     exchangeRate,
     cacheMinutes: await cryptoCacheMinutes(env),
-    prices,
+    prices: visiblePrices,
     positions,
     operations: operations.map(operationShape),
     alerts: enrichedAlerts,
@@ -204,6 +206,20 @@ async function cryptoPrices(env, symbols, { refresh = false } = {}) {
         symbols: toFetch,
         message: error.message || String(error),
       }));
+
+      try {
+        const binanceConfigValue = await binanceConfig(env);
+        if (binanceConfigValue.proxyUrl && binanceConfigValue.proxyKey) {
+          fetched = await fetchBinanceTickerPrices(binanceConfigValue, toFetch);
+          await savePriceCache(env, fetched);
+        }
+      } catch (binanceError) {
+        console.warn(JSON.stringify({
+          event: 'crypto_price_binance_fallback_failed',
+          symbols: toFetch,
+          message: binanceError.message || String(binanceError),
+        }));
+      }
     }
   }
 
@@ -324,6 +340,7 @@ async function binanceAccountSnapshot(env, symbols, priceMap, exchangeRate) {
       configured: true,
       accountType: account.accountType || 'SPOT',
       balances: shapedBalances,
+      prices: fetchedPrices.map(priceShape),
       summary: {
         assets: shapedBalances.length,
         totalValueUsd,
@@ -340,6 +357,7 @@ async function binanceAccountSnapshot(env, symbols, priceMap, exchangeRate) {
       configured: true,
       error: binanceFriendlyError(error),
       balances: [],
+      prices: [],
       summary: emptyBinanceSummary(),
     };
   }
@@ -507,6 +525,29 @@ function shapeBinanceTickerRows(data) {
       };
     })
     .filter((item) => item.symbol && item.priceUsd > 0);
+}
+
+function mergePrices(primary = [], secondary = []) {
+  const map = new Map();
+  for (const item of primary || []) {
+    const shaped = priceShape(item);
+    if (shaped.symbol) map.set(shaped.symbol, shaped);
+  }
+  for (const item of secondary || []) {
+    const shaped = priceShape(item);
+    if (!shaped.symbol || !shaped.priceUsd) continue;
+    const current = map.get(shaped.symbol);
+    if (!current || !current.priceUsd || current.source === 'sin precio') {
+      map.set(shaped.symbol, shaped);
+    }
+  }
+  return [...map.values()].sort((a, b) => {
+    const defaultOrder = DEFAULT_SYMBOLS.indexOf(a.symbol) - DEFAULT_SYMBOLS.indexOf(b.symbol);
+    if (DEFAULT_SYMBOLS.includes(a.symbol) && DEFAULT_SYMBOLS.includes(b.symbol)) return defaultOrder;
+    if (DEFAULT_SYMBOLS.includes(a.symbol)) return -1;
+    if (DEFAULT_SYMBOLS.includes(b.symbol)) return 1;
+    return a.symbol.localeCompare(b.symbol);
+  });
 }
 
 async function fetchCoinGeckoPrices(config, symbols) {
