@@ -3,6 +3,7 @@ import { requireDashboardAccess } from '../../auth/service.js';
 import {
   closePaperOrder,
   decideTradingSignal,
+  runPaperScalper,
   runTradingBot,
   tradingDashboard,
   upsertTradingStrategy,
@@ -20,6 +21,11 @@ export async function tradingRoutes(request, env, url) {
   if (url.pathname === '/api/trading/run' && request.method === 'POST') {
     await requireDashboardAccess(request, env);
     return json(await runTradingBot(env, url.searchParams, await safeJson(request)));
+  }
+
+  if (url.pathname === '/api/trading/scalper/run' && request.method === 'POST') {
+    await requireDashboardAccess(request, env);
+    return json(await runPaperScalper(env, url.searchParams, await safeJson(request)));
   }
 
   if (url.pathname === '/api/trading/strategy' && request.method === 'POST') {
