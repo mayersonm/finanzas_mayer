@@ -12,6 +12,7 @@ import {
 import { apiEndpoint } from '../../app/api';
 import { EmptyState } from '../../components/common/EmptyState';
 import type { WorkItem, WorkPriority, WorkStatus, WorkSummary } from '../../types/dashboard';
+import { WorkDetailView } from './WorkDetailView';
 
 interface Draft {
   id?: string;
@@ -36,6 +37,8 @@ type WorkResponse = {
   summary?: WorkSummary;
   error?: string;
 };
+
+type WorkViewMode = 'board' | 'detail';
 
 const emptyDraft: Draft = {
   title: '',
@@ -80,6 +83,8 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
   const [savingTimeline, setSavingTimeline] = useState(false);
   const [draggingId, setDraggingId] = useState('');
   const [dropTarget, setDropTarget] = useState<WorkStatus | ''>('');
+  const [viewMode, setViewMode] = useState<WorkViewMode>('board');
+  const [selectedDetailId, setSelectedDetailId] = useState('');
   const [timelineDraft, setTimelineDraft] = useState<TimelineDraft>(() => ({ date: todayInputDate(), message: '' }));
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -121,6 +126,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
   }, [load]);
 
   const startEdit = (item: WorkItem) => {
+    setViewMode('board');
     setDraft({
       id: item.id,
       title: item.title,
@@ -135,6 +141,13 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
     setMessage('');
     setError('');
     setTimelineDraft({ date: todayInputDate(), message: '' });
+  };
+
+  const openDetails = (item: WorkItem) => {
+    setSelectedDetailId(item.id);
+    setViewMode('detail');
+    setMessage('');
+    setError('');
   };
 
   const resetDraft = () => {
@@ -199,6 +212,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
       const nextItems = items.filter((row) => row.id !== item.id);
       setItems(nextItems);
       setSummary(summarize(nextItems));
+      if (selectedDetailId === item.id) setSelectedDetailId('');
       setMessage('Trabajo eliminado.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo eliminar');
@@ -324,10 +338,46 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
             <SummaryTile label="Alta prioridad" value={summary.highPriority} tone="rose" />
           </div>
         </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={`inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default border px-3 text-xs font-semibold transition ${
+              viewMode === 'board'
+                ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-100'
+                : 'border-slate-800 bg-slate-900/40 text-slate-400 hover:border-slate-700 hover:bg-slate-900/70 hover:text-slate-100'
+            }`}
+            onClick={() => setViewMode('board')}
+          >
+            <RiCheckboxCircleLine className="h-4 w-4" />
+            Tablero
+          </button>
+          <button
+            type="button"
+            className={`inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default border px-3 text-xs font-semibold transition ${
+              viewMode === 'detail'
+                ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-100'
+                : 'border-slate-800 bg-slate-900/40 text-slate-400 hover:border-slate-700 hover:bg-slate-900/70 hover:text-slate-100'
+            }`}
+            onClick={() => setViewMode('detail')}
+          >
+            <RiEditLine className="h-4 w-4" />
+            Detalle
+          </button>
+        </div>
         {error ? <div className="mt-4 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</div> : null}
         {message ? <div className="mt-4 rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{message}</div> : null}
       </Card>
 
+      {viewMode === 'detail' ? (
+        <WorkDetailView
+          items={items}
+          loading={loading}
+          selectedItemId={selectedDetailId}
+          onSelectItem={setSelectedDetailId}
+          onEdit={startEdit}
+          onDelete={(item) => void remove(item)}
+        />
+      ) : (
       <div className="grid gap-4 xl:grid-cols-[22rem_minmax(0,1fr)]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-5">
           <div className="flex items-start justify-between gap-3">
@@ -421,11 +471,13 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
               }}
               onDrop={(beforeId) => void moveItem(column.id, beforeId)}
               onEdit={startEdit}
+              onOpenDetails={openDetails}
               onDelete={(item) => void remove(item)}
             />
           ))}
         </div>
       </div>
+      )}
     </section>
   );
 }
@@ -441,6 +493,7 @@ function KanbanColumn({
   onDragOver,
   onDrop,
   onEdit,
+  onOpenDetails,
   onDelete,
 }: {
   column: (typeof columns)[number];
@@ -453,6 +506,7 @@ function KanbanColumn({
   onDragOver: (event: DragEvent<HTMLDivElement>) => void;
   onDrop: (beforeId?: string) => void;
   onEdit: (item: WorkItem) => void;
+  onOpenDetails: (item: WorkItem) => void;
   onDelete: (item: WorkItem) => void;
 }) {
   const toneClass = {
@@ -490,6 +544,7 @@ function KanbanColumn({
             onDragEnd={onDragEnd}
             onDropBefore={() => onDrop(item.id)}
             onEdit={() => onEdit(item)}
+            onOpenDetails={() => onOpenDetails(item)}
             onDelete={() => onDelete(item)}
           />
         )) : (
@@ -507,6 +562,7 @@ function WorkCard({
   onDragEnd,
   onDropBefore,
   onEdit,
+  onOpenDetails,
   onDelete,
 }: {
   item: WorkItem;
@@ -515,6 +571,7 @@ function WorkCard({
   onDragEnd: () => void;
   onDropBefore: () => void;
   onEdit: () => void;
+  onOpenDetails: () => void;
   onDelete: () => void;
 }) {
   const blocked = Boolean(item.blockers);
@@ -590,20 +647,16 @@ function WorkCard({
       ) : null}
 
       {item.timeline?.length ? (
-        <div className="mt-3 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-2.5">
-          <div className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-slate-500">Linea de tiempo</div>
-          <div className="grid gap-2">
-            {item.timeline.slice(0, 4).map((event) => (
-              <div key={event.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 text-xs">
-                <span className="pt-0.5 font-semibold text-emerald-300">{formatDate(event.eventDate)}</span>
-                <span className="relative border-l border-slate-700 pl-3 leading-5 text-slate-400 before:absolute before:-left-[4.5px] before:top-1.5 before:h-2 before:w-2 before:rounded-full before:bg-emerald-400">
-                  <b className="mr-1 text-slate-200">{timelineTypeLabel(event.type)}:</b>
-                  {event.message}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <button
+          type="button"
+          className="mt-3 flex w-full items-center justify-between gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-2.5 text-left text-xs text-slate-400 transition hover:border-slate-700 hover:bg-slate-900/60 hover:text-slate-100"
+          onClick={onOpenDetails}
+        >
+          <span className="line-clamp-1">
+            {item.timeline.length} hito{item.timeline.length === 1 ? '' : 's'} en linea de tiempo
+          </span>
+          <span className="shrink-0 font-semibold text-emerald-300">Ver</span>
+        </button>
       ) : null}
     </article>
   );
@@ -694,17 +747,6 @@ function formatDate(value?: string) {
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function timelineTypeLabel(type: string) {
-  if (type === 'created') return 'Creado';
-  if (type === 'status') return 'Estado';
-  if (type === 'notes') return 'Notas';
-  if (type === 'blocker') return 'Bloqueo';
-  if (type === 'unblocked') return 'Desbloqueo';
-  if (type === 'due_date') return 'Fecha';
-  if (type === 'updated') return 'Cambio';
-  return 'Nota';
 }
 
 function todayInputDate() {
