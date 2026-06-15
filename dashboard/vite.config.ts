@@ -21,12 +21,16 @@ export default defineConfig({
           if (
             id.includes('node_modules/@tremor/react') ||
             id.includes('node_modules/@headlessui/react') ||
-            id.includes('node_modules/recharts') ||
-            id.includes('node_modules/d3-') ||
             id.includes('node_modules/clsx') ||
             id.includes('node_modules/tailwind-merge')
           ) {
-            return 'tremor';
+            return 'tremor-ui';
+          }
+          if (id.includes('node_modules/recharts')) {
+            return 'charts';
+          }
+          if (id.includes('node_modules/d3-')) {
+            return 'd3';
           }
         },
       },
