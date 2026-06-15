@@ -2,7 +2,6 @@ import { getChatId } from '../../shared/request.js';
 import { round, currencyToPen } from '../../shared/money.js';
 import { localDateKey, localIso, payCycleFromDate } from '../../shared/dates.js';
 import { fixedExpensesSummary, netWorthInsights } from '../dashboard/planning.js';
-import { cryptoPortfolio } from '../investments/crypto.js';
 import { investmentsList } from '../investments/service.js';
 import { exchangeRate } from '../system/exchange-rate.js';
 import { fixedExpensesList } from '../commitments/fixed-expenses.js';
@@ -35,27 +34,13 @@ export async function netWorth(env, params) {
   const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, rate, cycle);
   const fixedSummary = fixedExpensesSummary(fixedExpenses, rate);
   const cash = round(incomePen - expensesPen - fixedSummary.paid);
-  let cryptoSummary = {
-    totalValuePen: 0,
-    totalInvestedPen: 0,
-  };
-
-  try {
-    const crypto = await cryptoPortfolio(env, params, { exchangeRate: rate, refresh: false });
-    cryptoSummary = crypto.summary || cryptoSummary;
-  } catch (error) {
-    console.warn(JSON.stringify({
-      event: 'crypto_net_worth_skipped',
-      message: error.message || String(error),
-    }));
-  }
 
   const investmentValue = round(investments.reduce((total, item) => (
     total + currencyToPen(Number(item.currentValue || 0), item.currency || 'PEN', rate)
-  ), 0) + Number(cryptoSummary.totalCryptoValuePen ?? cryptoSummary.totalValuePen ?? 0));
+  ), 0));
   const investmentCost = round(investments.reduce((total, item) => (
     total + currencyToPen(Number(item.amount || 0), item.currency || 'PEN', rate)
-  ), 0) + Number(cryptoSummary.totalInvestedPen || 0));
+  ), 0));
   const goalsSaved = round(goals.reduce((total, item) => total + Number(item.ahorrado || 0), 0));
   const debtPending = round(debts
     .filter((item) => item.estado !== 'pagada')
