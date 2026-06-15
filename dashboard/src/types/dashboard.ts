@@ -214,29 +214,6 @@ export interface CryptoSuggestion {
   message: string;
 }
 
-export interface CryptoBinanceBalance {
-  asset: string;
-  free: number;
-  locked: number;
-  total: number;
-  priceUsd: number;
-  valueUsd: number;
-  valuePen: number;
-}
-
-export interface CryptoBinanceSnapshot {
-  configured: boolean;
-  accountType?: string;
-  error?: string;
-  balances: CryptoBinanceBalance[];
-  summary: {
-    assets: number;
-    totalValueUsd: number;
-    totalValuePen: number;
-  };
-  updatedAt?: string;
-}
-
 export interface CryptoPortfolioData {
   ok?: boolean;
   exchangeRate: number;
@@ -253,13 +230,10 @@ export interface CryptoPortfolioData {
     totalInvestedPen: number;
     totalValuePen: number;
     gainPen: number;
-    binanceValueUsd?: number;
-    binanceValuePen?: number;
     totalCryptoValueUsd?: number;
     totalCryptoValuePen?: number;
     positions: number;
   };
-  binance?: CryptoBinanceSnapshot;
   suggestions: CryptoSuggestion[];
   updatedAt?: string;
   error?: string;
