@@ -1,5 +1,6 @@
 import {
   CalendarIcon,
+  BriefcaseIcon,
   CardIcon,
   CoinsIcon,
   DashboardIcon,
@@ -19,6 +20,7 @@ export const tabs: DashboardTab[] = [
   { id: 'compromisos', label: 'Compromisos', icon: CardIcon },
   { id: 'dinero', label: 'Dinero Libre', icon: CoinsIcon },
   { id: 'calendario', label: 'Calendario', icon: CalendarIcon },
+  { id: 'trabajo', label: 'Trabajo', icon: BriefcaseIcon },
   { id: 'patrimonio', label: 'Patrimonio', icon: ScaleIcon },
   { id: 'inversiones', label: 'Inversiones', icon: LineChartIcon },
   { id: 'ia', label: 'IA', icon: SparklesIcon },

@@ -19,6 +19,7 @@ const InvestmentsSection = lazy(() => import('./features/investments/Investments
 const MovementsSection = lazy(() => import('./features/movements/MovementsSection').then((mod) => ({ default: mod.MovementsSection })));
 const NetWorthSection = lazy(() => import('./features/netWorth/NetWorthSection').then((mod) => ({ default: mod.NetWorthSection })));
 const SettingsSection = lazy(() => import('./features/settings/SettingsSection').then((mod) => ({ default: mod.SettingsSection })));
+const WorkSection = lazy(() => import('./features/work/WorkSection').then((mod) => ({ default: mod.WorkSection })));
 
 type Theme = 'light' | 'dark';
 
@@ -531,6 +532,7 @@ export default function App() {
               {tab === 'compromisos' ? <CommitmentsSection data={data} realExpenses={realExpenses} exchangeRate={exchangeRate} authToken={token} chatId={selectedChatId} onChanged={() => void fetchData()} /> : null}
               {tab === 'dinero' ? <FreeMoneySection data={data} /> : null}
               {tab === 'calendario' ? <CalendarSection data={data} authToken={token} chatId={selectedChatId} /> : null}
+              {tab === 'trabajo' ? <WorkSection authToken={token} chatId={selectedChatId} /> : null}
               {tab === 'patrimonio' ? <NetWorthSection authToken={token} chatId={selectedChatId} /> : null}
               {tab === 'inversiones' ? <InvestmentsSection authToken={token} chatId={selectedChatId} exchangeRate={exchangeRate} /> : null}
               {tab === 'ia' ? <AiSection data={data} authToken={token} chatId={selectedChatId} /> : null}
