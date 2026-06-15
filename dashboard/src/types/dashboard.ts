@@ -153,6 +153,15 @@ export interface Investment {
 export type WorkStatus = 'todo' | 'in_progress' | 'done';
 export type WorkPriority = 'low' | 'medium' | 'high';
 
+export interface WorkTimelineEvent {
+  id: string;
+  itemId?: string;
+  type: 'created' | 'updated' | 'status' | 'notes' | 'blocker' | 'unblocked' | 'due_date' | 'note' | string;
+  message: string;
+  eventDate: string;
+  createdAt?: string;
+}
+
 export interface WorkItem {
   id: string;
   title: string;
@@ -164,6 +173,7 @@ export interface WorkItem {
   dueDate?: string;
   tags?: string[];
   sortOrder: number;
+  timeline?: WorkTimelineEvent[];
   createdAt?: string;
   updatedAt?: string;
 }
