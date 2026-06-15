@@ -146,15 +146,15 @@ function construirHtmlMensualEmail_(data) {
         const color = c.delta > 0 ? '#dc2626' : c.delta < 0 ? '#16a34a' : '#6b7280';
         return [
           '<tr>',
-          '<td>' + escEmail_(capitalizar(c.cat)) + '</td>',
-          '<td align="right"><strong>' + fmtEmail_(c.actual) + '</strong></td>',
-          '<td align="right">' + fmtEmail_(c.anterior) + '</td>',
-          '<td align="right" style="color:' + color + '"><strong>' + fmtDeltaMontoSimpleEmail_(c.delta) + '</strong></td>',
-          '<td align="right">' + fmtPctEmail_(c.participacion) + '</td>',
+          celdaEmail_(escEmail_(capitalizar(c.cat)), 'left', false),
+          celdaEmail_(fmtEmail_(c.actual), 'right', true),
+          celdaEmail_(fmtEmail_(c.anterior), 'right', false),
+          celdaEmail_(fmtDeltaMontoSimpleEmail_(c.delta), 'right', true, color),
+          celdaEmail_(fmtPctEmail_(c.participacion), 'right', false),
           '</tr>',
         ].join('');
       }).join('')
-    : '<tr><td colspan="5" style="color:#6b7280">Sin gastos por categoria en el periodo.</td></tr>';
+    : '<tr><td colspan="5" style="padding:12px 8px;color:#64748b">Sin gastos por categoria en el periodo.</td></tr>';
 
   const presupuestosHtml = data.presupuestos.length
     ? data.presupuestos.map(function (p) {
@@ -172,20 +172,13 @@ function construirHtmlMensualEmail_(data) {
 
   const iaHtml = escEmail_(data.sugerenciaIA).replace(/\n/g, '<br>');
   const mesesComparadosHtml = [
-    '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse">',
-    '<tr><td style="color:#6b7280">Periodo actual</td><td align="right"><strong>' + escEmail_(data.nombrePeriodo) + '</strong></td></tr>',
-    '<tr><td style="color:#6b7280">Periodo comparado</td><td align="right"><strong>' + escEmail_(data.nombreAnterior) + '</strong></td></tr>',
-    '</table>',
+    captionEmail_('Periodo actual', data.nombrePeriodo),
+    captionEmail_('Periodo comparado', data.nombreAnterior),
+    captionEmail_('Rango', data.periodo.rangeLabel || ''),
   ].join('');
 
-  return [
-    '<div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827">',
-    '<div style="max-width:760px;margin:0 auto;padding:24px">',
-    '<div style="background:#111827;color:#f9fafb;border-radius:14px;padding:22px;margin-bottom:16px">',
-    '<div style="font-size:12px;text-transform:uppercase;color:#9ca3af">Cierre financiero mensual</div>',
-    '<h1 style="margin:6px 0 0;font-size:24px">' + escEmail_(data.nombrePeriodo) + '</h1>',
-    '<div style="font-size:13px;color:#d1d5db;margin-top:8px">Comparativa: ' + escEmail_(data.nombrePeriodo) + ' vs ' + escEmail_(data.nombreAnterior) + '</div>',
-    '</div>',
+  return emailShell_([
+    emailHero_('Cierre financiero mensual', data.nombrePeriodo, 'Comparativa del ciclo, presupuesto, categorias y lectura IA.', data.periodo.rangeLabel || data.nombreAnterior),
     cardsEmail_([
       ['Ingresos', fmtEmail_(data.totalesPeriodo.ingresos), '#16a34a'],
       ['Gastos', fmtEmail_(data.totalesPeriodo.gastos), '#dc2626'],
@@ -193,15 +186,13 @@ function construirHtmlMensualEmail_(data) {
       ['Ahorro estimado', fmtPctEmail_(ahorroPct), ahorroPct >= 0 ? '#2563eb' : '#dc2626'],
     ]),
     seccionEmail_('Meses comparados', mesesComparadosHtml),
-    seccionEmail_('Comparativo mensual', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Indicador</th><th align="right">' + escEmail_(data.nombrePeriodo) + '</th><th align="right">' + escEmail_(data.nombreAnterior) + '</th><th align="right">Cambio</th></tr>' + comparativoRows + '</table>'),
-    seccionEmail_('Gastos por categoria', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Categoria</th><th align="right">' + escEmail_(data.nombrePeriodo) + '</th><th align="right">' + escEmail_(data.nombreAnterior) + '</th><th align="right">Cambio</th><th align="right">Participacion</th></tr>' + categoriasRows + '</table>'),
+    seccionEmail_('Comparativo mensual', tablaEmail_('<tr>' + thEmail_('Indicador') + thEmail_(data.nombrePeriodo, 'right') + thEmail_(data.nombreAnterior, 'right') + thEmail_('Cambio', 'right') + '</tr>' + comparativoRows)),
+    seccionEmail_('Gastos por categoria', tablaEmail_('<tr>' + thEmail_('Categoria') + thEmail_(data.nombrePeriodo, 'right') + thEmail_(data.nombreAnterior, 'right') + thEmail_('Cambio', 'right') + thEmail_('Participacion', 'right') + '</tr>' + categoriasRows)),
     seccionEmail_('Presupuestos', presupuestosHtml),
     seccionEmail_('Sugerencia financiera IA', '<div style="line-height:1.55;font-size:14px">' + iaHtml + '</div><p style="font-size:12px;color:#6b7280;margin:14px 0 0">Contenido educativo para organizacion personal. No reemplaza asesoria financiera profesional.</p>'),
     seccionEmail_('Senal para alerta anual', '<p style="margin:0;line-height:1.55"><strong>' + escEmail_(data.alertaAnualBase.nivel) + ':</strong> ' + escEmail_(data.alertaAnualBase.texto) + '</p>'),
-    '<p style="font-size:12px;color:#6b7280;text-align:center;margin-top:18px">Archivo Excel adjunto generado el ' + escEmail_(data.generadoEn) + '.</p>',
-    '</div>',
-    '</div>',
-  ].join('');
+    footerEmail_('Archivo Excel adjunto generado el ' + data.generadoEn + '.'),
+  ].join(''), 760);
 }
 
 function filaComparativoMensualEmail_(label, actual, anterior, money) {
@@ -210,10 +201,10 @@ function filaComparativoMensualEmail_(label, actual, anterior, money) {
 
   return [
     '<tr>',
-    '<td>' + escEmail_(label) + '</td>',
-    '<td align="right"><strong>' + (money ? fmtSignedEmail_(actual) : String(actual || 0)) + '</strong></td>',
-    '<td align="right">' + (money ? fmtSignedEmail_(anterior) : String(anterior || 0)) + '</td>',
-    '<td align="right" style="color:' + color + '"><strong>' + (money ? fmtDeltaMontoSimpleEmail_(delta) : fmtDeltaNumeroSimpleEmail_(delta)) + '</strong></td>',
+    celdaEmail_(escEmail_(label), 'left', false),
+    celdaEmail_(money ? fmtSignedEmail_(actual) : String(actual || 0), 'right', true),
+    celdaEmail_(money ? fmtSignedEmail_(anterior) : String(anterior || 0), 'right', false),
+    celdaEmail_(money ? fmtDeltaMontoSimpleEmail_(delta) : fmtDeltaNumeroSimpleEmail_(delta), 'right', true, color),
     '</tr>',
   ].join('');
 }

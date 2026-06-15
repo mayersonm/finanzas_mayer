@@ -109,10 +109,9 @@ function construirHtmlAnualEmail_(data) {
   const iaHtml = escEmail_(data.sugerenciaIA).replace(/\n/g, '<br>');
 
   const periodosHtml = [
-    '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse">',
-    '<tr><td style="color:#6b7280">Anio actual</td><td align="right"><strong>' + escEmail_(data.year) + '</strong></td></tr>',
-    '<tr><td style="color:#6b7280">Anio comparado</td><td align="right"><strong>' + escEmail_(data.previousYear) + '</strong></td></tr>',
-    '</table>',
+    captionEmail_('Anio actual', data.year),
+    captionEmail_('Anio comparado', data.previousYear),
+    captionEmail_('Ciclos revisados', String(data.months.length)),
   ].join('');
 
   const comparativoRows = [
@@ -126,11 +125,11 @@ function construirHtmlAnualEmail_(data) {
     const color = m.balance >= 0 ? '#16a34a' : '#dc2626';
     return [
       '<tr>',
-      '<td>' + escEmail_(m.periodo || m.nombre) + '</td>',
-      '<td align="right">' + fmtEmail_(m.ingresos) + '</td>',
-      '<td align="right">' + fmtEmail_(m.gastos) + '</td>',
-      '<td align="right" style="color:' + color + '"><strong>' + fmtSignedEmail_(m.balance) + '</strong></td>',
-      '<td align="right">' + m.movimientos + '</td>',
+      celdaEmail_(escEmail_(m.periodo || m.nombre), 'left', false),
+      celdaEmail_(fmtEmail_(m.ingresos), 'right', false),
+      celdaEmail_(fmtEmail_(m.gastos), 'right', false),
+      celdaEmail_(fmtSignedEmail_(m.balance), 'right', true, color),
+      celdaEmail_(String(m.movimientos), 'right', false),
       '</tr>',
     ].join('');
   }).join('');
@@ -140,23 +139,17 @@ function construirHtmlAnualEmail_(data) {
         const color = c.delta > 0 ? '#dc2626' : c.delta < 0 ? '#16a34a' : '#6b7280';
         return [
           '<tr>',
-          '<td>' + escEmail_(capitalizar(c.cat)) + '</td>',
-          '<td align="right"><strong>' + fmtEmail_(c.actual) + '</strong></td>',
-          '<td align="right">' + fmtEmail_(c.anterior) + '</td>',
-          '<td align="right" style="color:' + color + '"><strong>' + fmtDeltaMontoSimpleEmail_(c.delta) + '</strong></td>',
+          celdaEmail_(escEmail_(capitalizar(c.cat)), 'left', false),
+          celdaEmail_(fmtEmail_(c.actual), 'right', true),
+          celdaEmail_(fmtEmail_(c.anterior), 'right', false),
+          celdaEmail_(fmtDeltaMontoSimpleEmail_(c.delta), 'right', true, color),
           '</tr>',
         ].join('');
       }).join('')
-    : '<tr><td colspan="4" style="color:#6b7280">Sin categorias de gasto.</td></tr>';
+    : '<tr><td colspan="4" style="padding:12px 8px;color:#64748b">Sin categorias de gasto.</td></tr>';
 
-  return [
-    '<div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827">',
-    '<div style="max-width:780px;margin:0 auto;padding:24px">',
-    '<div style="background:#111827;color:#f9fafb;border-radius:14px;padding:22px;margin-bottom:16px">',
-    '<div style="font-size:12px;text-transform:uppercase;color:#9ca3af">Alerta financiera anual</div>',
-    '<h1 style="margin:6px 0 0;font-size:24px">' + escEmail_(data.year) + '</h1>',
-    '<div style="font-size:13px;color:#d1d5db;margin-top:8px">Comparativa: ' + escEmail_(data.year) + ' vs ' + escEmail_(data.previousYear) + '</div>',
-    '</div>',
+  return emailShell_([
+    emailHero_('Alerta financiera anual', String(data.year), 'Resumen del anio, ciclos negativos, categorias principales y sugerencia IA.', String(data.year) + ' vs ' + String(data.previousYear)),
     cardsEmail_([
       ['Ingresos', fmtEmail_(data.totals.ingresos), '#16a34a'],
       ['Gastos', fmtEmail_(data.totals.gastos), '#dc2626'],
@@ -164,15 +157,13 @@ function construirHtmlAnualEmail_(data) {
       ['Ciclos negativos', String(monthsNegative), monthsNegative > 0 ? '#dc2626' : '#16a34a'],
     ]),
     seccionEmail_('Periodos comparados', periodosHtml),
-    seccionEmail_('Comparativo anual', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Indicador</th><th align="right">' + escEmail_(data.year) + '</th><th align="right">' + escEmail_(data.previousYear) + '</th><th align="right">Cambio</th></tr>' + comparativoRows + '</table>'),
+    seccionEmail_('Comparativo anual', tablaEmail_('<tr>' + thEmail_('Indicador') + thEmail_(String(data.year), 'right') + thEmail_(String(data.previousYear), 'right') + thEmail_('Cambio', 'right') + '</tr>' + comparativoRows)),
     seccionEmail_('Alerta anual', '<p style="margin:0;line-height:1.55"><strong>' + escEmail_(data.alertaAnual.nivel) + ':</strong> ' + escEmail_(data.alertaAnual.texto) + '</p>'),
-    seccionEmail_('Ciclo a ciclo', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Ciclo</th><th align="right">Ingresos</th><th align="right">Gastos</th><th align="right">Balance</th><th align="right">Mov.</th></tr>' + monthsRows + '</table>'),
-    seccionEmail_('Categorias principales', '<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f9fafb"><th align="left">Categoria</th><th align="right">' + escEmail_(data.year) + '</th><th align="right">' + escEmail_(data.previousYear) + '</th><th align="right">Cambio</th></tr>' + categoryRows + '</table>'),
+    seccionEmail_('Ciclo a ciclo', tablaEmail_('<tr>' + thEmail_('Ciclo') + thEmail_('Ingresos', 'right') + thEmail_('Gastos', 'right') + thEmail_('Balance', 'right') + thEmail_('Mov.', 'right') + '</tr>' + monthsRows)),
+    seccionEmail_('Categorias principales', tablaEmail_('<tr>' + thEmail_('Categoria') + thEmail_(String(data.year), 'right') + thEmail_(String(data.previousYear), 'right') + thEmail_('Cambio', 'right') + '</tr>' + categoryRows)),
     seccionEmail_('Sugerencia IA anual', '<div style="line-height:1.55;font-size:14px">' + iaHtml + '</div><p style="font-size:12px;color:#6b7280;margin:14px 0 0">Contenido educativo para organizacion personal. No reemplaza asesoria financiera profesional.</p>'),
-    '<p style="font-size:12px;color:#6b7280;text-align:center;margin-top:18px">Archivo Excel adjunto generado el ' + escEmail_(data.generadoEn) + '.</p>',
-    '</div>',
-    '</div>',
-  ].join('');
+    footerEmail_('Archivo Excel adjunto generado el ' + data.generadoEn + '.'),
+  ].join(''), 780);
 }
 
 function construirExcelAnualEmail_(data) {
