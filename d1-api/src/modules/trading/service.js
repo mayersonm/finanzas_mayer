@@ -707,13 +707,13 @@ function analyzeSymbol(symbol, price, strategy) {
     side: 'buy',
     priceUsd,
     change24h,
-    confidence: source === 'binance' && change24h === 0 ? 35 : 30,
+    confidence: change24h === 0 ? 35 : 30,
     notionalUsd,
     quantity,
     takeProfitPriceUsd,
     stopLossPriceUsd,
-    reason: source === 'binance' && change24h === 0
-      ? 'Precio actualizado desde Binance; falta variacion 24h del proveedor para una senal fuerte.'
+    reason: change24h === 0
+      ? 'Precio actualizado, pero falta variacion 24h del proveedor para una senal fuerte.'
       : 'No hay descuento suficiente. Esperar es parte de la estrategia.',
     source,
   };
@@ -739,7 +739,7 @@ function signalFromAnalysis(chatId, strategy, item, mode) {
     details_json: JSON.stringify({
       change24h: item.change24h,
       source: item.source,
-      safety: 'No ejecuta orden real en Binance.',
+      safety: 'No ejecuta orden real en ningun exchange.',
     }),
   };
 }
@@ -1069,7 +1069,7 @@ function safetyNotes(strategy) {
   const mode = normalizeMode(strategy.mode);
   return [
     mode === 'paper'
-      ? 'Modo paper: simula compras y ventas, no toca Binance.'
+      ? 'Modo paper: simula compras y ventas, no toca ningun exchange.'
       : 'Modo confirmacion: crea senales para aprobar manualmente, no ejecuta orden real.',
     'Scalper paper registra rafagas simuladas con fee y spread; no envia orden real.',
     'Usa montos pequenos y respeta presupuesto; cripto puede caer fuerte en minutos.',

@@ -4,7 +4,6 @@ import { localDateKey } from '../../shared/dates.js';
 import { normalizeCurrency, normalizeDateOnly, normalizeKey, title } from '../../shared/normalizers.js';
 import { getChatId } from '../../shared/request.js';
 import { getAppSetting, timeoutSignal } from '../../shared/settings-store.js';
-import { hmacSha256Hex } from '../../shared/crypto.js';
 
 const DEFAULT_SYMBOLS = ['BTC', 'ETH', 'SOL', 'USDT'];
 const CACHE_MINUTES = 5;
@@ -15,7 +14,6 @@ const ASSET_IDS = {
   SOL: 'solana',
   USDT: 'tether',
   USDC: 'usd-coin',
-  BNB: 'binancecoin',
   XRP: 'ripple',
   ADA: 'cardano',
   DOGE: 'dogecoin',
@@ -49,10 +47,9 @@ export async function cryptoPortfolio(env, params, options = {}) {
   const prices = await cryptoPrices(env, symbols, { refresh });
   const priceMap = Object.fromEntries(prices.map((item) => [item.symbol, item]));
   const positions = buildPositions(operations, priceMap, exchangeRate);
-  const binance = await binanceAccountSnapshot(env, symbols, priceMap, exchangeRate);
-  const visiblePrices = mergePrices(prices, binance.prices || []);
+  const visiblePrices = sortPrices(prices);
   const visiblePriceMap = Object.fromEntries(visiblePrices.map((item) => [item.symbol, item]));
-  const summary = buildSummary(positions, exchangeRate, binance);
+  const summary = buildSummary(positions, exchangeRate);
   const enrichedAlerts = alerts.map((alert) => alertShape(alert, visiblePriceMap[alert.symbol]));
 
   return {
@@ -63,7 +60,6 @@ export async function cryptoPortfolio(env, params, options = {}) {
     positions,
     operations: operations.map(operationShape),
     alerts: enrichedAlerts,
-    binance,
     summary,
     suggestions: cryptoSuggestions({ summary, positions, alerts: enrichedAlerts }),
     updatedAt: new Date().toISOString(),
@@ -206,20 +202,6 @@ async function cryptoPrices(env, symbols, { refresh = false } = {}) {
         symbols: toFetch,
         message: error.message || String(error),
       }));
-
-      try {
-        const binanceConfigValue = await binanceConfig(env);
-        if (binanceConfigValue.proxyUrl && binanceConfigValue.proxyKey) {
-          fetched = await fetchBinanceTickerPrices(binanceConfigValue, toFetch);
-          await savePriceCache(env, fetched);
-        }
-      } catch (binanceError) {
-        console.warn(JSON.stringify({
-          event: 'crypto_price_binance_fallback_failed',
-          symbols: toFetch,
-          message: binanceError.message || String(binanceError),
-        }));
-      }
     }
   }
 
@@ -288,260 +270,8 @@ async function fetchProviderPrices(env, symbols) {
   return fetchCoinGeckoPrices(config, symbols);
 }
 
-async function binanceAccountSnapshot(env, symbols, priceMap, exchangeRate) {
-  const config = await binanceConfig(env);
-  if (!config.apiKey && !config.proxyUrl) {
-    return {
-      configured: false,
-      balances: [],
-      summary: emptyBinanceSummary(),
-    };
-  }
-
-  try {
-    const account = await fetchBinanceAccount(config);
-    const balances = (account.balances || [])
-      .map((row) => ({
-        asset: normalizeSymbol(row.asset),
-        free: Number(row.free || 0),
-        locked: Number(row.locked || 0),
-      }))
-      .map((row) => ({ ...row, total: roundQuantity(row.free + row.locked) }))
-      .filter((row) => row.asset && row.total > 0.00000001);
-
-    const missingSymbols = balances
-      .map((row) => row.asset)
-      .filter((symbol) => !priceMap[symbol]?.priceUsd);
-    const fetchedPrices = await fetchBinanceTickerPrices(config, missingSymbols);
-    const mergedPriceMap = {
-      ...priceMap,
-      ...Object.fromEntries(fetchedPrices.map((item) => [item.symbol, item])),
-    };
-
-    const shapedBalances = balances
-      .map((row) => {
-        const priceUsd = stableUsdAsset(row.asset) ? 1 : Number(mergedPriceMap[row.asset]?.priceUsd || 0);
-        const valueUsd = row.total * priceUsd;
-        return {
-          asset: row.asset,
-          free: roundQuantity(row.free),
-          locked: roundQuantity(row.locked),
-          total: roundQuantity(row.total),
-          priceUsd: round(priceUsd),
-          valueUsd: round(valueUsd),
-          valuePen: round(valueUsd * exchangeRate),
-        };
-      })
-      .filter((row) => row.valueUsd > 0 || row.total > 0)
-      .sort((a, b) => b.valueUsd - a.valueUsd || a.asset.localeCompare(b.asset));
-
-    const totalValueUsd = round(shapedBalances.reduce((sum, row) => sum + row.valueUsd, 0));
-    return {
-      configured: true,
-      accountType: account.accountType || 'SPOT',
-      balances: shapedBalances,
-      prices: fetchedPrices.map(priceShape),
-      summary: {
-        assets: shapedBalances.length,
-        totalValueUsd,
-        totalValuePen: round(totalValueUsd * exchangeRate),
-      },
-      updatedAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    console.warn(JSON.stringify({
-      event: 'binance_account_failed',
-      message: error.message || String(error),
-    }));
-    return {
-      configured: true,
-      error: binanceFriendlyError(error),
-      balances: [],
-      prices: [],
-      summary: emptyBinanceSummary(),
-    };
-  }
-}
-
-async function fetchBinanceAccount(config) {
-  if (config.proxyUrl && config.proxyKey && (!config.apiKey || !config.apiSecret || config.proxyFirst)) {
-    return fetchBinanceAccountViaProxy(config);
-  }
-  if (!config.apiKey || !config.apiSecret) {
-    throw new Error('BINANCE_API_KEY y BINANCE_API_SECRET requeridos si no usas proxy Fly');
-  }
-
-  const query = `timestamp=${Date.now()}&recvWindow=5000`;
-  const signature = await hmacSha256Hex(query, config.apiSecret);
-  const targetUrl = `${config.apiUrl}/api/v3/account?${query}&signature=${signature}`;
-  const response = await fetch(targetUrl, {
-    headers: {
-      accept: 'application/json',
-      'User-Agent': 'FinanzasMayeson/1.0 (+https://finanzas-dashboard-4d5.pages.dev)',
-      'X-MBX-APIKEY': config.apiKey,
-    },
-    signal: timeoutSignal(7000),
-  });
-  const text = await response.text();
-  const data = safeJson(text);
-  if (!response.ok) {
-    if (response.status === 403 && config.proxyUrl && config.proxyKey) {
-      return fetchBinanceAccountViaProxy(config, targetUrl);
-    }
-    const detail = data?.msg || cleanErrorBody(text);
-    throw new Error(detail ? `Binance HTTP ${response.status}: ${detail}` : `Binance HTTP ${response.status}`);
-  }
-  return data;
-}
-
-async function fetchBinanceTickerPrices(config, symbols) {
-  const cleanSymbols = uniqueSymbols(symbols).filter((symbol) => !stableUsdAsset(symbol));
-  if (!cleanSymbols.length) return [];
-
-  const pairs = cleanSymbols.map((symbol) => `${symbol}USDT`);
-  const url = new URL(`${config.apiUrl}/api/v3/ticker/price`);
-  url.searchParams.set('symbols', JSON.stringify(pairs));
-  if (config.proxyUrl && config.proxyKey && config.proxyFirst) {
-    const proxied = await binanceProxyTicker(config, cleanSymbols);
-    return shapeBinanceTickerRows(proxied);
-  }
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      accept: 'application/json',
-      'User-Agent': 'FinanzasMayeson/1.0 (+https://finanzas-dashboard-4d5.pages.dev)',
-    },
-    signal: timeoutSignal(7000),
-  });
-  const text = await response.text();
-  const data = safeJson(text) || [];
-  if (!response.ok) {
-    if (response.status === 403 && config.proxyUrl && config.proxyKey) {
-      const proxied = await fetchBinancePublicViaProxy(config, url.toString());
-      return shapeBinanceTickerRows(proxied);
-    }
-    const detail = Array.isArray(data) ? '' : data?.msg || cleanErrorBody(text);
-    throw new Error(detail ? `Binance ticker HTTP ${response.status}: ${detail}` : `Binance ticker HTTP ${response.status}`);
-  }
-  return shapeBinanceTickerRows(data);
-}
-
-async function fetchBinanceAccountViaProxy(config, targetUrl = '') {
-  if (!targetUrl) {
-    const data = await binanceProxyJson(config, '/api/binance/account');
-    return data.account || data.data || data;
-  }
-
-  const result = await binanceProxyFetch(config, targetUrl, config.apiKey);
-  const data = safeJson(result.body);
-  if (result.status < 200 || result.status >= 300) {
-    const detail = data?.msg || cleanErrorBody(result.body);
-    throw new Error(detail ? `Binance proxy HTTP ${result.status}: ${detail}` : `Binance proxy HTTP ${result.status}`);
-  }
-  return data;
-}
-
-async function fetchBinancePublicViaProxy(config, targetUrl) {
-  const result = await binanceProxyFetch(config, targetUrl, '');
-  const data = safeJson(result.body) || [];
-  if (result.status < 200 || result.status >= 300) {
-    const detail = Array.isArray(data) ? '' : data?.msg || cleanErrorBody(result.body);
-    throw new Error(detail ? `Binance proxy ticker HTTP ${result.status}: ${detail}` : `Binance proxy ticker HTTP ${result.status}`);
-  }
-  return data;
-}
-
-async function binanceProxyTicker(config, symbols) {
-  const endpoint = proxyEndpoint(config, '/api/binance/ticker');
-  endpoint.searchParams.set('symbols', symbols.join(','));
-  const data = await binanceProxyJson(config, endpoint);
-  return data.data || [];
-}
-
-async function binanceProxyFetch(config, targetUrl, apiKey) {
-  const url = new URL(config.proxyUrl);
-  url.searchParams.set('action', 'binance_proxy');
-  url.searchParams.set('key', config.proxyKey);
-  url.searchParams.set('url', targetUrl);
-  if (apiKey) url.searchParams.set('apiKey', apiKey);
-
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      accept: 'application/json',
-    },
-    signal: timeoutSignal(12000),
-  });
-  const text = await response.text();
-  const body = safeJson(text);
-  if (!response.ok || !body || body.ok === false) {
-    const detail = body?.error || cleanErrorBody(text);
-    throw new Error(detail ? `Binance proxy error: ${detail}` : `Binance proxy HTTP ${response.status}`);
-  }
-  return {
-    status: Number(body.status || 0),
-    body: String(body.body || ''),
-  };
-}
-
-async function binanceProxyJson(config, pathname) {
-  const url = pathname instanceof URL ? pathname : proxyEndpoint(config, pathname);
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      accept: 'application/json',
-      'x-proxy-key': config.proxyKey,
-    },
-    signal: timeoutSignal(12000),
-  });
-  const text = await response.text();
-  const body = safeJson(text);
-  if (!response.ok || !body || body.ok === false) {
-    const detail = body?.error || cleanErrorBody(text);
-    throw new Error(detail ? `Binance proxy error: ${detail}` : `Binance proxy HTTP ${response.status}`);
-  }
-  return body;
-}
-
-function proxyEndpoint(config, pathname) {
-  const base = new URL(config.proxyUrl);
-  return new URL(pathname, `${base.protocol}//${base.host}`);
-}
-
-function shapeBinanceTickerRows(data) {
-  return (Array.isArray(data) ? data : [])
-    .map((row) => {
-      const symbol = String(row.symbol || '').replace(/USDT$/i, '').toUpperCase();
-      return {
-        symbol,
-        assetId: symbol,
-        name: title(symbol),
-        priceUsd: round(row.price || 0),
-        change24h: 0,
-        marketCapUsd: 0,
-        volume24hUsd: 0,
-        source: 'binance',
-        fetchedAt: new Date().toISOString(),
-      };
-    })
-    .filter((item) => item.symbol && item.priceUsd > 0);
-}
-
-function mergePrices(primary = [], secondary = []) {
-  const map = new Map();
-  for (const item of primary || []) {
-    const shaped = priceShape(item);
-    if (shaped.symbol) map.set(shaped.symbol, shaped);
-  }
-  for (const item of secondary || []) {
-    const shaped = priceShape(item);
-    if (!shaped.symbol || !shaped.priceUsd) continue;
-    const current = map.get(shaped.symbol);
-    if (!current || !current.priceUsd || current.source === 'sin precio') {
-      map.set(shaped.symbol, shaped);
-    }
-  }
-  return [...map.values()].sort((a, b) => {
+function sortPrices(prices = []) {
+  return (prices || []).map(priceShape).filter((item) => item.symbol).sort((a, b) => {
     const defaultOrder = DEFAULT_SYMBOLS.indexOf(a.symbol) - DEFAULT_SYMBOLS.indexOf(b.symbol);
     if (DEFAULT_SYMBOLS.includes(a.symbol) && DEFAULT_SYMBOLS.includes(b.symbol)) return defaultOrder;
     if (DEFAULT_SYMBOLS.includes(a.symbol)) return -1;
@@ -642,19 +372,6 @@ async function cryptoProviderConfig(env) {
   };
 }
 
-async function binanceConfig(env) {
-  const proxyUrl = String(await getAppSetting(env, 'binance_proxy_url') || env.BINANCE_PROXY_URL || env.GAS_API_URL || '').trim();
-  const proxyFirstRaw = String(await getAppSetting(env, 'binance_proxy_first') || env.BINANCE_PROXY_FIRST || '').trim().toLowerCase();
-  return {
-    apiUrl: String(await getAppSetting(env, 'binance_api_url') || env.BINANCE_API_URL || 'https://api.binance.com').trim().replace(/\/+$/g, ''),
-    apiKey: String(env.BINANCE_API_KEY || '').trim(),
-    apiSecret: String(env.BINANCE_API_SECRET || '').trim(),
-    proxyUrl,
-    proxyKey: String(env.BINANCE_PROXY_KEY || env.GAS_API_KEY || '').trim(),
-    proxyFirst: proxyFirstRaw === 'true' || proxyFirstRaw === '1' || Boolean(proxyUrl && proxyUrl.includes('.fly.dev')),
-  };
-}
-
 async function cryptoCacheMinutes(env) {
   const configured = Number(await getAppSetting(env, 'crypto_price_cache_minutes') || env.CRYPTO_PRICE_CACHE_MINUTES || CACHE_MINUTES);
   if (!Number.isFinite(configured)) return CACHE_MINUTES;
@@ -727,12 +444,10 @@ function buildPositions(operations, priceMap, exchangeRate) {
     .sort((a, b) => b.currentValueUsd - a.currentValueUsd || a.symbol.localeCompare(b.symbol));
 }
 
-function buildSummary(positions, exchangeRate, binance) {
+function buildSummary(positions, exchangeRate) {
   const totalInvestedUsd = round(positions.reduce((sum, item) => sum + item.investedUsd, 0));
   const totalValueUsd = round(positions.reduce((sum, item) => sum + item.currentValueUsd, 0));
   const gainUsd = round(totalValueUsd - totalInvestedUsd + positions.reduce((sum, item) => sum + item.realizedUsd, 0));
-  const binanceValueUsd = round(binance?.summary?.totalValueUsd || 0);
-  const binanceValuePen = round(binance?.summary?.totalValuePen || binanceValueUsd * exchangeRate);
   return {
     totalInvestedUsd,
     totalValueUsd,
@@ -741,10 +456,8 @@ function buildSummary(positions, exchangeRate, binance) {
     totalInvestedPen: round(totalInvestedUsd * exchangeRate),
     totalValuePen: round(totalValueUsd * exchangeRate),
     gainPen: round(gainUsd * exchangeRate),
-    binanceValueUsd,
-    binanceValuePen,
-    totalCryptoValueUsd: round(totalValueUsd + binanceValueUsd),
-    totalCryptoValuePen: round((totalValueUsd * exchangeRate) + binanceValuePen),
+    totalCryptoValueUsd: totalValueUsd,
+    totalCryptoValuePen: round(totalValueUsd * exchangeRate),
     positions: positions.length,
   };
 }
@@ -917,45 +630,6 @@ function emptyPrice(symbol) {
     source: 'sin precio',
     fetchedAt: '',
   };
-}
-
-function emptyBinanceSummary() {
-  return {
-    assets: 0,
-    totalValueUsd: 0,
-    totalValuePen: 0,
-  };
-}
-
-function stableUsdAsset(symbol) {
-  return ['USDT', 'USDC', 'BUSD', 'TUSD', 'FDUSD', 'DAI', 'USD'].includes(normalizeSymbol(symbol));
-}
-
-function binanceFriendlyError(error) {
-  const message = error.message || String(error);
-  if (/restricted location|eligibility|service unavailable/i.test(message)) {
-    return `${message}. Binance esta bloqueando la region/IP de salida de Cloudflare. Usa un proxy/VPS con IP publica fija permitida o cambia el endpoint/proveedor.`;
-  }
-  if (/ip|restricted|permission|api-key|invalid/i.test(message)) {
-    return `${message}. Revisa permisos y restriccion IP: Cloudflare Worker no sale desde una IP local como 192.168.x.x.`;
-  }
-  return message;
-}
-
-function safeJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
-
-function cleanErrorBody(text) {
-  return String(text || '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 240);
 }
 
 function normalizeSymbol(value) {
