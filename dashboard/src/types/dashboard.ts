@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'dinero' | 'calendario' | 'patrimonio' | 'inversiones' | 'ia' | 'analisis' | 'metas' | 'configuracion';
+export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'dinero' | 'calendario' | 'trabajo' | 'patrimonio' | 'inversiones' | 'ia' | 'analisis' | 'metas' | 'configuracion';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {
@@ -148,6 +148,33 @@ export interface Investment {
   gainPct?: number;
   notes?: string;
   updatedAt?: string;
+}
+
+export type WorkStatus = 'todo' | 'in_progress' | 'done';
+export type WorkPriority = 'low' | 'medium' | 'high';
+
+export interface WorkItem {
+  id: string;
+  title: string;
+  description?: string;
+  notes?: string;
+  blockers?: string;
+  status: WorkStatus;
+  priority: WorkPriority;
+  dueDate?: string;
+  tags?: string[];
+  sortOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WorkSummary {
+  total: number;
+  todo: number;
+  in_progress: number;
+  done: number;
+  blocked: number;
+  highPriority: number;
 }
 
 export interface NetWorthCompositionItem {

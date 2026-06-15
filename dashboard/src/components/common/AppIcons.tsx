@@ -37,6 +37,15 @@ export const CardIcon: AppIcon = (props) => (
   </Icon>
 );
 
+export const BriefcaseIcon: AppIcon = (props) => (
+  <Icon {...props}>
+    <path d="M9 7V5h6v2" />
+    <path d="M4 7h16v12H4z" />
+    <path d="M4 12h16" />
+    <path d="M10 12v2h4v-2" />
+  </Icon>
+);
+
 export const CoinsIcon: AppIcon = (props) => (
   <Icon {...props}>
     <ellipse cx="9" cy="7" rx="5" ry="3" />
