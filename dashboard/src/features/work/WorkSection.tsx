@@ -25,6 +25,11 @@ interface Draft {
   tags: string;
 }
 
+interface TimelineDraft {
+  date: string;
+  message: string;
+}
+
 type WorkResponse = {
   ok?: boolean;
   items?: WorkItem[];
@@ -72,8 +77,10 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingTimeline, setSavingTimeline] = useState(false);
   const [draggingId, setDraggingId] = useState('');
   const [dropTarget, setDropTarget] = useState<WorkStatus | ''>('');
+  const [timelineDraft, setTimelineDraft] = useState<TimelineDraft>(() => ({ date: todayInputDate(), message: '' }));
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -127,10 +134,12 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
     });
     setMessage('');
     setError('');
+    setTimelineDraft({ date: todayInputDate(), message: '' });
   };
 
   const resetDraft = () => {
     setDraft(emptyDraft);
+    setTimelineDraft({ date: todayInputDate(), message: '' });
     setMessage('');
     setError('');
   };
@@ -195,6 +204,38 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
       setError(err instanceof Error ? err.message : 'No se pudo eliminar');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const addTimelineNote = async () => {
+    if (!authToken || !draft.id || !timelineDraft.message.trim()) return;
+    setSavingTimeline(true);
+    setMessage('');
+    setError('');
+
+    try {
+      const url = new URL(apiEndpoint(`work-items/${encodeURIComponent(draft.id)}/timeline`));
+      if (chatId) url.searchParams.set('chat_id', chatId);
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          eventDate: timelineDraft.date || todayInputDate(),
+          message: timelineDraft.message,
+        }),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo agregar a la linea de tiempo');
+      setTimelineDraft({ date: todayInputDate(), message: '' });
+      setMessage('Hito agregado a la linea de tiempo.');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo agregar a la linea de tiempo');
+    } finally {
+      setSavingTimeline(false);
     }
   };
 
@@ -334,6 +375,24 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
             <Field label="Etiquetas">
               <input className="form-input" value={draft.tags} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))} placeholder="backend, correo, urgente" />
             </Field>
+
+            {draft.id ? (
+              <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
+                <p className="text-xs font-semibold uppercase text-slate-400">Linea de tiempo</p>
+                <div className="mt-3 grid gap-3">
+                  <Field label="Fecha">
+                    <input className="form-input" type="date" value={timelineDraft.date} onChange={(event) => setTimelineDraft((current) => ({ ...current, date: event.target.value }))} />
+                  </Field>
+                  <Field label="Hito / nota">
+                    <textarea className="form-input min-h-[4.5rem] !h-auto py-2" value={timelineDraft.message} onChange={(event) => setTimelineDraft((current) => ({ ...current, message: event.target.value }))} placeholder="Ej: Se envio propuesta, falta respuesta de Juan" />
+                  </Field>
+                  <button type="button" className="inline-flex h-9 items-center justify-center gap-2 rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60" disabled={savingTimeline || !timelineDraft.message.trim()} onClick={() => void addTimelineNote()}>
+                    <RiAddLine className="h-4 w-4" />
+                    Agregar hito
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <button className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60" disabled={saving || !authToken}>
               {draft.id ? <RiSave3Line className="h-4 w-4" /> : <RiAddLine className="h-4 w-4" />}
@@ -529,6 +588,23 @@ function WorkCard({
           ))}
         </div>
       ) : null}
+
+      {item.timeline?.length ? (
+        <div className="mt-3 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-2.5">
+          <div className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-slate-500">Linea de tiempo</div>
+          <div className="grid gap-2">
+            {item.timeline.slice(0, 4).map((event) => (
+              <div key={event.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 text-xs">
+                <span className="pt-0.5 font-semibold text-emerald-300">{formatDate(event.eventDate)}</span>
+                <span className="relative border-l border-slate-700 pl-3 leading-5 text-slate-400 before:absolute before:-left-[4.5px] before:top-1.5 before:h-2 before:w-2 before:rounded-full before:bg-emerald-400">
+                  <b className="mr-1 text-slate-200">{timelineTypeLabel(event.type)}:</b>
+                  {event.message}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -579,6 +655,7 @@ function normalizeItems(items: WorkItem[]) {
     priority: normalizePriority(item.priority),
     sortOrder: Number(item.sortOrder || 0),
     tags: item.tags || [],
+    timeline: item.timeline || [],
   }));
 }
 
@@ -616,5 +693,20 @@ function formatDate(value?: string) {
   if (!value) return '';
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+  return date.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function timelineTypeLabel(type: string) {
+  if (type === 'created') return 'Creado';
+  if (type === 'status') return 'Estado';
+  if (type === 'notes') return 'Notas';
+  if (type === 'blocker') return 'Bloqueo';
+  if (type === 'unblocked') return 'Desbloqueo';
+  if (type === 'due_date') return 'Fecha';
+  if (type === 'updated') return 'Cambio';
+  return 'Nota';
+}
+
+function todayInputDate() {
+  return new Date().toISOString().slice(0, 10);
 }

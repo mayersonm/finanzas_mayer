@@ -21,7 +21,7 @@ export async function listWorkItems(env, params) {
       updated_at DESC
   `).bind(chatId).all();
 
-  const items = (rows.results || []).map(workItemShape);
+  const items = await attachTimeline(env, chatId, (rows.results || []).map(workItemShape));
   return {
     ok: true,
     items,
@@ -36,7 +36,7 @@ export async function createWorkItem(env, payload, params) {
   if (!item.title) throw httpError(400, 'Titulo requerido');
 
   const nextOrder = await nextSortOrder(env, chatId, item.status);
-  const id = String(payload.id || crypto.randomUUID?.() || `work:${chatId}:${Date.now()}`).slice(0, 180);
+  const id = String(payload.id || makeId('work', chatId)).slice(0, 180);
 
   await env.DB.prepare(`
     INSERT INTO work_items (
@@ -56,6 +56,14 @@ export async function createWorkItem(env, payload, params) {
     JSON.stringify(item.tags),
     nextOrder,
   ).run();
+
+  await insertTimelineEvent(env, {
+    chatId,
+    itemId: id,
+    type: 'created',
+    message: 'Apunte creado',
+    eventDate: todayDate(),
+  });
 
   const saved = await getWorkItem(env, chatId, id);
   return { ok: true, item: workItemShape(saved) };
@@ -102,6 +110,17 @@ export async function updateWorkItem(env, id, payload, params) {
     chatId,
   ).run();
 
+  const event = describeUpdate(current, normalized);
+  if (event) {
+    await insertTimelineEvent(env, {
+      chatId,
+      itemId: cleanId,
+      type: event.type,
+      message: event.message,
+      eventDate: todayDate(),
+    });
+  }
+
   const saved = await getWorkItem(env, chatId, cleanId);
   return { ok: true, item: workItemShape(saved) };
 }
@@ -110,6 +129,9 @@ export async function reorderWorkItems(env, payload, params) {
   const chatId = getChatId(env, params);
   const items = Array.isArray(payload.items) ? payload.items : [];
   if (!items.length) return { ok: true, updated: 0 };
+  const ids = items.map((item) => String(item.id || '').trim()).filter(Boolean);
+  const existingRows = ids.length ? await rowsByIds(env, chatId, ids) : [];
+  const previousStatus = new Map(existingRows.map((row) => [row.id, normalizeStatus(row.status || 'todo')]));
 
   const updates = items.map((item, index) => {
     const id = String(item.id || '').trim();
@@ -125,8 +147,48 @@ export async function reorderWorkItems(env, payload, params) {
     `).bind(status, sortOrder, id, chatId);
   });
 
-  await env.DB.batch(updates);
+  const timelineUpdates = items
+    .map((item) => {
+      const id = String(item.id || '').trim();
+      const status = normalizeStatus(item.status || 'todo');
+      const previous = previousStatus.get(id);
+      if (!previous || previous === status) return null;
+      return timelineStatement(env, {
+        chatId,
+        itemId: id,
+        type: 'status',
+        message: `Movido de ${statusLabel(previous)} a ${statusLabel(status)}`,
+        eventDate: todayDate(),
+      });
+    })
+    .filter(Boolean);
+
+  await env.DB.batch([...updates, ...timelineUpdates]);
   return { ok: true, updated: updates.length };
+}
+
+export async function addWorkItemTimelineEvent(env, id, payload, params) {
+  const chatId = getChatId(env, params);
+  const cleanId = String(id || '').trim();
+  if (!cleanId) throw httpError(400, 'id requerido');
+
+  const existing = await getWorkItem(env, chatId, cleanId);
+  if (!existing) throw httpError(404, 'Trabajo no encontrado');
+
+  const message = normalizeText(payload.message || payload.mensaje || payload.note || payload.nota || '', 900);
+  if (!message) throw httpError(400, 'Mensaje requerido');
+
+  const eventDate = normalizeDate(payload.eventDate || payload.event_date || payload.fecha || '') || todayDate();
+  const event = {
+    chatId,
+    itemId: cleanId,
+    type: normalizeText(payload.type || payload.tipo || 'note', 40) || 'note',
+    message,
+    eventDate,
+  };
+  await insertTimelineEvent(env, event);
+  const saved = await latestTimelineEvent(env, chatId, cleanId);
+  return { ok: true, event: timelineEventShape(saved) };
 }
 
 export async function deleteWorkItem(env, id, params) {
@@ -149,6 +211,71 @@ async function getWorkItem(env, chatId, id) {
     FROM work_items
     WHERE id = ? AND chat_id = ? AND active = 1
   `).bind(id, chatId).first();
+}
+
+async function rowsByIds(env, chatId, ids) {
+  if (!ids.length) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = await env.DB.prepare(`
+    SELECT id, status
+    FROM work_items
+    WHERE chat_id = ? AND active = 1 AND id IN (${placeholders})
+  `).bind(chatId, ...ids).all();
+  return rows.results || [];
+}
+
+async function attachTimeline(env, chatId, items) {
+  if (!items.length) return items;
+  const ids = items.map((item) => item.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = await env.DB.prepare(`
+    SELECT id, work_item_id, type, message, event_date, created_at
+    FROM work_item_timeline
+    WHERE chat_id = ? AND work_item_id IN (${placeholders})
+    ORDER BY event_date DESC, created_at DESC
+    LIMIT 300
+  `).bind(chatId, ...ids).all();
+
+  const timelineByItem = new Map();
+  for (const row of rows.results || []) {
+    const itemId = row.work_item_id;
+    const current = timelineByItem.get(itemId) || [];
+    if (current.length < 8) current.push(timelineEventShape(row));
+    timelineByItem.set(itemId, current);
+  }
+
+  return items.map((item) => ({
+    ...item,
+    timeline: timelineByItem.get(item.id) || fallbackTimeline(item),
+  }));
+}
+
+async function latestTimelineEvent(env, chatId, itemId) {
+  return env.DB.prepare(`
+    SELECT id, work_item_id, type, message, event_date, created_at
+    FROM work_item_timeline
+    WHERE chat_id = ? AND work_item_id = ?
+    ORDER BY event_date DESC, created_at DESC
+    LIMIT 1
+  `).bind(chatId, itemId).first();
+}
+
+async function insertTimelineEvent(env, event) {
+  await timelineStatement(env, event).run();
+}
+
+function timelineStatement(env, event) {
+  return env.DB.prepare(`
+    INSERT INTO work_item_timeline (id, chat_id, work_item_id, type, message, event_date)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(
+    makeId('work_event', event.chatId),
+    event.chatId,
+    event.itemId,
+    event.type || 'note',
+    event.message,
+    event.eventDate || todayDate(),
+  );
 }
 
 async function nextSortOrder(env, chatId, status) {
@@ -188,7 +315,44 @@ function workItemShape(row) {
     sortOrder: Number(row.sort_order || row.sortOrder || 0),
     createdAt: row.created_at || row.createdAt || '',
     updatedAt: row.updated_at || row.updatedAt || '',
+    timeline: row.timeline || [],
   };
+}
+
+function timelineEventShape(row) {
+  return {
+    id: row.id,
+    itemId: row.work_item_id || row.itemId || '',
+    type: row.type || 'note',
+    message: row.message || '',
+    eventDate: row.event_date || row.eventDate || todayDate(),
+    createdAt: row.created_at || row.createdAt || '',
+  };
+}
+
+function fallbackTimeline(item) {
+  const events = [];
+  if (item.updatedAt) {
+    events.push({
+      id: `${item.id}:updated`,
+      itemId: item.id,
+      type: 'updated',
+      message: 'Ultima actualizacion',
+      eventDate: isoToDate(item.updatedAt),
+      createdAt: item.updatedAt,
+    });
+  }
+  if (item.createdAt) {
+    events.push({
+      id: `${item.id}:created`,
+      itemId: item.id,
+      type: 'created',
+      message: 'Apunte creado',
+      eventDate: isoToDate(item.createdAt),
+      createdAt: item.createdAt,
+    });
+  }
+  return events;
 }
 
 function buildSummary(items) {
@@ -230,4 +394,51 @@ function normalizeTags(value) {
       .filter(Boolean)
       .slice(0, 8),
   ));
+}
+
+function describeUpdate(current, next) {
+  if (current.status !== next.status) {
+    return {
+      type: 'status',
+      message: `Cambio de ${statusLabel(current.status)} a ${statusLabel(next.status)}`,
+    };
+  }
+
+  if ((current.blockers || '') !== (next.blockers || '')) {
+    return {
+      type: next.blockers ? 'blocker' : 'unblocked',
+      message: next.blockers ? 'Bloqueante actualizado' : 'Bloqueante resuelto',
+    };
+  }
+
+  if ((current.notes || '') !== (next.notes || '')) {
+    return { type: 'notes', message: 'Notas actualizadas' };
+  }
+
+  if ((current.dueDate || '') !== (next.dueDate || '')) {
+    return { type: 'due_date', message: next.dueDate ? `Fecha objetivo ${next.dueDate}` : 'Fecha objetivo retirada' };
+  }
+
+  return { type: 'updated', message: 'Apunte actualizado' };
+}
+
+function statusLabel(status) {
+  if (status === 'in_progress') return 'En progreso';
+  if (status === 'done') return 'Done';
+  return 'Todo';
+}
+
+function todayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isoToDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return todayDate();
+  return date.toISOString().slice(0, 10);
+}
+
+function makeId(prefix, chatId) {
+  const random = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}:${Math.random()}`;
+  return `${prefix}:${chatId}:${random}`;
 }
