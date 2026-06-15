@@ -3,7 +3,6 @@ import { appsScriptRoutes } from './apps-script.js';
 import { authRoutes } from './auth.js';
 import { budgetingRoutes } from './budgeting.js';
 import { commitmentsRoutes } from './commitments.js';
-import { cryptoRoutes } from './crypto.js';
 import { dashboardRoutes } from './dashboard.js';
 import { investmentsRoutes } from './investments.js';
 import { receiptsRoutes } from './receipts.js';
@@ -12,7 +11,6 @@ import { settingsRoutes } from './settings.js';
 import { syncRoutes } from './sync.js';
 import { systemRoutes } from './system.js';
 import { transactionsRoutes } from './transactions.js';
-import { tradingRoutes } from './trading.js';
 
 export const routeHandlers = [
   authRoutes,
@@ -25,8 +23,6 @@ export const routeHandlers = [
   budgetingRoutes,
   commitmentsRoutes,
   receiptsRoutes,
-  cryptoRoutes,
-  tradingRoutes,
   investmentsRoutes,
   appsScriptRoutes,
 ];
