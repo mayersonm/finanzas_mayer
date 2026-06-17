@@ -161,7 +161,7 @@ export function normalizeSettingsConfig(value) {
     receiptImageMaxBytes: clamp(Number(value.receiptImageMaxBytes || 921600), 200000, 3000000),
     claudeModel: String(value.claudeModel || 'claude-haiku-4-5-20251001').slice(0, 120),
     claudeApiUrl: String(value.claudeApiUrl || '').slice(0, 240),
-    financeEmailTo: String(value.financeEmailTo || '').slice(0, 180),
+    financeEmailTo: String(value.financeEmailTo || value.email_finance || '').slice(0, 180),
     dailyEmailTo: String(value.dailyEmailTo || '').slice(0, 180),
     monthlyEmailTo: String(value.monthlyEmailTo || '').slice(0, 180),
     yearlyEmailTo: String(value.yearlyEmailTo || '').slice(0, 180),
@@ -169,7 +169,7 @@ export function normalizeSettingsConfig(value) {
     emergencyBufferAmount: round(Math.max(0, parseAmount(value.emergencyBufferAmount ?? value.emergency_buffer_amount ?? 0))),
     investorProfile: profile,
     investmentHorizon: horizon,
-    cycleIncomeLeadDays: clamp(Number(value.cycleIncomeLeadDays ?? value.cycle_income_lead_days ?? 0), 0, 7),
+    cycleIncomeLeadDays: clamp(Number(value.cycleIncomeLeadDays ?? value.cycle_income_lead_days ?? 1), 0, 7),
   };
 }
 
@@ -355,12 +355,13 @@ export async function upsertUserSettings(env, userId, config) {
     INSERT INTO user_settings (
       user_id, credit_cutoff_day, credit_due_day, credit_card_name,
       default_currency, default_payment_method, receipt_image_max_bytes,
+      claude_model, claude_api_url, email_finance,
       email_daily, email_monthly, email_yearly,
       savings_target_amount, emergency_buffer_amount, investor_profile, investment_horizon,
       cycle_income_lead_days,
       updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id) DO UPDATE SET
       credit_cutoff_day = excluded.credit_cutoff_day,
       credit_due_day = excluded.credit_due_day,
@@ -368,6 +369,9 @@ export async function upsertUserSettings(env, userId, config) {
       default_currency = excluded.default_currency,
       default_payment_method = excluded.default_payment_method,
       receipt_image_max_bytes = excluded.receipt_image_max_bytes,
+      claude_model = excluded.claude_model,
+      claude_api_url = excluded.claude_api_url,
+      email_finance = excluded.email_finance,
       email_daily = excluded.email_daily,
       email_monthly = excluded.email_monthly,
       email_yearly = excluded.email_yearly,
@@ -385,6 +389,9 @@ export async function upsertUserSettings(env, userId, config) {
     config.defaultCurrency || 'PEN',
     config.defaultPaymentMethod || 'debito',
     config.receiptImageMaxBytes,
+    config.claudeModel,
+    config.claudeApiUrl,
+    config.financeEmailTo,
     config.dailyEmailTo,
     config.monthlyEmailTo,
     config.yearlyEmailTo,
@@ -405,6 +412,9 @@ export function userSettingsToConfig(settings) {
     defaultCurrency: settings.default_currency || 'PEN',
     defaultPaymentMethod: settings.default_payment_method || 'debito',
     receiptImageMaxBytes: Number(settings.receipt_image_max_bytes || 921600),
+    claudeModel: settings.claude_model || 'claude-haiku-4-5-20251001',
+    claudeApiUrl: settings.claude_api_url || '',
+    financeEmailTo: settings.email_finance || '',
     dailyEmailTo: settings.email_daily || '',
     monthlyEmailTo: settings.email_monthly || '',
     yearlyEmailTo: settings.email_yearly || '',

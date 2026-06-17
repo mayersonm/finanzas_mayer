@@ -546,6 +546,7 @@ export interface AppSettingsConfig {
   emergencyBufferAmount: number;
   investorProfile: 'conservador' | 'moderado' | 'agresivo' | string;
   investmentHorizon: 'corto' | 'medio' | 'largo' | string;
+  cycleIncomeLeadDays?: number;
 }
 
 export interface AppSettingsData {

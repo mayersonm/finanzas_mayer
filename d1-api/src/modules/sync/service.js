@@ -16,6 +16,20 @@ export async function syncFromGas(env, params) {
   const chatId = String(params.get('chat_id') || env.DEFAULT_CHAT_ID || '').trim();
   if (!chatId) throw httpError(400, 'Falta chat_id o DEFAULT_CHAT_ID');
 
+  try {
+    return await runGasSync(env, { limit, chatId });
+  } catch (error) {
+    await recordSyncRun(env, 'error', {
+      chatId,
+      limit,
+      error: error.message || String(error),
+      status: error.status || 500,
+    });
+    throw error;
+  }
+}
+
+async function runGasSync(env, { limit, chatId }) {
   const txUrl = new URL(env.GAS_API_URL);
   txUrl.searchParams.set('action', 'txs');
   txUrl.searchParams.set('key', env.GAS_API_KEY);
@@ -27,7 +41,13 @@ export async function syncFromGas(env, params) {
   dashUrl.searchParams.set('key', env.GAS_API_KEY);
   dashUrl.searchParams.set('chat_id', chatId);
 
-  const [txResp, dashResp] = await Promise.all([fetch(txUrl), fetch(dashUrl)]);
+  const [txResp, dashResp] = await Promise.all([
+    fetch(txUrl, { signal: timeoutSignal(20000) }),
+    fetch(dashUrl, { signal: timeoutSignal(20000) }),
+  ]);
+  if (!txResp.ok) throw httpError(502, `GAS txs HTTP ${txResp.status}`);
+  if (!dashResp.ok) throw httpError(502, `GAS dashboard HTTP ${dashResp.status}`);
+
   const txData = await txResp.json();
   const dashData = await dashResp.json();
 
@@ -77,11 +97,7 @@ export async function syncFromGas(env, params) {
     if (await upsertDebt(env, chatId, raw)) debtCount++;
   }
 
-  const runId = crypto.randomUUID();
-  await env.DB.prepare(`
-    INSERT INTO sync_runs (id, source, status, details)
-    VALUES (?, 'gas', 'ok', ?)
-  `).bind(runId, JSON.stringify({
+  await recordSyncRun(env, 'ok', {
     chatId,
     txCount,
     removedTransactions,
@@ -92,7 +108,7 @@ export async function syncFromGas(env, params) {
     fixedCount,
     debtCount,
     limit,
-  })).run();
+  });
 
   return {
     ok: true,
@@ -107,6 +123,17 @@ export async function syncFromGas(env, params) {
     debts: debtCount,
     syncedAt: new Date().toISOString(),
   };
+}
+
+async function recordSyncRun(env, status, details) {
+  try {
+    await env.DB.prepare(`
+      INSERT INTO sync_runs (id, source, status, details)
+      VALUES (?, 'gas', ?, ?)
+    `).bind(crypto.randomUUID(), status, JSON.stringify(details || {})).run();
+  } catch (_error) {
+    // El sync no debe ocultar el error original si el log falla.
+  }
 }
 
 export async function emailConfigFromGas(env) {

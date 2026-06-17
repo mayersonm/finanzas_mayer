@@ -36,6 +36,7 @@ const EMPTY_CONFIG: AppSettingsConfig = {
   emergencyBufferAmount: 0,
   investorProfile: 'conservador',
   investmentHorizon: 'corto',
+  cycleIncomeLeadDays: 1,
 };
 
 const EMPTY_HEALTH: SystemHealthData = {
@@ -293,6 +294,9 @@ export function SettingsSection({ authToken, chatId }: { authToken?: string | nu
                 </Field>
                 <Field label="Colchon minimo">
                   <input className="form-input" type="number" min={0} step="0.01" value={config.emergencyBufferAmount} onChange={(event) => updateField('emergencyBufferAmount', Number(event.target.value))} />
+                </Field>
+                <Field label="Ingreso antes del ciclo">
+                  <input className="form-input" type="number" min={0} max={7} step={1} value={config.cycleIncomeLeadDays || 0} onChange={(event) => updateField('cycleIncomeLeadDays', Number(event.target.value))} />
                 </Field>
                 <Field label="Perfil inversionista">
                   <select className="form-input" value={config.investorProfile || 'conservador'} onChange={(event) => updateField('investorProfile', event.target.value as AppSettingsConfig['investorProfile'])}>
