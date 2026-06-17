@@ -466,7 +466,37 @@ export default function App() {
   return (
     <main className="min-h-screen px-3 py-3 sm:px-5 sm:py-5 lg:px-6 xl:px-7">
       <div className={`mx-auto flex w-full max-w-[92rem] gap-4 ${showPasswordPanel ? 'pointer-events-none blur-sm' : ''}`}>
-        <DashboardSidebar activeTab={tab} onTabChange={setTab} />
+        <DashboardSidebar
+          activeTab={tab}
+          onTabChange={setTab}
+          data={data}
+          loading={loading}
+          status={status}
+          isConfigured={configured}
+          onRefresh={() => void fetchData()}
+          onSyncSheets={() => void syncSheetsToD1()}
+          syncing={syncing}
+          theme={theme}
+          onToggleTheme={() => {
+            setTheme((value) => {
+              const nextTheme = value === 'dark' ? 'light' : 'dark';
+              applyTheme(nextTheme);
+              return nextTheme;
+            });
+          }}
+          onTogglePasswordPanel={() => {
+            setPasswordError('');
+            setPasswordSuccess('');
+            setTwoFactorError('');
+            setTwoFactorMessage('');
+            void loadTwoFactorStatus();
+            setShowPasswordPanel(true);
+          }}
+          onLogout={handleLogout}
+          users={users}
+          selectedChatId={selectedChatId}
+          onSelectedChatIdChange={handleSelectedChatIdChange}
+        />
 
         <div className="min-w-0 flex-1">
           <AppHeader

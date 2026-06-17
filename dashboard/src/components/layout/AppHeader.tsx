@@ -38,7 +38,7 @@ export function AppHeader({
       : 'bg-slate-500/15 text-slate-300';
 
   return (
-    <section className="mb-4 rounded-tremor-default border border-slate-800 bg-slate-950/80 p-4 sm:mb-5 sm:p-5">
+    <section className="mb-4 rounded-tremor-default border border-slate-800 bg-slate-950/80 p-4 sm:mb-5 sm:p-5 lg:hidden">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
