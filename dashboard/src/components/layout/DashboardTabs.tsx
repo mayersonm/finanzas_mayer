@@ -86,7 +86,7 @@ export function DashboardSidebar({
       : 'bg-slate-500/15 text-slate-300';
 
   return (
-    <aside className="sticky top-5 hidden h-[calc(100vh-2.5rem)] w-64 shrink-0 flex-col rounded-tremor-default border border-slate-800 bg-slate-950/80 p-3 shadow-sm lg:flex">
+    <aside className="sticky top-0 hidden h-full w-64 shrink-0 flex-col rounded-tremor-default border border-slate-800 bg-slate-950/80 p-3 shadow-sm lg:flex">
       <div className="border-b border-slate-800 px-2 pb-3 pt-1">
         <div className="flex items-start justify-between gap-3">
           <div>

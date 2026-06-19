@@ -24,6 +24,59 @@
   --shadow-panel: 0 14px 30px -28px rgba(15, 23, 42, 0.32);
 }
 
+.notepad-paper {
+  background-image: linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px), radial-gradient(circle at top left, rgba(255, 255, 255, 0.08) 0%, transparent 40%);
+  background-size: 100% 2.4rem, 30rem 30rem;
+}
+
+.work-window {
+  border-radius: 1.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 32px 110px -52px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+}
+
+.work-window.notepad-paper {
+  background-image: linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px), radial-gradient(circle at top left, rgba(255, 255, 255, 0.08) 0%, transparent 40%);
+  background-size: 100% 2.4rem, 30rem 30rem;
+}
+
+.work-window__titlebar {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.96);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+.window-dots {
+  display: inline-flex;
+  gap: 0.45rem;
+}
+
+.window-dots span {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 9999px;
+  display: inline-block;
+  background: rgba(248, 250, 252, 0.18);
+}
+
+.window-dots span:nth-child(1) {
+  background: #f97316;
+}
+
+.window-dots span:nth-child(2) {
+  background: #facc15;
+}
+
+.window-dots span:nth-child(3) {
+  background: #34d399;
+}
+
 :root[data-theme="dark"] {
   color-scheme: dark;
   --app-bg: linear-gradient(180deg, #101720 0%, #111a22 46%, #0f151d 100%);

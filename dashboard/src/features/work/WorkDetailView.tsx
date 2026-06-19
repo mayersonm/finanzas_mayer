@@ -118,51 +118,62 @@ export function WorkDetailView({
         </div>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[24rem_minmax(0,1fr)]">
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-0">
-          <div className="border-b border-slate-800 p-4">
-            <p className="text-sm font-semibold text-slate-100">{filteredItems.length} apunte{filteredItems.length === 1 ? '' : 's'}</p>
-            <p className="mt-1 text-xs text-slate-500">{loading ? 'Actualizando...' : 'Ordenado por prioridad y actividad'}</p>
+      <div className="work-window notepad-paper grid gap-4">
+        <div className="work-window__titlebar">
+          <div className="window-dots">
+            <span />
+            <span />
+            <span />
           </div>
+          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Panel de notas</p>
+        </div>
 
-          <div className="max-h-[calc(100vh-18rem)] min-h-[22rem] overflow-y-auto p-2">
-            {filteredItems.length ? filteredItems.map((item) => {
-              const active = selectedItem?.id === item.id;
-              const lastEvent = getLastEvent(item.timeline || []);
+        <div className="grid gap-4 p-4 xl:grid-cols-[22rem_minmax(0,1fr)]">
+          <Card className="rounded-tremor-default border-slate-800 bg-slate-950/60 !p-0">
+            <div className="border-b border-slate-800 p-4">
+              <p className="text-sm font-semibold text-slate-100">{filteredItems.length} apunte{filteredItems.length === 1 ? '' : 's'}</p>
+              <p className="mt-1 text-xs text-slate-500">{loading ? 'Actualizando...' : 'Ordenado por prioridad y actividad'}</p>
+            </div>
 
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`mb-2 block w-full rounded-tremor-default border p-3 text-left transition ${
-                    active
-                      ? 'border-emerald-400/70 bg-emerald-500/15'
-                      : 'border-slate-800 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/60'
-                  }`}
-                  onClick={() => onSelectItem(item.id)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="line-clamp-2 text-sm font-semibold leading-5 text-slate-100">{item.title}</p>
-                    <Badge color={item.blockers ? 'rose' : statusTone(item.status)}>{item.blockers ? 'Bloqueado' : statusLabels[item.status]}</Badge>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <Badge color={priorityTone(item.priority)}>{priorityLabels[item.priority]}</Badge>
-                    {item.dueDate ? <Badge color={dueDateTone(item.dueDate)}>{formatDate(item.dueDate)}</Badge> : null}
-                  </div>
-                  {lastEvent ? (
-                    <p className="mt-3 line-clamp-2 text-xs leading-5 text-slate-500">
-                      {formatDate(lastEvent.eventDate)} · {lastEvent.message}
-                    </p>
-                  ) : null}
-                </button>
-              );
-            }) : (
-              <div className="grid min-h-[18rem] place-items-center rounded-tremor-default border border-dashed border-slate-800 bg-slate-900/20 p-6 text-center text-sm text-slate-500">
-                No hay apuntes con ese filtro.
-              </div>
-            )}
-          </div>
-        </Card>
+            <div className="max-h-[calc(100vh-18rem)] min-h-[22rem] overflow-y-auto p-2">
+              {filteredItems.length ? filteredItems.map((item) => {
+                const active = selectedItem?.id === item.id;
+                const lastEvent = getLastEvent(item.timeline || []);
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`mb-2 block w-full rounded-tremor-default border p-3 text-left transition ${
+                      active
+                        ? 'border-emerald-400/70 bg-emerald-500/15'
+                        : 'border-slate-800 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/60'
+                    }`}
+                    onClick={() => onSelectItem(item.id)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="line-clamp-2 text-sm font-semibold leading-5 text-slate-100">{item.title}</p>
+                      <Badge color={item.blockers ? 'rose' : statusTone(item.status)}>{item.blockers ? 'Bloqueado' : statusLabels[item.status]}</Badge>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <Badge color={priorityTone(item.priority)}>{priorityLabels[item.priority]}</Badge>
+                      {item.dueDate ? <Badge color={dueDateTone(item.dueDate)}>{formatDate(item.dueDate)}</Badge> : null}
+                    </div>
+                    {lastEvent ? (
+                      <p className="mt-3 line-clamp-2 text-xs leading-5 text-slate-500">
+                        {formatDate(lastEvent.eventDate)} · {lastEvent.message}
+                      </p>
+                    ) : null}
+                  </button>
+                );
+              }) : (
+                <div className="grid min-h-[18rem] place-items-center rounded-tremor-default border border-dashed border-slate-800 bg-slate-900/20 p-6 text-center text-sm text-slate-500">
+                  No hay apuntes con ese filtro.
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
 
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-5">
           {selectedItem ? (
