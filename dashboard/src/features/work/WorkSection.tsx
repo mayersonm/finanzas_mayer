@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { Badge, Card, Text, Title } from '@tremor/react';
-import {
-  RiAddLine,
-  RiCheckboxCircleLine,
-  RiCloseLine,
-  RiDeleteBinLine,
-  RiEditLine,
-  RiErrorWarningLine,
-  RiSave3Line,
-} from '@remixicon/react';
+import { RiAddLine, RiCloseLine, RiSave3Line } from '@remixicon/react';
 import { apiEndpoint } from '../../app/api';
-import { EmptyState } from '../../components/common/EmptyState';
 import type { WorkItem, WorkPriority, WorkStatus, WorkSummary } from '../../types/dashboard';
 import { WorkDetailView } from './WorkDetailView';
 
@@ -38,28 +29,10 @@ type WorkResponse = {
   error?: string;
 };
 
-type WorkViewMode = 'board' | 'detail';
-
-const emptyDraft: Draft = {
-  title: '',
-  description: '',
-  notes: '',
-  blockers: '',
-  status: 'todo',
-  priority: 'medium',
-  dueDate: '',
-  tags: '',
-};
-
-const columns: Array<{
-  id: WorkStatus;
-  title: string;
-  subtitle: string;
-  tone: 'slate' | 'amber' | 'emerald';
-}> = [
-  { id: 'todo', title: 'Todo', subtitle: 'Ideas y pendientes por tomar', tone: 'slate' },
-  { id: 'in_progress', title: 'En progreso', subtitle: 'Lo que estas moviendo ahora', tone: 'amber' },
-  { id: 'done', title: 'Done', subtitle: 'Cerrado y listo para revisar', tone: 'emerald' },
+const columns: Array<{ id: WorkStatus; title: string; subtitle: string; tone: 'slate' | 'amber' | 'emerald' }> = [
+  { id: 'todo', title: 'Pendientes', subtitle: 'Nuevas notas por trabajar', tone: 'slate' },
+  { id: 'in_progress', title: 'En progreso', subtitle: 'Notas en desarrollo', tone: 'amber' },
+  { id: 'done', title: 'Completadas', subtitle: 'Notas terminadas', tone: 'emerald' },
 ];
 
 const statusLabels: Record<WorkStatus, string> = {
@@ -74,6 +47,17 @@ const priorityLabels: Record<WorkPriority, string> = {
   high: 'Alta',
 };
 
+const emptyDraft: Draft = {
+  title: '',
+  description: '',
+  notes: '',
+  blockers: '',
+  status: 'todo',
+  priority: 'medium',
+  dueDate: '',
+  tags: '',
+};
+
 export function WorkSection({ authToken, chatId }: { authToken?: string | null; chatId?: string }) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [summary, setSummary] = useState<WorkSummary>({ total: 0, todo: 0, in_progress: 0, done: 0, blocked: 0, highPriority: 0 });
@@ -81,22 +65,12 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingTimeline, setSavingTimeline] = useState(false);
-  const [draggingId, setDraggingId] = useState('');
-  const [dropTarget, setDropTarget] = useState<WorkStatus | ''>('');
-  const [viewMode, setViewMode] = useState<WorkViewMode>('board');
   const [selectedDetailId, setSelectedDetailId] = useState('');
   const [timelineDraft, setTimelineDraft] = useState<TimelineDraft>(() => ({ date: todayInputDate(), message: '' }));
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-
-  const board = useMemo(() => {
-    return columns.reduce<Record<WorkStatus, WorkItem[]>>((acc, column) => {
-      acc[column.id] = items
-        .filter((item) => item.status === column.id)
-        .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title));
-      return acc;
-    }, { todo: [], in_progress: [], done: [] });
-  }, [items]);
+  const [draggingId, setDraggingId] = useState('');
+  const [dropTarget, setDropTarget] = useState<WorkStatus | ''>('');
 
   const load = useCallback(async () => {
     if (!authToken) return;
@@ -109,7 +83,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
       const response = await fetch(url.toString(), {
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      const result = await response.json() as WorkResponse;
+      const result = (await response.json()) as WorkResponse;
       if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo cargar Mi Trabajo');
       const nextItems = normalizeItems(result.items || []);
       setItems(nextItems);
@@ -125,8 +99,70 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!selectedDetailId && items.length > 0) {
+      setSelectedDetailId(items[0].id);
+    }
+  }, [items, selectedDetailId]);
+
+  const boardItems = useMemo(() => {
+    return columns.reduce((acc, column) => {
+      acc[column.id] = items
+        .filter((item) => item.status === column.id)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title));
+      return acc;
+    }, {} as Record<WorkStatus, WorkItem[]>);
+  }, [items]);
+
+  const persistOrder = useCallback(async (nextItems: WorkItem[]) => {
+    if (!authToken) return;
+    try {
+      const url = new URL(apiEndpoint('work-items/reorder'));
+      if (chatId) url.searchParams.set('chat_id', chatId);
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: nextItems.map((item) => ({ id: item.id, status: item.status, sortOrder: item.sortOrder })),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo reordenar');
+    } catch {
+      // ignore persist errors to keep UI responsive
+    }
+  }, [authToken, chatId]);
+
+  const moveItem = useCallback(async (targetStatus: WorkStatus, beforeId?: string) => {
+    if (!draggingId) return;
+    const dragged = items.find((item) => item.id === draggingId);
+    if (!dragged) return;
+
+    const nextItems = items.map((item) => ({ ...item }));
+    const withinTarget = nextItems.filter((item) => item.status === targetStatus && item.id !== draggingId);
+    const targetIndex = beforeId ? withinTarget.findIndex((item) => item.id === beforeId) : withinTarget.length;
+
+    const reorderedTarget = [
+      ...withinTarget.slice(0, targetIndex),
+      { ...dragged, status: targetStatus },
+      ...withinTarget.slice(targetIndex),
+    ];
+
+    const ordered = nextItems
+      .filter((item) => item.id !== draggingId && item.status !== targetStatus)
+      .concat(reorderedTarget)
+      .map((item) => ({ ...item, sortOrder: item.status === targetStatus ? reorderedTarget.findIndex((row) => row.id === item.id) : item.sortOrder }));
+
+    setItems(ordered);
+    setDraggingId('');
+    setDropTarget('');
+    await persistOrder(ordered);
+  }, [draggingId, items, persistOrder]);
+
   const startEdit = (item: WorkItem) => {
-    setViewMode('board');
     setDraft({
       id: item.id,
       title: item.title,
@@ -145,7 +181,6 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
 
   const openDetails = (item: WorkItem) => {
     setSelectedDetailId(item.id);
-    setViewMode('detail');
     setMessage('');
     setError('');
   };
@@ -179,14 +214,15 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
         },
         body: JSON.stringify(payload),
       });
-      const result = await response.json() as { ok?: boolean; item?: WorkItem; error?: string };
+      const result = (await response.json()) as { ok?: boolean; item?: WorkItem; error?: string };
       if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo guardar');
 
-      setMessage(draft.id ? 'Trabajo actualizado.' : 'Trabajo creado.');
+      setMessage(draft.id ? 'Apunte actualizado.' : 'Apunte guardado.');
       setDraft(emptyDraft);
+      if (result.item?.id) setSelectedDetailId(result.item.id);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el trabajo');
+      setError(err instanceof Error ? err.message : 'No se pudo guardar el apunte');
     } finally {
       setSaving(false);
     }
@@ -207,13 +243,13 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
         method: 'DELETE',
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      const result = await response.json() as { ok?: boolean; error?: string };
+      const result = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo eliminar');
       const nextItems = items.filter((row) => row.id !== item.id);
       setItems(nextItems);
       setSummary(summarize(nextItems));
       if (selectedDetailId === item.id) setSelectedDetailId('');
-      setMessage('Trabajo eliminado.');
+      setMessage('Apunte eliminado.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo eliminar');
     } finally {
@@ -241,81 +277,17 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
           message: timelineDraft.message,
         }),
       });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo agregar a la linea de tiempo');
+      const result = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo agregar a la línea de tiempo');
       setTimelineDraft({ date: todayInputDate(), message: '' });
-      setMessage('Hito agregado a la linea de tiempo.');
+      setMessage('Hito agregado a la línea de tiempo.');
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo agregar a la linea de tiempo');
+      setError(err instanceof Error ? err.message : 'No se pudo agregar a la línea de tiempo');
     } finally {
       setSavingTimeline(false);
     }
   };
-
-  const persistOrder = useCallback(async (nextItems: WorkItem[]) => {
-    if (!authToken) return;
-    const url = new URL(apiEndpoint('work-items/reorder'));
-    if (chatId) url.searchParams.set('chat_id', chatId);
-
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        items: nextItems.map((item) => ({
-          id: item.id,
-          status: item.status,
-          sortOrder: item.sortOrder,
-        })),
-      }),
-    });
-    const result = await response.json() as { ok?: boolean; error?: string };
-    if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo reordenar');
-  }, [authToken, chatId]);
-
-  const moveItem = useCallback(async (targetStatus: WorkStatus, beforeId?: string) => {
-    if (!draggingId || !authToken) return;
-
-    const currentItem = items.find((item) => item.id === draggingId);
-    if (!currentItem || currentItem.id === beforeId) {
-      setDraggingId('');
-      setDropTarget('');
-      return;
-    }
-
-    const withoutDragged = items.filter((item) => item.id !== draggingId);
-    const targetItems = withoutDragged.filter((item) => item.status === targetStatus);
-    const moved = { ...currentItem, status: targetStatus };
-    const insertIndex = beforeId ? Math.max(0, targetItems.findIndex((item) => item.id === beforeId)) : targetItems.length;
-    const nextTarget = [
-      ...targetItems.slice(0, insertIndex),
-      moved,
-      ...targetItems.slice(insertIndex),
-    ].map((item, index) => ({ ...item, sortOrder: index + 1 }));
-
-    const nextItems = columns.flatMap((column) => {
-      if (column.id === targetStatus) return nextTarget;
-      return withoutDragged
-        .filter((item) => item.status === column.id)
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((item, index) => ({ ...item, sortOrder: index + 1 }));
-    });
-
-    setDraggingId('');
-    setDropTarget('');
-    setItems(nextItems);
-    setSummary(summarize(nextItems));
-
-    try {
-      await persistOrder(nextItems);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo reordenar');
-      await load();
-    }
-  }, [authToken, draggingId, items, load, persistOrder]);
 
   const donePct = summary.total > 0 ? Math.round((summary.done / summary.total) * 100) : 0;
 
@@ -325,11 +297,11 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <Badge color="emerald">Mi Trabajo</Badge>
+              <Badge color="emerald">Mi Libreta</Badge>
               <Badge color={summary.blocked ? 'rose' : 'slate'}>{summary.blocked} bloqueante{summary.blocked === 1 ? '' : 's'}</Badge>
             </div>
-            <Title>Tablero de trabajo</Title>
-            <Text>Apuntes, pendientes, bloqueantes y avances en un Kanban simple.</Text>
+            <Title>Notas de trabajo</Title>
+            <Text>Arrastra solo las cabeceras en el canvas y ve el detalle en la página de detalle.</Text>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[34rem]">
             <SummaryTile label="Total" value={summary.total} />
@@ -338,37 +310,157 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
             <SummaryTile label="Alta prioridad" value={summary.highPriority} tone="rose" />
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={`inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default border px-3 text-xs font-semibold transition ${
-              viewMode === 'board'
-                ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-100'
-                : 'border-slate-800 bg-slate-900/40 text-slate-400 hover:border-slate-700 hover:bg-slate-900/70 hover:text-slate-100'
-            }`}
-            onClick={() => setViewMode('board')}
-          >
-            <RiCheckboxCircleLine className="h-4 w-4" />
-            Tablero
-          </button>
-          <button
-            type="button"
-            className={`inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default border px-3 text-xs font-semibold transition ${
-              viewMode === 'detail'
-                ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-100'
-                : 'border-slate-800 bg-slate-900/40 text-slate-400 hover:border-slate-700 hover:bg-slate-900/70 hover:text-slate-100'
-            }`}
-            onClick={() => setViewMode('detail')}
-          >
-            <RiEditLine className="h-4 w-4" />
-            Detalle
-          </button>
-        </div>
         {error ? <div className="mt-4 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</div> : null}
         {message ? <div className="mt-4 rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{message}</div> : null}
       </Card>
 
-      {viewMode === 'detail' ? (
+      <div className="grid gap-4 xl:grid-cols-[24rem_minmax(0,1.4fr)]">
+        <div className="grid gap-4">
+          <Card className="rounded-tremor-default border-slate-800 bg-slate-900/95 !p-4 sm:!p-5 shadow-slate-950/10">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <Title className="text-base">{draft.id ? 'Editar apunte' : 'Nuevo apunte'}</Title>
+                <Text>Registra tu nota rápida y luego muévela en el canvas de cabeceras.</Text>
+              </div>
+              {draft.id ? (
+                <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 text-slate-200" onClick={resetDraft} title="Cancelar edición">
+                  <RiCloseLine className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+
+            <form className="mt-4 grid gap-3" onSubmit={save}>
+              <Field label="Título">
+                <input className="form-input" value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Ej: Revisar reporte de ventas" required />
+              </Field>
+              <Field label="Notas">
+                <textarea className="form-input min-h-[10rem] !h-auto py-3" value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="Apuntes, decisiones, links, ideas" />
+              </Field>
+              <Field label="Resumen breve">
+                <textarea className="form-input min-h-[5rem] !h-auto py-2" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder="Resumen rápido del pendiente" />
+              </Field>
+              <Field label="Bloqueantes">
+                <textarea className="form-input min-h-[4.75rem] !h-auto py-2" value={draft.blockers} onChange={(event) => setDraft((current) => ({ ...current, blockers: event.target.value }))} placeholder="Qué falta para avanzar" />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Estado">
+                  <select className="form-input" value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as WorkStatus }))}>
+                    <option value="todo">Todo</option>
+                    <option value="in_progress">En progreso</option>
+                    <option value="done">Done</option>
+                  </select>
+                </Field>
+                <Field label="Prioridad">
+                  <select className="form-input" value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value as WorkPriority }))}>
+                    <option value="low">Baja</option>
+                    <option value="medium">Media</option>
+                    <option value="high">Alta</option>
+                  </select>
+                </Field>
+              </div>
+              <Field label="Fecha objetivo">
+                <input className="form-input" type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} />
+              </Field>
+              <Field label="Etiquetas">
+                <input className="form-input" value={draft.tags} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))} placeholder="backend, correo, urgente" />
+              </Field>
+
+              {draft.id ? (
+                <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
+                  <p className="text-xs font-semibold uppercase text-slate-400">Línea de tiempo</p>
+                  <div className="mt-3 grid gap-3">
+                    <Field label="Fecha">
+                      <input className="form-input" type="date" value={timelineDraft.date} onChange={(event) => setTimelineDraft((current) => ({ ...current, date: event.target.value }))} />
+                    </Field>
+                    <Field label="Hito / nota">
+                      <textarea className="form-input min-h-[4.5rem] !h-auto py-2" value={timelineDraft.message} onChange={(event) => setTimelineDraft((current) => ({ ...current, message: event.target.value }))} placeholder="Ej: Se envió propuesta, falta respuesta" />
+                    </Field>
+                    <button type="button" className="inline-flex h-9 items-center justify-center gap-2 rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60" disabled={savingTimeline || !timelineDraft.message.trim()} onClick={() => void addTimelineNote()}>
+                      <RiAddLine className="h-4 w-4" />
+                      Agregar hito
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <button className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60" disabled={saving || !authToken}>
+                {draft.id ? <RiSave3Line className="h-4 w-4" /> : <RiAddLine className="h-4 w-4" />}
+                {draft.id ? 'Guardar cambios' : 'Guardar apunte'}
+              </button>
+            </form>
+          </Card>
+
+          <Card className="rounded-tremor-default border-slate-800 bg-slate-900/95 !p-4 sm:!p-5 shadow-slate-950/10">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <Title className="text-base">Canvas de cabeceras</Title>
+                <Text>Arrastra las cabeceras para mover el apunte entre columnas.</Text>
+              </div>
+              <Badge color="slate">{items.length} apunte{items.length === 1 ? '' : 's'}</Badge>
+            </div>
+            <div className="grid gap-3 xl:grid-cols-3">
+              {columns.map((column) => (
+                <div
+                  key={column.id}
+                  className={`rounded-tremor-default border p-4 transition ${dropTarget === column.id ? 'border-emerald-400/70 bg-emerald-500/10' : 'border-slate-800 bg-slate-950/80'}`}
+                  onDragOver={(event: DragEvent<HTMLDivElement>) => {
+                    event.preventDefault();
+                    setDropTarget(column.id);
+                  }}
+                  onDragLeave={() => setDropTarget('')}
+                  onDrop={(event: DragEvent<HTMLDivElement>) => {
+                    event.preventDefault();
+                    void moveItem(column.id);
+                  }}
+                >
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-100">{column.title}</p>
+                      <p className="text-xs text-slate-500">{column.subtitle}</p>
+                    </div>
+                    <Badge color={column.tone}>{boardItems[column.id].length}</Badge>
+                  </div>
+                  <div className="space-y-3">
+                    {boardItems[column.id].length ? boardItems[column.id].map((item) => (
+                      <article
+                        key={item.id}
+                        draggable
+                        className={`rounded-tremor-default border p-3 transition hover:border-slate-700 hover:bg-slate-900/70 ${draggingId === item.id ? 'opacity-60 ring-2 ring-emerald-400/50' : 'bg-slate-900/90 border-slate-800 cursor-grab'}`}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = 'move';
+                          event.dataTransfer.setData('text/plain', item.id);
+                          setDraggingId(item.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggingId('');
+                          setDropTarget('');
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void moveItem(column.id, item.id);
+                        }}
+                      >
+                        <button type="button" className="text-left w-full" onClick={() => openDetails(item)}>
+                          <p className="text-sm font-semibold text-slate-100 line-clamp-2">{item.title}</p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-[0.65rem] text-slate-400">
+                            <span className="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-0.5">{priorityLabels[item.priority]}</span>
+                            <span className="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-0.5">{statusLabels[item.status]}</span>
+                          </div>
+                        </button>
+                      </article>
+                    )) : (
+                      <div className="rounded-tremor-default border border-dashed border-slate-800 bg-slate-900/80 p-4 text-center text-sm text-slate-500">
+                        Sin notas en esta columna
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+
         <WorkDetailView
           items={items}
           loading={loading}
@@ -377,288 +469,8 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
           onEdit={startEdit}
           onDelete={(item) => void remove(item)}
         />
-      ) : (
-      <div className="grid gap-4 xl:grid-cols-[22rem_minmax(0,1fr)]">
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <Title className="text-base">{draft.id ? 'Editar apunte' : 'Nuevo apunte'}</Title>
-              <Text>Captura la tarea y lo que la bloquea.</Text>
-            </div>
-            {draft.id ? (
-              <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 text-slate-200" onClick={resetDraft} title="Cancelar edicion">
-                <RiCloseLine className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-
-          <form className="mt-4 grid gap-3" onSubmit={save}>
-            <Field label="Titulo">
-              <input className="form-input" value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Ej: Revisar reporte de ventas" required />
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-              <Field label="Estado">
-                <select className="form-input" value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as WorkStatus }))}>
-                  {columns.map((column) => <option key={column.id} value={column.id}>{column.title}</option>)}
-                </select>
-              </Field>
-              <Field label="Prioridad">
-                <select className="form-input" value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value as WorkPriority }))}>
-                  <option value="low">Baja</option>
-                  <option value="medium">Media</option>
-                  <option value="high">Alta</option>
-                </select>
-              </Field>
-            </div>
-            <Field label="Fecha objetivo">
-              <input className="form-input" type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} />
-            </Field>
-            <Field label="Descripcion">
-              <textarea className="form-input min-h-[4.75rem] !h-auto py-2" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder="Contexto rapido del pendiente" />
-            </Field>
-            <Field label="Notas">
-              <textarea className="form-input min-h-[5.5rem] !h-auto py-2" value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="Apuntes, decisiones, links, ideas" />
-            </Field>
-            <Field label="Bloqueantes">
-              <textarea className="form-input min-h-[4.75rem] !h-auto py-2" value={draft.blockers} onChange={(event) => setDraft((current) => ({ ...current, blockers: event.target.value }))} placeholder="Que falta para avanzar" />
-            </Field>
-            <Field label="Etiquetas">
-              <input className="form-input" value={draft.tags} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))} placeholder="backend, correo, urgente" />
-            </Field>
-
-            {draft.id ? (
-              <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
-                <p className="text-xs font-semibold uppercase text-slate-400">Linea de tiempo</p>
-                <div className="mt-3 grid gap-3">
-                  <Field label="Fecha">
-                    <input className="form-input" type="date" value={timelineDraft.date} onChange={(event) => setTimelineDraft((current) => ({ ...current, date: event.target.value }))} />
-                  </Field>
-                  <Field label="Hito / nota">
-                    <textarea className="form-input min-h-[4.5rem] !h-auto py-2" value={timelineDraft.message} onChange={(event) => setTimelineDraft((current) => ({ ...current, message: event.target.value }))} placeholder="Ej: Se envio propuesta, falta respuesta de Juan" />
-                  </Field>
-                  <button type="button" className="inline-flex h-9 items-center justify-center gap-2 rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60" disabled={savingTimeline || !timelineDraft.message.trim()} onClick={() => void addTimelineNote()}>
-                    <RiAddLine className="h-4 w-4" />
-                    Agregar hito
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            <button className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60" disabled={saving || !authToken}>
-              {draft.id ? <RiSave3Line className="h-4 w-4" /> : <RiAddLine className="h-4 w-4" />}
-              {draft.id ? 'Guardar cambios' : 'Crear apunte'}
-            </button>
-          </form>
-        </Card>
-
-        <div className="grid gap-3 lg:grid-cols-3">
-          {columns.map((column) => (
-            <KanbanColumn
-              key={column.id}
-              column={column}
-              items={board[column.id]}
-              loading={loading}
-              active={dropTarget === column.id}
-              draggingId={draggingId}
-              onDragStart={(id) => setDraggingId(id)}
-              onDragEnd={() => {
-                setDraggingId('');
-                setDropTarget('');
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDropTarget(column.id);
-              }}
-              onDrop={(beforeId) => void moveItem(column.id, beforeId)}
-              onEdit={startEdit}
-              onOpenDetails={openDetails}
-              onDelete={(item) => void remove(item)}
-            />
-          ))}
-        </div>
       </div>
-      )}
     </section>
-  );
-}
-
-function KanbanColumn({
-  column,
-  items,
-  loading,
-  active,
-  draggingId,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDrop,
-  onEdit,
-  onOpenDetails,
-  onDelete,
-}: {
-  column: (typeof columns)[number];
-  items: WorkItem[];
-  loading: boolean;
-  active: boolean;
-  draggingId: string;
-  onDragStart: (id: string) => void;
-  onDragEnd: () => void;
-  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
-  onDrop: (beforeId?: string) => void;
-  onEdit: (item: WorkItem) => void;
-  onOpenDetails: (item: WorkItem) => void;
-  onDelete: (item: WorkItem) => void;
-}) {
-  const toneClass = {
-    slate: 'border-slate-800 bg-slate-950/60',
-    amber: 'border-amber-500/30 bg-amber-500/10',
-    emerald: 'border-emerald-500/30 bg-emerald-500/10',
-  }[column.tone];
-
-  return (
-    <div
-      className={`flex min-h-[30rem] flex-col rounded-tremor-default border p-3 transition ${toneClass} ${active ? 'ring-2 ring-emerald-400/50' : ''}`}
-      onDragOver={onDragOver}
-      onDrop={(event) => {
-        event.preventDefault();
-        onDrop();
-      }}
-    >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-slate-100">{column.title}</h2>
-            <Badge color={column.tone}>{items.length}</Badge>
-          </div>
-          <p className="mt-1 text-xs leading-5 text-slate-400">{column.subtitle}</p>
-        </div>
-      </div>
-
-      <div className="grid flex-1 content-start gap-3">
-        {items.length ? items.map((item) => (
-          <WorkCard
-            key={item.id}
-            item={item}
-            dragging={draggingId === item.id}
-            onDragStart={() => onDragStart(item.id)}
-            onDragEnd={onDragEnd}
-            onDropBefore={() => onDrop(item.id)}
-            onEdit={() => onEdit(item)}
-            onOpenDetails={() => onOpenDetails(item)}
-            onDelete={() => onDelete(item)}
-          />
-        )) : (
-          <EmptyState>{loading ? 'Cargando...' : 'Suelta aqui un apunte.'}</EmptyState>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function WorkCard({
-  item,
-  dragging,
-  onDragStart,
-  onDragEnd,
-  onDropBefore,
-  onEdit,
-  onOpenDetails,
-  onDelete,
-}: {
-  item: WorkItem;
-  dragging: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDropBefore: () => void;
-  onEdit: () => void;
-  onOpenDetails: () => void;
-  onDelete: () => void;
-}) {
-  const blocked = Boolean(item.blockers);
-  const priorityTone = item.priority === 'high' ? 'rose' : item.priority === 'medium' ? 'amber' : 'slate';
-  const dueTone = dueDateTone(item.dueDate);
-
-  return (
-    <article
-      draggable
-      className={`group rounded-tremor-default border border-slate-800 bg-slate-950/70 p-3 shadow-sm transition hover:border-slate-700 hover:bg-slate-900/80 ${dragging ? 'opacity-50 ring-2 ring-emerald-400/50' : ''}`}
-      onDragStart={(event) => {
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', item.id);
-        onDragStart();
-      }}
-      onDragEnd={onDragEnd}
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onDropBefore();
-      }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="line-clamp-2 text-sm font-semibold leading-5 text-slate-100">{item.title}</p>
-          {item.description ? <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-400">{item.description}</p> : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-1 opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100">
-          <button type="button" className="grid h-8 w-8 place-items-center rounded-tremor-default border border-slate-700 bg-slate-900/70 text-slate-200" onClick={onEdit} title="Editar">
-            <RiEditLine className="h-4 w-4" />
-          </button>
-          <button type="button" className="grid h-8 w-8 place-items-center rounded-tremor-default border border-rose-500/30 bg-rose-500/10 text-rose-200" onClick={onDelete} title="Eliminar">
-            <RiDeleteBinLine className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        <Badge color={priorityTone}>{priorityLabels[item.priority]}</Badge>
-        <Badge color={blocked ? 'rose' : 'emerald'}>{blocked ? 'Bloqueado' : statusLabels[item.status]}</Badge>
-        {item.dueDate ? <Badge color={dueTone}>{formatDate(item.dueDate)}</Badge> : null}
-      </div>
-
-      {item.blockers ? (
-        <div className="mt-3 rounded-tremor-default border border-rose-500/25 bg-rose-500/10 p-2 text-xs leading-5 text-rose-200">
-          <span className="mb-1 flex items-center gap-1 font-semibold">
-            <RiErrorWarningLine className="h-3.5 w-3.5" />
-            Bloqueante
-          </span>
-          <p className="line-clamp-3">{item.blockers}</p>
-        </div>
-      ) : null}
-
-      {item.notes ? (
-        <div className="mt-3 rounded-tremor-default border border-slate-800 bg-slate-900/40 p-2 text-xs leading-5 text-slate-400">
-          <span className="mb-1 flex items-center gap-1 font-semibold text-slate-200">
-            <RiCheckboxCircleLine className="h-3.5 w-3.5 text-emerald-300" />
-            Notas
-          </span>
-          <p className="line-clamp-4 whitespace-pre-line">{item.notes}</p>
-        </div>
-      ) : null}
-
-      {item.tags?.length ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {item.tags.map((tag) => (
-            <span key={tag} className="rounded-full border border-slate-800 bg-slate-900/40 px-2 py-0.5 text-[0.68rem] font-semibold text-slate-400">
-              #{tag}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {item.timeline?.length ? (
-        <button
-          type="button"
-          className="mt-3 flex w-full items-center justify-between gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-2.5 text-left text-xs text-slate-400 transition hover:border-slate-700 hover:bg-slate-900/60 hover:text-slate-100"
-          onClick={onOpenDetails}
-        >
-          <span className="line-clamp-1">
-            {item.timeline.length} hito{item.timeline.length === 1 ? '' : 's'} en linea de tiempo
-          </span>
-          <span className="shrink-0 font-semibold text-emerald-300">Ver</span>
-        </button>
-      ) : null}
-    </article>
   );
 }
 
@@ -728,25 +540,6 @@ function normalizeStatus(value: string): WorkStatus {
 
 function normalizePriority(value: string): WorkPriority {
   return value === 'high' || value === 'low' ? value : 'medium';
-}
-
-function dueDateTone(value?: string) {
-  if (!value) return 'slate';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(due.getTime())) return 'slate';
-  const days = Math.ceil((due.getTime() - today.getTime()) / 86400000);
-  if (days < 0) return 'rose';
-  if (days <= 2) return 'amber';
-  return 'slate';
-}
-
-function formatDate(value?: string) {
-  if (!value) return '';
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function todayInputDate() {

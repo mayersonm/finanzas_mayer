@@ -464,8 +464,8 @@ export default function App() {
   const showInitialSkeleton = configured && Boolean(token) && !hasLoadedData && status !== 'error';
 
   return (
-    <main className="min-h-screen w-full px-3 py-3 sm:px-5 sm:py-5 lg:px-6 xl:px-7">
-      <div className={`flex w-full gap-4 ${showPasswordPanel ? 'pointer-events-none blur-sm' : ''}`}>
+    <main className="flex min-h-screen w-full flex-col overflow-hidden px-3 py-3 sm:px-5 sm:py-5 lg:px-6 xl:px-7">
+      <div className={`flex flex-1 overflow-hidden gap-4 ${showPasswordPanel ? 'pointer-events-none blur-sm' : ''}`}>
         <DashboardSidebar
           activeTab={tab}
           onTabChange={setTab}
@@ -498,7 +498,7 @@ export default function App() {
           onSelectedChatIdChange={handleSelectedChatIdChange}
         />
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-y-auto">
           <AppHeader
             data={data}
             loading={loading}
