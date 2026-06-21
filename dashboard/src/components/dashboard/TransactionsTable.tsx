@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { RiBankCardLine, RiCloseLine, RiDeleteBinLine, RiEditLine, RiImageLine } from '@remixicon/react';
 import {
   Badge,
@@ -261,7 +262,7 @@ export function TransactionsTable({
         </div>
       ) : null}
 
-      {preview ? (
+      {preview ? createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
           <div className="w-full max-w-4xl rounded-tremor-default border border-slate-700 bg-slate-950 shadow-2xl shadow-black/40">
             <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
@@ -303,7 +304,8 @@ export function TransactionsTable({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
       {editing ? (
@@ -332,7 +334,7 @@ function EditTransactionModal({
   const [draft, setDraft] = useState<Transaction>(tx);
   const set = (key: keyof Transaction, value: string | number) => setDraft((current) => ({ ...current, [key]: value }));
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
       <form className="w-full max-w-2xl rounded-tremor-default border border-slate-700 bg-slate-950 p-4 shadow-2xl shadow-black/40" onSubmit={(event) => { event.preventDefault(); onSave(draft); }}>
         <div className="flex items-start justify-between gap-3">
@@ -380,7 +382,8 @@ function EditTransactionModal({
           <button className="rounded-tremor-default bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60" disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
