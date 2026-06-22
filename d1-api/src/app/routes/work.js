@@ -1,5 +1,4 @@
-import { requireDashboardAccess } from '../../auth/service.js';
-import { json, safeJson } from '../../shared/http.js';
+import { auth, route } from '../router.js';
 import {
   createWorkFollowup,
   createWorkMeeting,
@@ -10,84 +9,26 @@ import {
   updateWorkMeeting,
 } from '../../modules/work/meetings.js';
 import {
-  createWorkItem,
   addWorkItemTimelineEvent,
+  createWorkItem,
   deleteWorkItem,
   listWorkItems,
   reorderWorkItems,
   updateWorkItem,
 } from '../../modules/work/service.js';
 
-export async function workRoutes(request, env, url) {
-  const followupMatch = url.pathname.match(/^\/api\/work-followups\/([^/]+)$/);
-  const meetingMatch = url.pathname.match(/^\/api\/work-meetings\/([^/]+)$/);
-  const timelineMatch = url.pathname.match(/^\/api\/work-items\/([^/]+)\/timeline$/);
-  const itemMatch = url.pathname.match(/^\/api\/work-items\/([^/]+)$/);
-
-  if (url.pathname === '/api/work-meetings' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json(await listWorkMeetings(env, url.searchParams));
-  }
-
-  if (url.pathname === '/api/work-meetings' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await createWorkMeeting(env, await safeJson(request), url.searchParams), 201);
-  }
-
-  if (url.pathname === '/api/work-followups' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await createWorkFollowup(env, await safeJson(request), url.searchParams), 201);
-  }
-
-  if (meetingMatch && request.method === 'PATCH') {
-    await requireDashboardAccess(request, env);
-    return json(await updateWorkMeeting(env, decodeURIComponent(meetingMatch[1]), await safeJson(request), url.searchParams));
-  }
-
-  if (meetingMatch && request.method === 'DELETE') {
-    await requireDashboardAccess(request, env);
-    return json(await deleteWorkMeeting(env, decodeURIComponent(meetingMatch[1]), url.searchParams));
-  }
-
-  if (followupMatch && request.method === 'PATCH') {
-    await requireDashboardAccess(request, env);
-    return json(await updateWorkFollowup(env, decodeURIComponent(followupMatch[1]), await safeJson(request), url.searchParams));
-  }
-
-  if (followupMatch && request.method === 'DELETE') {
-    await requireDashboardAccess(request, env);
-    return json(await deleteWorkFollowup(env, decodeURIComponent(followupMatch[1]), url.searchParams));
-  }
-
-  if (url.pathname === '/api/work-items' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json(await listWorkItems(env, url.searchParams));
-  }
-
-  if (url.pathname === '/api/work-items' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await createWorkItem(env, await safeJson(request), url.searchParams), 201);
-  }
-
-  if (url.pathname === '/api/work-items/reorder' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await reorderWorkItems(env, await safeJson(request), url.searchParams));
-  }
-
-  if (timelineMatch && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await addWorkItemTimelineEvent(env, decodeURIComponent(timelineMatch[1]), await safeJson(request), url.searchParams), 201);
-  }
-
-  if (itemMatch && request.method === 'PATCH') {
-    await requireDashboardAccess(request, env);
-    return json(await updateWorkItem(env, decodeURIComponent(itemMatch[1]), await safeJson(request), url.searchParams));
-  }
-
-  if (itemMatch && request.method === 'DELETE') {
-    await requireDashboardAccess(request, env);
-    return json(await deleteWorkItem(env, decodeURIComponent(itemMatch[1]), url.searchParams));
-  }
-
-  return null;
-}
+export const workRoutes = [
+  route('GET', '/api/work-meetings', auth.dash, (ctx) => listWorkMeetings(ctx.env, ctx.query)),
+  route('POST', '/api/work-meetings', auth.dash, async (ctx) => createWorkMeeting(ctx.env, await ctx.safeBody(), ctx.query), 201),
+  route('PATCH', '/api/work-meetings/:id', auth.dash, async (ctx) => updateWorkMeeting(ctx.env, ctx.params.id, await ctx.safeBody(), ctx.query)),
+  route('DELETE', '/api/work-meetings/:id', auth.dash, (ctx) => deleteWorkMeeting(ctx.env, ctx.params.id, ctx.query)),
+  route('POST', '/api/work-followups', auth.dash, async (ctx) => createWorkFollowup(ctx.env, await ctx.safeBody(), ctx.query), 201),
+  route('PATCH', '/api/work-followups/:id', auth.dash, async (ctx) => updateWorkFollowup(ctx.env, ctx.params.id, await ctx.safeBody(), ctx.query)),
+  route('DELETE', '/api/work-followups/:id', auth.dash, (ctx) => deleteWorkFollowup(ctx.env, ctx.params.id, ctx.query)),
+  route('GET', '/api/work-items', auth.dash, (ctx) => listWorkItems(ctx.env, ctx.query)),
+  route('POST', '/api/work-items', auth.dash, async (ctx) => createWorkItem(ctx.env, await ctx.safeBody(), ctx.query), 201),
+  route('POST', '/api/work-items/reorder', auth.dash, async (ctx) => reorderWorkItems(ctx.env, await ctx.safeBody(), ctx.query)),
+  route('POST', '/api/work-items/:id/timeline', auth.dash, async (ctx) => addWorkItemTimelineEvent(ctx.env, ctx.params.id, await ctx.safeBody(), ctx.query), 201),
+  route('PATCH', '/api/work-items/:id', auth.dash, async (ctx) => updateWorkItem(ctx.env, ctx.params.id, await ctx.safeBody(), ctx.query)),
+  route('DELETE', '/api/work-items/:id', auth.dash, (ctx) => deleteWorkItem(ctx.env, ctx.params.id, ctx.query)),
+];

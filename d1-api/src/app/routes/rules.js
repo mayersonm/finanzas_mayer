@@ -1,43 +1,20 @@
+import { auth, route } from '../router.js';
+import {
+  budgetKeysPayload,
+  classifyRulePayload,
+  deleteBudgetCategoryRule,
+  deleteCategoryRule,
+  rulesList,
+  upsertBudgetCategoryRule,
+  upsertCategoryRule,
+} from '../../modules/rules/service.js';
 
-import { json } from '../../shared/http.js';
-import { requireAdminKey, requireDashboardOrAdminAccess } from '../../auth/service.js';
-import { budgetKeysPayload, classifyRulePayload, deleteBudgetCategoryRule, deleteCategoryRule, rulesList, upsertBudgetCategoryRule, upsertCategoryRule } from '../../modules/rules/service.js';
-
-export async function rulesRoutes(request, env, url) {
-  if (url.pathname === '/api/rules' && request.method === 'GET') {
-    await requireDashboardOrAdminAccess(request, env);
-    return json(await rulesList(env, url.searchParams));
-  }
-
-  if (url.pathname === '/api/rules/classify' && request.method === 'POST') {
-    requireAdminKey(request, env);
-    return json(await classifyRulePayload(env, await request.json()));
-  }
-
-  if (url.pathname === '/api/rules/budget/keys' && request.method === 'POST') {
-    requireAdminKey(request, env);
-    return json(await budgetKeysPayload(env, await request.json()));
-  }
-
-  if (url.pathname === '/api/rules/category' && request.method === 'POST') {
-    await requireDashboardOrAdminAccess(request, env);
-    return json(await upsertCategoryRule(env, await request.json()), 201);
-  }
-
-  if (url.pathname === '/api/rules/category/delete' && request.method === 'POST') {
-    await requireDashboardOrAdminAccess(request, env);
-    return json(await deleteCategoryRule(env, await request.json()));
-  }
-
-  if (url.pathname === '/api/rules/budget' && request.method === 'POST') {
-    await requireDashboardOrAdminAccess(request, env);
-    return json(await upsertBudgetCategoryRule(env, await request.json()), 201);
-  }
-
-  if (url.pathname === '/api/rules/budget/delete' && request.method === 'POST') {
-    await requireDashboardOrAdminAccess(request, env);
-    return json(await deleteBudgetCategoryRule(env, await request.json()));
-  }
-
-  return null;
-}
+export const rulesRoutes = [
+  route('GET', '/api/rules', auth.dashAdmin, (ctx) => rulesList(ctx.env, ctx.query)),
+  route('POST', '/api/rules/classify', auth.admin, async (ctx) => classifyRulePayload(ctx.env, await ctx.body())),
+  route('POST', '/api/rules/budget/keys', auth.admin, async (ctx) => budgetKeysPayload(ctx.env, await ctx.body())),
+  route('POST', '/api/rules/category', auth.dashAdmin, async (ctx) => upsertCategoryRule(ctx.env, await ctx.body()), 201),
+  route('POST', '/api/rules/category/delete', auth.dashAdmin, async (ctx) => deleteCategoryRule(ctx.env, await ctx.body())),
+  route('POST', '/api/rules/budget', auth.dashAdmin, async (ctx) => upsertBudgetCategoryRule(ctx.env, await ctx.body()), 201),
+  route('POST', '/api/rules/budget/delete', auth.dashAdmin, async (ctx) => deleteBudgetCategoryRule(ctx.env, await ctx.body())),
+];

@@ -1,5 +1,4 @@
-import { json } from '../../shared/http.js';
-import { requireAdminKey, requireDashboardAccess } from '../../auth/service.js';
+import { auth, route } from '../router.js';
 import {
   categoryDefinitions,
   dashboardSettings,
@@ -11,46 +10,13 @@ import {
   usersList,
 } from '../../modules/settings/service.js';
 
-export async function settingsRoutes(request, env, url) {
-  if (url.pathname === '/api/settings' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json(await dashboardSettings(env, url.searchParams));
-  }
-
-  if (url.pathname === '/api/settings' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await updateDashboardSettings(env, await request.json(), url.searchParams));
-  }
-
-  if (url.pathname === '/api/profile' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json(await profile(env, url.searchParams));
-  }
-
-  if (url.pathname === '/api/categories' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json(await categoryDefinitions(env, url.searchParams));
-  }
-
-  if (url.pathname === '/api/categories' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await upsertCategoryDefinition(env, await request.json(), url.searchParams), 201);
-  }
-
-  if (url.pathname === '/api/categories/delete' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await disableCategoryDefinition(env, await request.json(), url.searchParams));
-  }
-
-  if (url.pathname === '/api/users' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json(await usersList(env));
-  }
-
-  if (url.pathname === '/api/users/link' && request.method === 'POST') {
-    requireAdminKey(request, env);
-    return json(await linkTelegramUser(env, await request.json()), 201);
-  }
-
-  return null;
-}
+export const settingsRoutes = [
+  route('GET', '/api/settings', auth.dash, (ctx) => dashboardSettings(ctx.env, ctx.query)),
+  route('POST', '/api/settings', auth.dash, async (ctx) => updateDashboardSettings(ctx.env, await ctx.body(), ctx.query)),
+  route('GET', '/api/profile', auth.dash, (ctx) => profile(ctx.env, ctx.query)),
+  route('GET', '/api/categories', auth.dash, (ctx) => categoryDefinitions(ctx.env, ctx.query)),
+  route('POST', '/api/categories', auth.dash, async (ctx) => upsertCategoryDefinition(ctx.env, await ctx.body(), ctx.query), 201),
+  route('POST', '/api/categories/delete', auth.dash, async (ctx) => disableCategoryDefinition(ctx.env, await ctx.body(), ctx.query)),
+  route('GET', '/api/users', auth.dash, (ctx) => usersList(ctx.env)),
+  route('POST', '/api/users/link', auth.admin, async (ctx) => linkTelegramUser(ctx.env, await ctx.body()), 201),
+];

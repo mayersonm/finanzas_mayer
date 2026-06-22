@@ -511,6 +511,30 @@ Vuelve a la raiz:
 cd ..
 ```
 
+### Estructura interna del Worker
+
+El codigo del Worker vive en `d1-api/src` y separa el ruteo de la logica de negocio:
+
+```text
+src
+  index.js            Punto de entrada (re-exporta el worker)
+  app
+    worker.js         fetch + scheduled; delega en el router
+    router.js         Router declarativo: route(), estrategias de auth y dispatcher
+    routes            Una tabla de rutas por dominio (auth, dashboard, transactions...)
+  modules             Logica de negocio por dominio (dashboard, commitments, ...)
+  shared              Utilidades (http, dates, money, crypto, categories...)
+  auth                Sesiones, login, 2FA y guardias de acceso
+```
+
+Cada archivo en `routes` exporta un arreglo de rutas declarativas. Para agregar un endpoint basta una linea:
+
+```js
+route('GET', '/api/mi-endpoint/:id', auth.dash, (ctx) => miServicio(ctx.env, ctx.params.id, ctx.query));
+```
+
+Las estrategias de autorizacion son `auth.public`, `auth.dash`, `auth.dashAdmin` y `auth.admin`. El dispatcher aplica la auth, arma el contexto (`env`, `params`, `query`, `body()`, `safeBody()`) y serializa el resultado a JSON. El orden de registro en `routes/index.js` define la prioridad de match.
+
 ## 12. Sincronizar datos hacia D1
 
 El bot registra en Google Sheets y tambien envia datos a D1 si `d1_api_url` y `d1_admin_key` estan bien configurados.
@@ -575,7 +599,24 @@ http://localhost:5173
 
 Debe aparecer el login con el usuario `mayersonm@gmail.com`. Entra con el valor que configuraste en `LOGIN_PASSWORD`.
 
+El login usa un diseno de dos columnas: a la izquierda la marca y las funciones del sistema, a la derecha el formulario. El campo de clave tiene un boton de ojo para mostrar u ocultar lo que escribes. Si el 2FA esta activo, despues de validar la clave se pide el codigo de 6 digitos.
+
 Si se ve modo demo, falta `VITE_GAS_API_URL` o el build se hizo sin esa variable.
+
+### Activar verificacion en dos pasos (2FA)
+
+El 2FA es opcional pero recomendado. Se administra desde el dashboard, no por comandos.
+
+```text
+Entra al dashboard y abre el panel de clave (icono de candado en la barra).
+Pulsa "Activar 2FA" para generar un secreto.
+Escanea el codigo o copia el secreto en Google Authenticator, Authy o similar.
+Ingresa el codigo de 6 digitos para confirmar y activar.
+```
+
+Desde ese momento, cada login pedira la clave y luego el codigo de la app de autenticacion. Para desactivarlo, en el mismo panel ingresa tu clave y un codigo valido y pulsa "Desactivar 2FA".
+
+El secreto y el estado del 2FA se guardan en D1 (app settings). Si pierdes el acceso a la app de autenticacion, desactiva el 2FA poniendo `dashboard_2fa_enabled` en `false` y limpiando `dashboard_2fa_secret` en la tabla de settings de D1.
 
 ## 14. Desplegar el dashboard en Cloudflare Pages
 
@@ -605,6 +646,12 @@ Debe salir login
 Debe cargar Inicio
 Debe cargar Movimientos
 Debe cargar Compromisos
+Debe cargar Dinero Libre
+Debe cargar Calendario
+Debe cargar Trabajo
+Debe cargar Patrimonio
+Debe cargar Inversiones
+Debe cargar IA
 Debe cargar Analisis
 Debe cargar Metas
 Debe cargar Config
@@ -695,6 +742,11 @@ Top fugas
 Movimientos
 Compromisos
 Dinero Libre
+Calendario
+Trabajo
+Patrimonio
+Inversiones
+IA
 Analisis
 Metas
 Config
@@ -702,6 +754,7 @@ Tema claro y oscuro
 Eliminar movimiento
 Categorias y presupuestos
 Recibos adjuntos
+2FA (activar y validar login)
 ```
 
 Pulsa `Actualizar` para volver a leer D1. Pulsa `Sync manual` solo cuando hayas corregido o agregado algo manualmente en Google Sheets y quieras importarlo a D1.
