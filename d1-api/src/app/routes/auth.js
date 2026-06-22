@@ -1,57 +1,22 @@
-import { json } from '../../shared/http.js';
+import { auth, route } from '../router.js';
 import {
   changePassword,
   disableTwoFactor,
   enableTwoFactor,
   login,
-  requireDashboardAccess,
   setupTwoFactor,
   twoFactorStatus,
   verifyTwoFactorLogin,
 } from '../../auth/service.js';
 
-export async function authRoutes(request, env, url) {
-  if (url.pathname === '/api/login' && request.method === 'POST') {
-    return json(await login(env, await request.json()));
-  }
-
-  if (url.pathname === '/api/login/2fa' && request.method === 'POST') {
-    return json(await verifyTwoFactorLogin(env, await request.json()));
-  }
-
-  if (url.pathname === '/api/session' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json({ ok: true, authenticated: true });
-  }
-
-  if (url.pathname === '/api/logout' && request.method === 'POST') {
-    return json({ ok: true });
-  }
-
-  if (url.pathname === '/api/password' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await changePassword(env, await request.json()));
-  }
-
-  if (url.pathname === '/api/2fa/status' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json(await twoFactorStatus(env));
-  }
-
-  if (url.pathname === '/api/2fa/setup' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await setupTwoFactor(env));
-  }
-
-  if (url.pathname === '/api/2fa/enable' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await enableTwoFactor(env, await request.json()));
-  }
-
-  if (url.pathname === '/api/2fa/disable' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await disableTwoFactor(env, await request.json()));
-  }
-
-  return null;
-}
+export const authRoutes = [
+  route('POST', '/api/login', auth.public, async (ctx) => login(ctx.env, await ctx.body())),
+  route('POST', '/api/login/2fa', auth.public, async (ctx) => verifyTwoFactorLogin(ctx.env, await ctx.body())),
+  route('GET', '/api/session', auth.dash, () => ({ ok: true, authenticated: true })),
+  route('POST', '/api/logout', auth.public, () => ({ ok: true })),
+  route('POST', '/api/password', auth.dash, async (ctx) => changePassword(ctx.env, await ctx.body())),
+  route('GET', '/api/2fa/status', auth.dash, (ctx) => twoFactorStatus(ctx.env)),
+  route('POST', '/api/2fa/setup', auth.dash, (ctx) => setupTwoFactor(ctx.env)),
+  route('POST', '/api/2fa/enable', auth.dash, async (ctx) => enableTwoFactor(ctx.env, await ctx.body())),
+  route('POST', '/api/2fa/disable', auth.dash, async (ctx) => disableTwoFactor(ctx.env, await ctx.body())),
+];

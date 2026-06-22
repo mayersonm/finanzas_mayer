@@ -1,5 +1,4 @@
-import { json } from '../../shared/http.js';
-import { requireDashboardAccess } from '../../auth/service.js';
+import { auth, route } from '../router.js';
 import {
   deleteInvestment,
   investmentsList,
@@ -7,28 +6,9 @@ import {
   upsertInvestmentFromDashboard,
 } from '../../modules/investments/service.js';
 
-export async function investmentsRoutes(request, env, url) {
-  const investmentMatch = url.pathname.match(/^\/api\/investments\/([^/]+)$/);
-
-  if (url.pathname === '/api/investments' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json(await investmentsList(env, url.searchParams));
-  }
-
-  if (url.pathname === '/api/investments' && request.method === 'POST') {
-    await requireDashboardAccess(request, env);
-    return json(await upsertInvestmentFromDashboard(env, await request.json(), url.searchParams), 201);
-  }
-
-  if (investmentMatch && request.method === 'PATCH') {
-    await requireDashboardAccess(request, env);
-    return json(await updateInvestmentFromDashboard(env, decodeURIComponent(investmentMatch[1]), await request.json(), url.searchParams));
-  }
-
-  if (investmentMatch && request.method === 'DELETE') {
-    await requireDashboardAccess(request, env);
-    return json(await deleteInvestment(env, decodeURIComponent(investmentMatch[1]), url.searchParams));
-  }
-
-  return null;
-}
+export const investmentsRoutes = [
+  route('GET', '/api/investments', auth.dash, (ctx) => investmentsList(ctx.env, ctx.query)),
+  route('POST', '/api/investments', auth.dash, async (ctx) => upsertInvestmentFromDashboard(ctx.env, await ctx.body(), ctx.query), 201),
+  route('PATCH', '/api/investments/:id', auth.dash, async (ctx) => updateInvestmentFromDashboard(ctx.env, ctx.params.id, await ctx.body(), ctx.query)),
+  route('DELETE', '/api/investments/:id', auth.dash, (ctx) => deleteInvestment(ctx.env, ctx.params.id, ctx.query)),
+];

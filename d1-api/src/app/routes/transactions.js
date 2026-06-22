@@ -1,55 +1,31 @@
-
-import { json } from '../../shared/http.js';
+import { auth, route } from '../router.js';
 import { getChatId } from '../../shared/request.js';
-import { requireAdminKey, requireDashboardAccess, requireDashboardOrAdminAccess } from '../../auth/service.js';
-import { deleteTransaction, insertTransaction, transactions, updateTransactionCategory, updateTransactionFromDashboard, updateTransactionPayment } from '../../modules/transactions/service.js';
+import {
+  deleteTransaction,
+  insertTransaction,
+  transactions,
+  updateTransactionCategory,
+  updateTransactionFromDashboard,
+  updateTransactionPayment,
+} from '../../modules/transactions/service.js';
 
-export async function transactionsRoutes(request, env, url) {
-  const transactionMatch = url.pathname.match(/^\/api\/transactions\/([^/]+)$/);
-
-  if (url.pathname === '/api/transactions' && request.method === 'GET') {
-    await requireDashboardOrAdminAccess(request, env);
-    return json(await transactions(env, url.searchParams));
-  }
-
-  if (url.pathname === '/api/transactions' && request.method === 'POST') {
-    requireAdminKey(request, env);
-    return json(await insertTransaction(env, await request.json()), 201);
-  }
-
-  if (transactionMatch && request.method === 'DELETE') {
-    await requireDashboardAccess(request, env);
-    return json(await deleteTransaction(env, {
-      id: decodeURIComponent(transactionMatch[1]),
-      chatId: getChatId(env, url.searchParams),
-      deleteFromGas: true,
-    }));
-  }
-
-  if (transactionMatch && request.method === 'PATCH') {
-    await requireDashboardAccess(request, env);
-    return json(await updateTransactionFromDashboard(env, decodeURIComponent(transactionMatch[1]), await request.json(), url.searchParams));
-  }
-
-  if (url.pathname === '/api/transactions/delete' && request.method === 'POST') {
-    requireAdminKey(request, env);
-    const payload = await request.json();
-    return json(await deleteTransaction(env, {
+export const transactionsRoutes = [
+  route('GET', '/api/transactions', auth.dashAdmin, (ctx) => transactions(ctx.env, ctx.query)),
+  route('POST', '/api/transactions', auth.admin, async (ctx) => insertTransaction(ctx.env, await ctx.body()), 201),
+  route('POST', '/api/transactions/delete', auth.admin, async (ctx) => {
+    const payload = await ctx.body();
+    return deleteTransaction(ctx.env, {
       id: String(payload.id || payload.transaction_id || payload.transactionId || '').trim(),
-      chatId: String(payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim(),
+      chatId: String(payload.chat_id || payload.chatId || ctx.env.DEFAULT_CHAT_ID || '').trim(),
       deleteFromGas: false,
-    }));
-  }
-
-  if (url.pathname === '/api/transactions/category' && request.method === 'POST') {
-    requireAdminKey(request, env);
-    return json(await updateTransactionCategory(env, await request.json()));
-  }
-
-  if (url.pathname === '/api/transactions/payment' && request.method === 'POST') {
-    requireAdminKey(request, env);
-    return json(await updateTransactionPayment(env, await request.json()));
-  }
-
-  return null;
-}
+    });
+  }),
+  route('POST', '/api/transactions/category', auth.admin, async (ctx) => updateTransactionCategory(ctx.env, await ctx.body())),
+  route('POST', '/api/transactions/payment', auth.admin, async (ctx) => updateTransactionPayment(ctx.env, await ctx.body())),
+  route('DELETE', '/api/transactions/:id', auth.dash, (ctx) => deleteTransaction(ctx.env, {
+    id: ctx.params.id,
+    chatId: getChatId(ctx.env, ctx.query),
+    deleteFromGas: true,
+  })),
+  route('PATCH', '/api/transactions/:id', auth.dash, async (ctx) => updateTransactionFromDashboard(ctx.env, ctx.params.id, await ctx.body(), ctx.query)),
+];

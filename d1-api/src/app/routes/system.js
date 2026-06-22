@@ -1,23 +1,10 @@
-
-import { json } from '../../shared/http.js';
-import { requireDashboardAccess } from '../../auth/service.js';
+import { auth, route } from '../router.js';
 import { health, systemHealth } from '../../modules/system/health.js';
 import { exchangeRate } from '../../modules/system/exchange-rate.js';
 
-export async function systemRoutes(request, env, url) {
-  if ((url.pathname === '/' || url.pathname === '/health') && request.method === 'GET') {
-    return json(await health(env));
-  }
-
-  if (url.pathname === '/api/system-health' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json(await systemHealth(env));
-  }
-
-  if (url.pathname === '/api/exchange-rate' && request.method === 'GET') {
-    await requireDashboardAccess(request, env);
-    return json(await exchangeRate(env));
-  }
-
-  return null;
-}
+export const systemRoutes = [
+  route('GET', '/', auth.public, (ctx) => health(ctx.env)),
+  route('GET', '/health', auth.public, (ctx) => health(ctx.env)),
+  route('GET', '/api/system-health', auth.dash, (ctx) => systemHealth(ctx.env)),
+  route('GET', '/api/exchange-rate', auth.dash, (ctx) => exchangeRate(ctx.env)),
+];
