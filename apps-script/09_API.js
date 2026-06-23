@@ -101,10 +101,14 @@ function handleDashboardApi(e) {
       return dashJson_(dashAiAdvisor_(params, body));
     }
 
+    if (action === 'send_password_reset') {
+      return dashJson_(dashSendPasswordReset_(params));
+    }
+
     return dashJson_({
       ok: false,
       error: 'Accion no valida',
-      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email', 'send_monthly_email', 'send_yearly_email', 'send_daily_telegram', 'ai_advisor'],
+      validActions: ['health', 'dashboard', 'txs', 'delete_tx', 'stats', 'config', 'update_config', 'setup_triggers', 'send_daily_email', 'send_monthly_email', 'send_yearly_email', 'send_daily_telegram', 'ai_advisor', 'send_password_reset'],
     });
   } catch (err) {
     Logger.log('Dashboard API error: ' + (err && err.stack ? err.stack : err));
@@ -432,6 +436,30 @@ function dashSendDailyEmail_() {
     ok: true,
     result: result || 'Resumen diario enviado',
     type: 'daily',
+    sentAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
+  };
+}
+
+function dashSendPasswordReset_(params) {
+  const to = String(params.to || '').trim();
+  const code = String(params.code || '').trim();
+  if (!to || !/^\d{6}$/.test(code)) throw new Error('Faltan to o code valido');
+
+  MailApp.sendEmail({
+    to: to,
+    subject: 'Codigo de recuperacion - Mayeson Finanzas',
+    htmlBody:
+      '<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#0f172a">' +
+      '<h2 style="margin:0 0 8px">Recuperacion de clave</h2>' +
+      '<p style="color:#475569;margin:0 0 16px">Usa este codigo para restablecer tu clave del dashboard. Vence en 15 minutos.</p>' +
+      '<div style="font-size:32px;font-weight:700;letter-spacing:8px;text-align:center;background:#f1f5f9;border-radius:12px;padding:16px 0;margin:0 0 16px">' + code + '</div>' +
+      '<p style="color:#94a3b8;font-size:13px;margin:0">Si no solicitaste este cambio, ignora este correo y tu clave seguira igual.</p>' +
+      '</div>',
+  });
+
+  return {
+    ok: true,
+    type: 'password_reset',
     sentAt: Utilities.formatDate(new Date(), DASH_TZ, "yyyy-MM-dd'T'HH:mm:ss"),
   };
 }
