@@ -16,6 +16,7 @@ export async function cycleExpenseRows(env, chatId, cycle) {
   return rows.results || [];
 }
 
+// Agrupa filas de gasto por categoria (ya clasificada con reglas) y las ordena por monto.
 export function categoriesFromExpenseRows(rows, rules, usdRate = 3.85) {
   const spending = {};
   for (const row of rows || []) {
@@ -32,6 +33,7 @@ export function categoriesFromExpenseRows(rows, rules, usdRate = 3.85) {
     .sort((a, b) => b.monto - a.monto || a.cat.localeCompare(b.cat));
 }
 
+// Detecta las mayores fugas de gasto variable, excluyendo deudas y fijos ya pagados.
 export function topLeaksFromExpenseRows(rows, rules, usdRate = 3.85) {
   const grouped = {};
   let total = 0;
@@ -76,6 +78,20 @@ export function topLeaksFromExpenseRows(rows, rules, usdRate = 3.85) {
     })
     .sort((a, b) => b.amount - a.amount || b.count - a.count || a.label.localeCompare(b.label))
     .slice(0, 5);
+}
+
+// Lee los gastos del periodo y sus reglas. Reutilizado por las variantes "WithSpending"/topLeaks.
+async function loadExpenseRowsAndRules(env, chatId, period) {
+  const rowsPromise = env.DB.prepare(`
+    SELECT category AS cat, description AS desc, amount, currency, source
+    FROM transactions
+    WHERE chat_id = ?
+      AND type = 'gasto'
+      AND tx_date BETWEEN ? AND ?
+  `).bind(chatId, period.startKey, period.endKey).all();
+
+  const [rows, rules] = await Promise.all([rowsPromise, loadCategoryRules(env, chatId)]);
+  return { rows: rows.results || [], rules };
 }
 
 export function budgetsFromExpenseRows(rows, expenseRows, categoryRules, budgetRules, usdRate = 3.85) {
@@ -130,89 +146,13 @@ export async function lastMonths(env, chatId, now, usdRate = 3.85) {
 }
 
 export async function categoriesWithSpending(env, chatId, cycle, usdRate = 3.85) {
-  const rowsPromise = env.DB.prepare(`
-    SELECT category AS cat, description AS desc, amount, currency
-    FROM transactions
-    WHERE chat_id = ?
-      AND type = 'gasto'
-      AND tx_date BETWEEN ? AND ?
-  `).bind(chatId, cycle.startKey, cycle.endKey).all();
-
-  const [rows, rules] = await Promise.all([
-    rowsPromise,
-    loadCategoryRules(env, chatId),
-  ]);
-  const spending = {};
-  for (const row of rows.results || []) {
-    const cat = classifyCategoryFromLoadedRules(rules, row.cat, row.desc);
-    spending[cat] = (spending[cat] || 0) + currencyToPen(Number(row.amount || 0), row.currency || 'PEN', usdRate);
-  }
-
-  return Object.keys(spending)
-    .map((cat) => ({
-      cat: title(cat),
-      monto: round(spending[cat]),
-      color: COLORS[cat] || COLORS.otro,
-    }))
-    .sort((a, b) => b.monto - a.monto || a.cat.localeCompare(b.cat));
+  const { rows, rules } = await loadExpenseRowsAndRules(env, chatId, cycle);
+  return categoriesFromExpenseRows(rows, rules, usdRate);
 }
 
 export async function topLeaks(env, chatId, period, usdRate = 3.85) {
-  const rowsPromise = env.DB.prepare(`
-    SELECT description AS desc, category AS cat, amount, currency, source
-    FROM transactions
-    WHERE chat_id = ?
-      AND type = 'gasto'
-      AND tx_date BETWEEN ? AND ?
-  `).bind(chatId, period.startKey, period.endKey).all();
-
-  const [rows, rules] = await Promise.all([
-    rowsPromise,
-    loadCategoryRules(env, chatId),
-  ]);
-  const grouped = {};
-  let total = 0;
-
-  for (const row of rows.results || []) {
-    const cat = classifyCategoryFromLoadedRules(rules, row.cat, row.desc);
-    const source = normalizeKey(row.source || '');
-    const descKey = normalizeKey(row.desc || '');
-    if (cat === 'deudas' || source === 'debt_payment' || descKey.startsWith('fijo pagado')) continue;
-
-    const amount = currencyToPen(Number(row.amount || 0), row.currency || 'PEN', usdRate);
-    if (amount <= 0) continue;
-
-    const label = leakLabel(row.desc, cat);
-    const key = `${normalizeKey(label)}|${cat}`;
-    if (!grouped[key]) {
-      grouped[key] = {
-        label,
-        category: title(cat),
-        amount: 0,
-        count: 0,
-      };
-    }
-    grouped[key].amount += amount;
-    grouped[key].count += 1;
-    total += amount;
-  }
-
-  return Object.values(grouped)
-    .map((item) => {
-      const sharePct = total > 0 ? round((item.amount / total) * 100) : 0;
-      return {
-        label: item.label,
-        category: item.category,
-        amount: round(item.amount),
-        count: item.count,
-        sharePct,
-        reason: item.count > 1
-          ? `${item.count} movimientos - ${sharePct}% del gasto variable`
-          : `${sharePct}% del gasto variable`,
-      };
-    })
-    .sort((a, b) => b.amount - a.amount || b.count - a.count || a.label.localeCompare(b.label))
-    .slice(0, 5);
+  const { rows, rules } = await loadExpenseRowsAndRules(env, chatId, period);
+  return topLeaksFromExpenseRows(rows, rules, usdRate);
 }
 
 export function leakLabel(description, category) {

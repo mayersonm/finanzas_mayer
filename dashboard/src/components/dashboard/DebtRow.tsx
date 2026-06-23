@@ -27,7 +27,7 @@ export function DebtRow({
   const payments = item.payments || [];
 
   return (
-    <div className="border-b border-slate-800 py-3 last:border-b-0 last:pb-0 first:pt-0 sm:py-4">
+    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3 transition hover:border-slate-700 sm:p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <Text className="truncate font-semibold text-slate-100">{item.nombre}</Text>

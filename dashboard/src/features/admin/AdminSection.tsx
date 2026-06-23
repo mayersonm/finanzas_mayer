@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Badge, Button, Card, Text, Title } from '@tremor/react';
 import { RiAddLine, RiDeleteBinLine, RiRefreshLine } from '@remixicon/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import type { BudgetRuleItem, CategoryDefinition, CategoryRuleItem, DashboardUser } from '../../types/dashboard';
 
 const CATEGORIES = ['supermercado', 'transporte', 'servicios', 'entretenimiento', 'salud', 'ropa', 'educacion', 'salario', 'freelance', 'inversion', 'venta', 'otro'];
@@ -25,28 +25,15 @@ export function AdminSection({
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const authHeaders: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
-
   const load = useCallback(async () => {
     if (!authToken) return;
     setLoading(true);
     setError('');
     try {
-      const categoryUrl = new URL(apiEndpoint('categories'));
-      const rulesUrl = new URL(apiEndpoint('rules'));
-      if (chatId) {
-        categoryUrl.searchParams.set('chat_id', chatId);
-        rulesUrl.searchParams.set('chat_id', chatId);
-      }
-
-      const [categoryResponse, rulesResponse] = await Promise.all([
-        fetch(categoryUrl.toString(), { headers: authHeaders }),
-        fetch(rulesUrl.toString(), { headers: authHeaders }),
+      const [categoryData, rulesData] = await Promise.all([
+        apiRequest<{ categories?: CategoryDefinition[] }>('categories', { token: authToken, query: { chat_id: chatId } }),
+        apiRequest<{ categoryRules?: CategoryRuleItem[]; budgetRules?: BudgetRuleItem[] }>('rules', { token: authToken, query: { chat_id: chatId } }),
       ]);
-      const categoryData = await categoryResponse.json() as { categories?: CategoryDefinition[]; error?: string };
-      const rulesData = await rulesResponse.json() as { categoryRules?: CategoryRuleItem[]; budgetRules?: BudgetRuleItem[]; error?: string };
-      if (!categoryResponse.ok) throw new Error(categoryData.error || 'No se pudo leer categorias');
-      if (!rulesResponse.ok) throw new Error(rulesData.error || 'No se pudo leer reglas');
 
       setCategories(categoryData.categories || []);
       setCategoryRules(rulesData.categoryRules || []);
@@ -65,15 +52,12 @@ export function AdminSection({
 
   async function post(path: string, payload: Record<string, unknown>) {
     if (!authToken) return;
-    const url = new URL(apiEndpoint(path));
-    if (chatId) url.searchParams.set('chat_id', chatId);
-    const response = await fetch(url.toString(), {
+    await apiRequest(path, {
       method: 'POST',
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, chatId }),
+      token: authToken,
+      query: { chat_id: chatId },
+      body: { ...payload, chatId },
     });
-    const data = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(data.error || 'No se pudo guardar');
   }
 
   async function submitCategory(event: FormEvent<HTMLFormElement>) {

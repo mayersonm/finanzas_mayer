@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Card, Metric, Text, Title } from '@tremor/react';
 import { RiCheckboxCircleLine, RiErrorWarningLine, RiRefreshLine } from '@remixicon/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import type { HealthCheck, SystemHealthData } from '../../types/dashboard';
 
 const EMPTY_HEALTH: SystemHealthData = {
@@ -21,11 +21,7 @@ export function HealthSection({ authToken }: { authToken?: string | null }) {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(apiEndpoint('system-health'), {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const data = await response.json() as SystemHealthData;
-      if (!response.ok || data.error) throw new Error(data.error || 'No se pudo leer salud del sistema');
+      const data = await apiRequest<SystemHealthData>('system-health', { token: authToken });
       setHealth(data);
     } catch (err) {
       console.error('Health error:', err);

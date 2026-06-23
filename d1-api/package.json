@@ -6,11 +6,14 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:create": "wrangler d1 create finanzas_mayeson",
     "db:migrate:local": "wrangler d1 migrations apply finanzas_mayeson --local",
     "db:migrate:remote": "wrangler d1 migrations apply finanzas_mayeson --remote"
   },
   "devDependencies": {
+    "vitest": "^4.1.9",
     "wrangler": "^4.90.0"
   }
 }

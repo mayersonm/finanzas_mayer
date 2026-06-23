@@ -1,12 +1,13 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Badge, Card, Text, Title } from '@tremor/react';
 import { RiAddLine, RiCloseLine, RiSave3Line } from '@remixicon/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import { BudgetProgress } from '../../components/dashboard/BudgetProgress';
 import { DebtRow } from '../../components/dashboard/DebtRow';
 import { EmailPanel } from '../../components/dashboard/EmailPanel';
 import { FixedExpenseRow } from '../../components/dashboard/FixedExpenseRow';
 import { EmptyState } from '../../components/common/EmptyState';
+import { SummaryBar } from '../../components/common/SummaryBar';
 import { formatMoney, convertCurrency } from '../../lib/formatters';
 import type { Currency, DashboardData, Debt, FixedExpense, RealExpenses } from '../../types/dashboard';
 
@@ -76,6 +77,8 @@ export function CommitmentsSection({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showFixedForm, setShowFixedForm] = useState(false);
+  const [showDebtForm, setShowDebtForm] = useState(false);
 
   const activeDebtTotal = useMemo(() => debts
     .filter((item) => item.estado !== 'pagada')
@@ -88,6 +91,7 @@ export function CommitmentsSection({
   const startEditFixed = (item: FixedExpense) => {
     setFixedMessage('');
     setFixedError('');
+    setShowFixedForm(true);
     setFixedDraft({
       id: item.id,
       nombre: item.nombre,
@@ -101,6 +105,7 @@ export function CommitmentsSection({
     setFixedDraft(emptyFixedDraft);
     setFixedMessage('');
     setFixedError('');
+    setShowFixedForm(false);
   };
 
   const saveFixedExpense = async (event: FormEvent<HTMLFormElement>) => {
@@ -118,19 +123,15 @@ export function CommitmentsSection({
         currency: fixedDraft.currency,
         cat: fixedDraft.cat,
       };
-      const url = fixedDraft.id ? `${apiEndpoint(`fixed-expenses/${encodeURIComponent(fixedDraft.id)}`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}` : apiEndpoint('fixed-expenses');
-      const response = await fetch(url, {
+      await apiRequest(fixedDraft.id ? `fixed-expenses/${encodeURIComponent(fixedDraft.id)}` : 'fixed-expenses', {
         method: fixedDraft.id ? 'PATCH' : 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        token: authToken,
+        query: { chat_id: chatId },
+        body: payload,
       });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo guardar el gasto fijo');
       setFixedMessage(fixedDraft.id ? 'Gasto fijo actualizado.' : 'Gasto fijo creado.');
       setFixedDraft(emptyFixedDraft);
+      setShowFixedForm(false);
       onChanged?.();
     } catch (err) {
       setFixedError(err instanceof Error ? err.message : 'No se pudo guardar el gasto fijo');
@@ -148,13 +149,11 @@ export function CommitmentsSection({
     setFixedMessage('');
     setFixedError('');
     try {
-      const url = `${apiEndpoint(`fixed-expenses/${encodeURIComponent(item.id)}`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
-      const response = await fetch(url, {
+      await apiRequest(`fixed-expenses/${encodeURIComponent(item.id)}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${authToken}` },
+        token: authToken,
+        query: { chat_id: chatId },
       });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo eliminar el gasto fijo');
       setFixedMessage('Gasto fijo eliminado.');
       if (fixedDraft.id === item.id) setFixedDraft(emptyFixedDraft);
       onChanged?.();
@@ -172,17 +171,12 @@ export function CommitmentsSection({
     setFixedError('');
 
     try {
-      const url = `${apiEndpoint(`fixed-expenses/${encodeURIComponent(item.id)}/status`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
-      const response = await fetch(url, {
+      await apiRequest(`fixed-expenses/${encodeURIComponent(item.id)}/status`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ chat_id: chatId, status: 'pagado' }),
+        token: authToken,
+        query: { chat_id: chatId },
+        body: { chat_id: chatId, status: 'pagado' },
       });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo marcar el fijo como pagado');
       setFixedMessage('Gasto fijo marcado como pagado. No se creó una transacción.');
       onChanged?.();
     } catch (err) {
@@ -195,6 +189,7 @@ export function CommitmentsSection({
   const startEdit = (item: Debt) => {
     setMessage('');
     setError('');
+    setShowDebtForm(true);
     setPayment({ amount: '', paymentDate: todayKey(), notes: '' });
     setDraft({
       id: item.id,
@@ -222,6 +217,7 @@ export function CommitmentsSection({
     setDraft(emptyDebtDraft);
     setMessage('');
     setError('');
+    setShowDebtForm(false);
   };
 
   const saveDebt = async (event: FormEvent<HTMLFormElement>) => {
@@ -241,19 +237,15 @@ export function CommitmentsSection({
         vencimiento: draft.vencimiento,
         notas: draft.notas,
       };
-      const url = draft.id ? `${apiEndpoint(`debts/${encodeURIComponent(draft.id)}`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}` : apiEndpoint('debts');
-      const response = await fetch(url, {
+      await apiRequest(draft.id ? `debts/${encodeURIComponent(draft.id)}` : 'debts', {
         method: draft.id ? 'PATCH' : 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        token: authToken,
+        query: { chat_id: chatId },
+        body: payload,
       });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo guardar la deuda');
       setMessage(draft.id ? 'Deuda actualizada.' : 'Deuda creada.');
       setDraft(emptyDebtDraft);
+      setShowDebtForm(false);
       onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar la deuda');
@@ -270,22 +262,17 @@ export function CommitmentsSection({
     setError('');
 
     try {
-      const url = `${apiEndpoint(`debts/${encodeURIComponent(payment.debt.id)}/payments`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
-      const response = await fetch(url, {
+      await apiRequest(`debts/${encodeURIComponent(payment.debt.id)}/payments`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+        token: authToken,
+        query: { chat_id: chatId },
+        body: {
           amount: Number(payment.amount),
           currency: payment.debt.currency || 'PEN',
           paymentDate: payment.paymentDate,
           notes: payment.notes,
-        }),
+        },
       });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo registrar el pago');
       setMessage('Pago registrado.');
       setPayment({ amount: '', paymentDate: todayKey(), notes: '' });
       onChanged?.();
@@ -305,13 +292,11 @@ export function CommitmentsSection({
     setMessage('');
     setError('');
     try {
-      const url = `${apiEndpoint(`debts/${encodeURIComponent(item.id)}`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
-      const response = await fetch(url, {
+      await apiRequest(`debts/${encodeURIComponent(item.id)}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${authToken}` },
+        token: authToken,
+        query: { chat_id: chatId },
       });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo eliminar la deuda');
       setMessage('Deuda eliminada.');
       onChanged?.();
     } catch (err) {
@@ -322,24 +307,41 @@ export function CommitmentsSection({
   };
 
   return (
-    <section className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+    <div className="grid gap-3 sm:gap-4">
+      <SummaryBar
+        stats={[
+          { label: 'Fijos pendientes', value: formatMoney(realExpenses.totalFijos), tone: 'warn', detail: `${fixedExpenses.length} activos` },
+          { label: 'Presupuesto', value: formatMoney(realExpenses.totalPresupuesto), tone: 'info' },
+          { label: 'Deudas activas', value: formatMoney(activeDebtTotal), tone: 'bad', detail: `${debts.filter((item) => item.estado !== 'pagada').length} activas` },
+          { label: 'Total comprometido', value: formatMoney(realExpenses.total + activeDebtTotal) },
+        ]}
+      />
+
+      <section className="grid gap-3 sm:gap-4 lg:grid-cols-2">
       <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <Title>Gastos fijos</Title>
-            <Text>{fixedExpenses.length} activos</Text>
+            <Text>{fixedExpenses.length} activos · {formatMoney(realExpenses.totalFijos)} pendientes</Text>
           </div>
-          <Badge color="amber">{formatMoney(realExpenses.totalFijos)} pendientes</Badge>
+          {!showFixedForm ? (
+            <button
+              type="button"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-tremor-default border border-amber-500/40 bg-amber-500/10 px-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15"
+              onClick={() => { setFixedDraft(emptyFixedDraft); setFixedMessage(''); setFixedError(''); setShowFixedForm(true); }}
+            >
+              <RiAddLine className="h-4 w-4" /> Nuevo
+            </button>
+          ) : null}
         </div>
 
+        {showFixedForm ? (
         <form className="mt-4 grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3" onSubmit={saveFixedExpense}>
           <div className="flex items-center justify-between gap-3">
             <Text className="font-semibold text-slate-100">{fixedDraft.id ? 'Editar gasto fijo' : 'Nuevo gasto fijo'}</Text>
-            {fixedDraft.id ? (
-              <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-tremor-default border border-slate-700 text-slate-300" onClick={resetFixedForm} title="Cancelar">
-                <RiCloseLine className="h-4 w-4" />
-              </button>
-            ) : null}
+            <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-tremor-default border border-slate-700 text-slate-300" onClick={resetFixedForm} title="Cancelar">
+              <RiCloseLine className="h-4 w-4" />
+            </button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Nombre"><input className="form-input" value={fixedDraft.nombre} onChange={(event) => setFixedDraft((current) => ({ ...current, nombre: event.target.value }))} required /></Field>
@@ -357,10 +359,11 @@ export function CommitmentsSection({
             {fixedDraft.id ? 'Guardar fijo' : 'Crear fijo'}
           </button>
         </form>
+        ) : null}
         {fixedMessage ? <div className="mt-3 rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">{fixedMessage}</div> : null}
         {fixedError ? <div className="mt-3 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">{fixedError}</div> : null}
 
-        <div className="mt-4 sm:mt-5">
+        <div className="mt-4 grid gap-2 sm:mt-5">
           {fixedExpenses.length ? (
             fixedExpenses.map((item) => (
               <FixedExpenseRow
@@ -396,15 +399,30 @@ export function CommitmentsSection({
         </div>
       </Card>
 
-      <Card>
-        <form className="mt-5 grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3" onSubmit={saveDebt}>
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Title>Deudas</Title>
+            <Text>{debts.filter((item) => item.estado !== 'pagada').length} activas · {formatMoney(activeDebtTotal)}</Text>
+          </div>
+          {!showDebtForm ? (
+            <button
+              type="button"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-tremor-default border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+              onClick={() => { setDraft(emptyDebtDraft); setMessage(''); setError(''); setShowDebtForm(true); }}
+            >
+              <RiAddLine className="h-4 w-4" /> Nueva
+            </button>
+          ) : null}
+        </div>
+
+        {showDebtForm ? (
+        <form className="mt-4 grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3" onSubmit={saveDebt}>
           <div className="flex items-center justify-between gap-3">
             <Text className="font-semibold text-slate-100">{draft.id ? 'Editar deuda' : 'Nueva deuda'}</Text>
-            {draft.id ? (
-              <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-tremor-default border border-slate-700 text-slate-300" onClick={resetDebtForm} title="Cancelar">
-                <RiCloseLine className="h-4 w-4" />
-              </button>
-            ) : null}
+            <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-tremor-default border border-slate-700 text-slate-300" onClick={resetDebtForm} title="Cancelar">
+              <RiCloseLine className="h-4 w-4" />
+            </button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Nombre"><input className="form-input" value={draft.nombre} onChange={(event) => setDraft((current) => ({ ...current, nombre: event.target.value }))} required /></Field>
@@ -424,16 +442,7 @@ export function CommitmentsSection({
             {draft.id ? 'Guardar deuda' : 'Crear deuda'}
           </button>
         </form>
-      </Card>
-
-      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <Title>Deudas</Title>
-            <Text>{debts.filter((item) => item.estado !== 'pagada').length} activas</Text>
-          </div>
-          <Badge color="rose">{formatMoney(activeDebtTotal)}</Badge>
-        </div>
+        ) : null}
 
         {payment.debt ? (
           <form className="mt-3 grid gap-3 rounded-tremor-default border border-emerald-500/20 bg-emerald-500/10 p-3" onSubmit={savePayment}>
@@ -458,7 +467,7 @@ export function CommitmentsSection({
         {message ? <div className="mt-3 rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">{message}</div> : null}
         {error ? <div className="mt-3 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">{error}</div> : null}
 
-        <div className="mt-4 sm:mt-5">
+        <div className="mt-4 grid gap-2 sm:mt-5">
           {debts.length ? (
             debts.map((item) => (
               <DebtRow
@@ -478,12 +487,11 @@ export function CommitmentsSection({
 
       
 
-      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-        <div className="lg:col-span-2">
-          <EmailPanel config={data.emailConfig} />
-        </div>
+      <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6 lg:col-span-2">
+        <EmailPanel config={data.emailConfig} />
       </Card>
-    </section>
+      </section>
+    </div>
   );
 }
 
