@@ -74,36 +74,9 @@ export function OverviewSection({
   const closureNextBudget = closure.nextBudget || [];
   const closureNextCycleRange = closure.nextCycle?.range || '';
 
-  async function saveClosure() {
-    if (!authToken) return;
-
-    setClosing(true);
-    setCloseMessage('');
-    setCloseError('');
-    try {
-      const result = await apiRequest<{ closure?: ClosureSummary }>('closures', {
-        method: 'POST',
-        token: authToken,
-        query: { chat_id: chatId },
-        body: data.cierreAutomatico?.active && !data.cierreAutomatico.saved
-          ? { cycle_start: data.cierreAutomatico.targetCycleStart }
-          : {},
-      });
-
-      const savedClosure = result.closure;
-      const savingsText = savedClosure?.suggestedSavings && savedClosure.suggestedSavings > 0
-        ? ` Ahorro sugerido: ${formatMoney(savedClosure.suggestedSavings)}.`
-        : '';
-      setCloseMessage(`Ciclo cerrado: ${savedClosure?.label || closure.label}.${savingsText}`);
-      onChanged?.();
-    } catch (error) {
-      setCloseError(error instanceof Error ? error.message : 'No se pudo guardar el cierre');
-    } finally {
-      setClosing(false);
-    }
-  }
-
-  async function closeCash() {
+  // Cierre unificado: guarda el snapshot del ciclo Y fija el saldo de apertura
+  // del nuevo ciclo (el saldo real con que cierras).
+  async function closeCycle() {
     if (!authToken) return;
     const opening = Number(realBalance);
     if (realBalance.trim() === '' || !Number.isFinite(opening)) {
@@ -112,26 +85,55 @@ export function OverviewSection({
     }
     setAdjusting(true);
     setAdjustError('');
+    setCloseMessage('');
+    setCloseError('');
     try {
-      await apiRequest('cash/close', {
+      const result = await apiRequest<{ closure?: ClosureSummary }>('closures', {
         method: 'POST',
         token: authToken,
         query: { chat_id: chatId },
-        body: { openingBalance: opening },
+        body: {
+          openingBalance: opening,
+          ...(data.cierreAutomatico?.active && !data.cierreAutomatico.saved
+            ? { cycle_start: data.cierreAutomatico.targetCycleStart }
+            : {}),
+        },
       });
+      const savedClosure = result.closure;
+      const savingsText = savedClosure?.suggestedSavings && savedClosure.suggestedSavings > 0
+        ? ` Ahorro sugerido: ${formatMoney(savedClosure.suggestedSavings)}.`
+        : '';
+      setCloseMessage(`Ciclo cerrado en ${formatMoney(opening)}.${savingsText}`);
       setShowAdjust(false);
       setRealBalance('');
       onChanged?.();
-    } catch (err) {
-      setAdjustError(err instanceof Error ? err.message : 'No se pudo cerrar la caja.');
+    } catch (error) {
+      setAdjustError(error instanceof Error ? error.message : 'No se pudo cerrar el ciclo.');
     } finally {
       setAdjusting(false);
+    }
+  }
+
+  async function undoClose() {
+    if (!authToken) return;
+    setCloseMessage('');
+    setCloseError('');
+    setClosing(true);
+    try {
+      await apiRequest('cash/reset', { method: 'POST', token: authToken, query: { chat_id: chatId } });
+      setCloseMessage('Cierre deshecho. La caja vuelve al calculo acumulado.');
+      onChanged?.();
+    } catch (error) {
+      setCloseError(error instanceof Error ? error.message : 'No se pudo deshacer el cierre.');
+    } finally {
+      setClosing(false);
     }
   }
 
   const closeDiff = realBalance.trim() !== '' && Number.isFinite(Number(realBalance))
     ? Math.round((cashBalance - Number(realBalance)) * 100) / 100
     : null;
+  const cashOpening = data.cashOpening;
 
   return (
     <>
@@ -176,8 +178,20 @@ export function OverviewSection({
                 disabled={!authToken}
               >
                 <DatabaseIcon className="h-4 w-4" aria-hidden="true" />
-                Cerrar caja
+                Cerrar ciclo
               </button>
+              {cashOpening ? (
+                <p className="mt-2 max-w-xl text-xs text-slate-500">
+                  Cerraste en {formatMoney(cashOpening.balance)} el {formatClosureDateTime(cashOpening.at)}
+                  {cashOpening.movimientos > 0
+                    ? ` · ${cashOpening.since >= 0 ? '+' : '−'}${formatMoney(Math.abs(cashOpening.since))} en ${cashOpening.movimientos} mov. desde entonces`
+                    : ' · sin movimientos nuevos aun'}
+                  {' · '}
+                  <button type="button" className="font-semibold text-cyan-300 transition hover:underline disabled:opacity-60" onClick={() => void undoClose()} disabled={closing}>
+                    deshacer
+                  </button>
+                </p>
+              ) : null}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -255,11 +269,11 @@ export function OverviewSection({
               <button
                 type="button"
                 className="inline-flex h-10 w-full min-w-[9.5rem] items-center justify-center gap-2 rounded-tremor-default border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 shadow-sm transition hover:border-emerald-400/60 hover:bg-emerald-500/15 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-wait disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:opacity-55 min-[420px]:w-auto"
-                disabled={!authToken || closing}
-                onClick={() => void saveClosure()}
+                disabled={!authToken}
+                onClick={() => { setShowAdjust(true); setAdjustError(''); setRealBalance(String(cashBalance)); }}
               >
                 <SaveIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{closing ? 'Cerrando' : closureClosed ? 'Actualizar cierre' : 'Cerrar ciclo'}</span>
+                <span className="truncate">{closureClosed ? 'Actualizar cierre' : 'Cerrar ciclo'}</span>
               </button>
             </div>
           </div>
@@ -396,8 +410,8 @@ export function OverviewSection({
           <div className="w-full max-w-md rounded-tremor-default border border-slate-700 bg-slate-950 p-5 shadow-2xl shadow-black/40">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-slate-100">Cerrar caja</h2>
-                <p className="mt-1 text-sm text-slate-400">Fija el saldo con que cierras este ciclo. Ese sera el punto de partida del nuevo ciclo; desde ahi la caja suma y resta tus movimientos. No se crean movimientos falsos.</p>
+                <h2 className="text-lg font-semibold text-slate-100">Cerrar ciclo</h2>
+                <p className="mt-1 text-sm text-slate-400">Guarda el cierre (snapshot + ahorro sugerido) y fija el saldo con que cierras como punto de partida del nuevo ciclo. Desde ahi la caja suma y resta tus movimientos. No se crean movimientos falsos.</p>
               </div>
               <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-tremor-default border border-slate-700 text-lg text-slate-300 transition hover:bg-slate-900" onClick={() => setShowAdjust(false)} aria-label="Cerrar">×</button>
             </div>
@@ -419,7 +433,7 @@ export function OverviewSection({
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" className="rounded-tremor-default border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200" onClick={() => setShowAdjust(false)}>Cancelar</button>
-              <button type="button" className="rounded-tremor-default bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60" disabled={adjusting} onClick={() => void closeCash()}>{adjusting ? 'Cerrando...' : 'Cerrar caja'}</button>
+              <button type="button" className="rounded-tremor-default bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60" disabled={adjusting} onClick={() => void closeCycle()}>{adjusting ? 'Cerrando...' : 'Cerrar ciclo'}</button>
             </div>
           </div>
         </div>,
@@ -647,6 +661,13 @@ function ClosureLine({ label, value, strong, danger }: { label: string; value: n
       <span className={`shrink-0 font-mono ${strong || danger ? 'font-semibold' : ''} ${valueClass}`}>{formatMoney(value)}</span>
     </div>
   );
+}
+
+function formatClosureDateTime(value?: string) {
+  if (!value) return '';
+  const date = new Date(`${value.replace(' ', 'T')}Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDateLabel(value?: string) {

@@ -587,9 +587,17 @@ export interface SystemHealthData {
   error?: string;
 }
 
+export interface CashOpening {
+  balance: number;
+  at: string;
+  since: number;
+  movimientos: number;
+}
+
 export interface DashboardData {
   ok?: boolean;
   balance: number;
+  cashOpening?: CashOpening | null;
   patrimonio?: number;
   patrimonioDisponible?: number;
   balanceGeneralNeto?: number;

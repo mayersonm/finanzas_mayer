@@ -189,16 +189,22 @@ export async function dashboard(env, params) {
   // el neto de lo registrado despues del cierre. Si no, usa el acumulado total.
   const cashOpening = await getCashOpening(env, chatId);
   let balanceCaja;
+  let cashSinceOpening = 0;
+  let cashMovesSinceOpening = 0;
   if (cashOpening) {
     const sinceOpening = await env.DB.prepare(`
-      SELECT COALESCE(SUM(CASE
-        WHEN type = 'ingreso' THEN (CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
-        WHEN type = 'gasto' THEN -(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
-        ELSE 0 END), 0) AS neto
+      SELECT
+        COALESCE(SUM(CASE
+          WHEN type = 'ingreso' THEN (CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
+          WHEN type = 'gasto' THEN -(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
+          ELSE 0 END), 0) AS neto,
+        COUNT(*) AS movimientos
       FROM transactions
       WHERE chat_id = ? AND created_at > ?
     `).bind(usdRate, usdRate, chatId, cashOpening.at).first();
-    balanceCaja = round(cashOpening.balance + Number(sinceOpening?.neto || 0));
+    cashSinceOpening = round(Number(sinceOpening?.neto || 0));
+    cashMovesSinceOpening = Number(sinceOpening?.movimientos || 0);
+    balanceCaja = round(cashOpening.balance + cashSinceOpening);
   } else {
     balanceCaja = round(ingresos - gastosConFijosPagados);
   }
@@ -315,6 +321,7 @@ export async function dashboard(env, params) {
   return {
     ok: true,
     balance: balanceCaja,
+    cashOpening: cashOpening ? { balance: round(cashOpening.balance), at: cashOpening.at, since: cashSinceOpening, movimientos: cashMovesSinceOpening } : null,
     patrimonio: patrimonioDisponible,
     patrimonioDisponible,
     balanceGeneralNeto: patrimonioDisponible,
