@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
 import { RiRefreshLine, RiSave3Line } from '@remixicon/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatMoney, formatUpdatedAt } from '../../lib/formatters';
 import type { NetWorthData, NetWorthInsight } from '../../types/dashboard';
@@ -39,12 +39,7 @@ export function NetWorthSection({
     setLoading(true);
     setError('');
     try {
-      const url = `${apiEndpoint('net-worth')}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const result = await response.json() as NetWorthData;
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo cargar patrimonio');
+      const result = await apiRequest<NetWorthData>('net-worth', { token: authToken, query: { chat_id: chatId } });
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo cargar patrimonio');
@@ -63,13 +58,7 @@ export function NetWorthSection({
     setMessage('');
     setError('');
     try {
-      const url = `${apiEndpoint('net-worth/snapshot')}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo guardar el corte');
+      await apiRequest('net-worth/snapshot', { method: 'POST', token: authToken, query: { chat_id: chatId } });
       setMessage('Corte de patrimonio guardado.');
       await load();
     } catch (err) {

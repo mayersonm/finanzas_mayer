@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import { EmptyState } from '../../components/common/EmptyState';
+import { Collapsible, SummaryBar } from '../../components/common/SummaryBar';
 import { DatabaseIcon, SaveIcon } from '../../components/common/AppIcons';
 import { percent } from '../../lib/finance';
 import { formatMoney, formatUpdatedAt } from '../../lib/formatters';
-import type { AutomationCenter, ClosureSummary, DashboardData, RealExpenses } from '../../types/dashboard';
+import type { AutomationCenter, ClosureSummary, DashboardData, MonthTotal, RealExpenses } from '../../types/dashboard';
 
 export function OverviewSection({
   data,
@@ -75,24 +76,14 @@ export function OverviewSection({
     setCloseMessage('');
     setCloseError('');
     try {
-      const url = new URL(apiEndpoint('closures'));
-      if (chatId) url.searchParams.set('chat_id', chatId);
-
-      const response = await fetch(url.toString(), {
+      const result = await apiRequest<{ closure?: ClosureSummary }>('closures', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data.cierreAutomatico?.active && !data.cierreAutomatico.saved
+        token: authToken,
+        query: { chat_id: chatId },
+        body: data.cierreAutomatico?.active && !data.cierreAutomatico.saved
           ? { cycle_start: data.cierreAutomatico.targetCycleStart }
-          : {}),
+          : {},
       });
-      const result = await response.json() as { ok?: boolean; error?: string; closure?: ClosureSummary };
-
-      if (!response.ok || result.ok === false) {
-        throw new Error(result.error || 'No se pudo guardar el cierre');
-      }
 
       const savedClosure = result.closure;
       const savingsText = savedClosure?.suggestedSavings && savedClosure.suggestedSavings > 0
@@ -109,6 +100,16 @@ export function OverviewSection({
 
   return (
     <>
+      <SummaryBar
+        className="mb-4"
+        stats={[
+          { label: 'Caja registrada', value: formatMoney(cashBalance), tone: cashBalance >= 0 ? 'good' : 'bad', detail: data.cycleLabel || data.mes },
+          { label: 'Libre proyectado', value: formatMoney(projectedFree), tone: projectedFree >= 0 ? 'good' : 'bad', detail: 'tras compromisos' },
+          { label: 'Patrimonio', value: formatMoney(patrimonioDisponible), tone: patrimonioDisponible >= 0 ? 'good' : 'bad', detail: 'caja - deudas y fijos' },
+          { label: 'Comprometido', value: `${commitmentRate}%`, tone: commitmentRate >= 100 ? 'bad' : commitmentRate >= 80 ? 'warn' : 'good', detail: `Cierre ${formatDateLabel(closure.closeDate)}` },
+        ]}
+      />
+
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -129,6 +130,7 @@ export function OverviewSection({
               <p className={`mt-2 truncate font-mono text-4xl font-semibold sm:text-5xl ${cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                 {formatMoney(cashBalance)}
               </p>
+              <Sparkline months={data.meses} />
               <p className="mt-3 max-w-2xl text-sm text-slate-400">
                 Saldo calculado con movimientos en D1. No es lectura directa del banco.
               </p>
@@ -275,13 +277,15 @@ export function OverviewSection({
             <ClosureMetric label="Resultado ciclo" value={formatMoney(closure.balance)} tone={closure.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'} detail="Entradas menos salidas del ciclo" />
           </div>
 
-          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-            <ClosureLine label="Caja registrada" value={cashBalance} strong />
-            <ClosureLine label="Fijos pendientes" value={closure.fijosPendientes} />
-            <ClosureLine label="Presupuesto pendiente" value={closure.presupuestoRestante} strong />
-            <ClosureLine label="Deudas pendientes" value={closure.deudasPendientes} />
-            <ClosureLine label="Total pendiente" value={closure.pendienteComprometido} strong />
-          </div>
+          <Collapsible className="mt-4" summary="Ver desglose del cierre">
+            <div className="grid gap-2 text-sm sm:grid-cols-2">
+              <ClosureLine label="Caja registrada" value={cashBalance} strong />
+              <ClosureLine label="Fijos pendientes" value={closure.fijosPendientes} />
+              <ClosureLine label="Presupuesto pendiente" value={closure.presupuestoRestante} strong />
+              <ClosureLine label="Deudas pendientes" value={closure.deudasPendientes} />
+              <ClosureLine label="Total pendiente" value={closure.pendienteComprometido} strong />
+            </div>
+          </Collapsible>
         </Card>
 
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
@@ -295,14 +299,16 @@ export function OverviewSection({
             </Badge>
           </div>
           <ProgressBar className="mt-5" value={closureBudgetPct} color={closureBudgetPct >= 100 ? 'rose' : closureBudgetPct >= 80 ? 'amber' : 'emerald'} />
-          <div className="mt-4 space-y-2 text-sm">
-            <ClosureLine label="Limite" value={closure.presupuestoLimite} />
-            <ClosureLine label="Usado" value={closure.presupuestoUsado} />
-            <ClosureLine label="Pendiente" value={closure.presupuestoRestante} strong />
-            {closure.presupuestoExcedido && closure.presupuestoExcedido > 0 ? (
-              <ClosureLine label="Excedido" value={closure.presupuestoExcedido} danger />
-            ) : null}
-          </div>
+          <Collapsible className="mt-4" summary="Ver desglose del presupuesto">
+            <div className="space-y-2 text-sm">
+              <ClosureLine label="Limite" value={closure.presupuestoLimite} />
+              <ClosureLine label="Usado" value={closure.presupuestoUsado} />
+              <ClosureLine label="Pendiente" value={closure.presupuestoRestante} strong />
+              {closure.presupuestoExcedido && closure.presupuestoExcedido > 0 ? (
+                <ClosureLine label="Excedido" value={closure.presupuestoExcedido} danger />
+              ) : null}
+            </div>
+          </Collapsible>
         </Card>
       </section>
 
@@ -341,6 +347,30 @@ export function OverviewSection({
         </Card>
       </section>
     </>
+  );
+}
+
+function Sparkline({ months }: { months: MonthTotal[] }) {
+  const data = (months || []).filter(Boolean).slice(-6);
+  if (data.length < 2) return null;
+  const max = Math.max(...data.map((m) => Math.max(Number(m.ingresos || 0), Number(m.gastos || 0))), 1);
+
+  return (
+    <div className="mt-4 flex items-end gap-1.5" aria-hidden="true">
+      {data.map((m, index) => {
+        const height = Math.max(8, Math.round((Number(m.gastos || 0) / max) * 100));
+        const isLast = index === data.length - 1;
+        return (
+          <div
+            key={m.key || `${m.mes}-${index}`}
+            className={`w-2 rounded-sm ${isLast ? 'bg-emerald-400' : 'bg-emerald-500/45'}`}
+            style={{ height: `${(height / 100) * 44}px` }}
+            title={`${m.mes}: ${formatMoney(m.gastos)}`}
+          />
+        );
+      })}
+      <span className="ml-2 self-center text-xs text-slate-500">gasto · {data.length} meses</span>
+    </div>
   );
 }
 

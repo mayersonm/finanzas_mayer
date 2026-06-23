@@ -11,7 +11,7 @@ import {
   RiTargetLine,
 } from '@remixicon/react';
 import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatDate, formatMoney } from '../../lib/formatters';
 import type { CalendarEvent, DashboardData, FinancialCalendar, WeeklyGoal } from '../../types/dashboard';
@@ -57,16 +57,11 @@ export function CalendarSection({ data, authToken, chatId }: { data: DashboardDa
       setLoadingMonth(true);
       setMonthError('');
       try {
-        const url = new URL(apiEndpoint('calendar'));
-        url.searchParams.set('calendar_month', selectedMonth);
-        if (chatId) url.searchParams.set('chat_id', chatId);
-        const response = await fetch(url.toString(), {
-          headers: { Authorization: `Bearer ${authToken}` },
+        const result = await apiRequest<{ calendario?: FinancialCalendar }>('calendar', {
+          token: authToken,
+          query: { calendar_month: selectedMonth, chat_id: chatId },
         });
-        const result = await response.json() as { ok?: boolean; error?: string; calendario?: FinancialCalendar };
-        if (!response.ok || result.ok === false || !result.calendario) {
-          throw new Error(result.error || 'No se pudo cargar el calendario');
-        }
+        if (!result.calendario) throw new Error('No se pudo cargar el calendario');
         if (!cancelled) {
           setHistoryCalendar(result.calendario);
           setCalendarCache((current) => ({ ...current, [selectedMonth]: result.calendario as FinancialCalendar }));

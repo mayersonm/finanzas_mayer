@@ -1,17 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { RiBankCardLine, RiCloseLine, RiDeleteBinLine, RiEditLine, RiImageLine } from '@remixicon/react';
-import {
-  Badge,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
-} from '@tremor/react';
-import { apiEndpoint } from '../../app/api';
+import { RiArrowDownSLine, RiArrowUpSLine, RiCloseLine, RiDeleteBinLine, RiEditLine, RiImageLine } from '@remixicon/react';
+import { apiBlob, apiRequest } from '../../app/apiClient';
 import { formatDate, formatMoney } from '../../lib/formatters';
+import { categoryVisual } from '../../lib/categoryVisual';
 import type { Transaction, TransactionReceipt } from '../../types/dashboard';
 import { EmptyState } from '../common/EmptyState';
 
@@ -21,6 +13,8 @@ interface ReceiptPreview {
   tx: Transaction;
   receipt: TransactionReceipt;
 }
+
+type SortKey = 'fecha' | 'cat' | 'monto';
 
 export function TransactionsTable({
   transactions,
@@ -39,6 +33,23 @@ export function TransactionsTable({
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [savingId, setSavingId] = useState('');
   const [error, setError] = useState('');
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null);
+
+  const sortedTransactions = useMemo(() => {
+    if (!sort) return transactions;
+    const factor = sort.dir === 'asc' ? 1 : -1;
+    return [...transactions].sort((a, b) => {
+      if (sort.key === 'monto') return (Number(a.monto || 0) - Number(b.monto || 0)) * factor;
+      if (sort.key === 'cat') return String(a.cat || '').localeCompare(String(b.cat || '')) * factor;
+      return `${a.fecha || ''} ${a.hora || ''}`.localeCompare(`${b.fecha || ''} ${b.hora || ''}`) * factor;
+    });
+  }, [transactions, sort]);
+
+  const toggleSort = (key: SortKey) => setSort((current) => {
+    if (!current || current.key !== key) return { key, dir: 'asc' };
+    if (current.dir === 'asc') return { key, dir: 'desc' };
+    return null;
+  });
 
   useEffect(() => {
     return () => {
@@ -61,17 +72,7 @@ export function TransactionsTable({
     setError('');
 
     try {
-      const response = await fetch(apiEndpoint(`receipts/${encodeURIComponent(receipt.id)}/file`), {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('No se pudo cargar la imagen');
-      }
-
-      const blob = await response.blob();
+      const blob = await apiBlob(`receipts/${encodeURIComponent(receipt.id)}/file`, { token: authToken });
       const objectUrl = URL.createObjectURL(blob);
       setPreview({
         url: objectUrl,
@@ -105,20 +106,11 @@ export function TransactionsTable({
     setError('');
 
     try {
-      const url = new URL(apiEndpoint(`transactions/${encodeURIComponent(tx.id)}`));
-      if (chatId) url.searchParams.set('chat_id', chatId);
-      const response = await fetch(url.toString(), {
+      await apiRequest(`transactions/${encodeURIComponent(tx.id)}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
+        token: authToken,
+        query: { chat_id: chatId },
       });
-
-      const result = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) {
-        throw new Error(result.error || 'No se pudo eliminar');
-      }
-
       onChanged?.();
     } catch (err) {
       console.error('Delete transaction error:', err);
@@ -133,18 +125,12 @@ export function TransactionsTable({
     setSavingId(next.id);
     setError('');
     try {
-      const url = new URL(apiEndpoint(`transactions/${encodeURIComponent(next.id)}`));
-      if (chatId) url.searchParams.set('chat_id', chatId);
-      const response = await fetch(url.toString(), {
+      await apiRequest(`transactions/${encodeURIComponent(next.id)}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(next),
+        token: authToken,
+        query: { chat_id: chatId },
+        body: next,
       });
-      const result = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo guardar');
       setEditing(null);
       onChanged?.();
     } catch (err) {
@@ -157,103 +143,83 @@ export function TransactionsTable({
 
   return (
     <>
-      <div className="-mx-4 mt-3 overflow-x-auto px-4 sm:mx-0 sm:mt-4 sm:px-0">
-        <Table className="min-w-[58rem]">
-          <TableHead>
-            <TableRow>
-              <TableHeaderCell>Fecha</TableHeaderCell>
-              <TableHeaderCell>Detalle</TableHeaderCell>
-              <TableHeaderCell>Categoria</TableHeaderCell>
-              <TableHeaderCell>Pago</TableHeaderCell>
-              <TableHeaderCell>Foto</TableHeaderCell>
-              <TableHeaderCell className="text-right">Monto</TableHeaderCell>
-              <TableHeaderCell className="text-right">Acciones</TableHeaderCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {transactions.map((tx, index) => {
-              const isIncome = tx.tipo === 'ingreso';
+      <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 sm:mt-4">
+        <span className="font-medium uppercase tracking-wide">Ordenar</span>
+        <SortChip label="Fecha" sortKey="fecha" sort={sort} onSort={toggleSort} />
+        <SortChip label="Categoria" sortKey="cat" sort={sort} onSort={toggleSort} />
+        <SortChip label="Monto" sortKey="monto" sort={sort} onSort={toggleSort} />
+      </div>
 
-              return (
-                <TableRow key={tx.id || `${tx.fecha}-${tx.desc}-${index}`}>
-                  <TableCell>
-                    <div className="whitespace-nowrap">
-                      <p className="text-slate-200">{formatDate(tx.fecha)}</p>
-                      <p className="text-xs text-slate-500">{tx.hora || '00:00'}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="min-w-[10rem] sm:min-w-[12rem]">
-                      <p className="font-semibold text-slate-100">{tx.desc}</p>
-                      <Badge className="mt-1" color={isIncome ? 'emerald' : 'rose'}>
-                        {tx.tipo}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className="capitalize">{tx.cat}</TableCell>
-                  <TableCell>
-                    <div className="min-w-[8rem]">
-                      <Badge color={tx.paymentMethod === 'credito' ? 'amber' : 'emerald'}>
-                        <RiBankCardLine className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-                        {tx.paymentMethod === 'credito' ? 'credito' : 'debito'}
-                      </Badge>
-                      {tx.paymentMethod === 'credito' ? (
-                        <p className="mt-1 text-xs text-amber-200">
-                          Pagar: {tx.paymentDueDate ? formatDate(tx.paymentDueDate) : 'configurar'}
-                        </p>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {tx.receipt ? (
-                      <>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 rounded-tremor-default border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-400/60 hover:bg-cyan-500/20 disabled:cursor-wait disabled:opacity-60"
-                          disabled={loadingReceiptId === tx.receipt.id}
-                          onClick={() => void openReceipt(tx)}
-                        >
-                          <RiImageLine className="h-4 w-4" aria-hidden="true" />
-                          {loadingReceiptId === tx.receipt.id ? 'Abriendo' : 'Ver'}
-                        </button>
-                        <p className="mt-1 text-xs text-slate-500">{formatBytes(tx.receipt.size)}</p>
-                      </>
-                    ) : (
-                      <span className="text-xs text-slate-600">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell className={`text-right font-mono font-semibold ${isIncome ? 'text-emerald-300' : 'text-rose-300'}`}>
-                    {isIncome ? '+' : '-'}
-                    {formatMoney(tx.monto, tx.currency)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="inline-flex gap-2">
-                      <button
-                        type="button"
-                        className="inline-grid h-8 w-8 place-items-center rounded-tremor-default border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 transition hover:border-cyan-400/60 hover:bg-cyan-500/20"
-                        onClick={() => setEditing(tx)}
-                        aria-label={`Editar ${tx.desc}`}
-                        title="Editar movimiento"
-                      >
-                        <RiEditLine className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-grid h-8 w-8 place-items-center rounded-tremor-default border border-rose-500/30 bg-rose-500/10 text-rose-200 transition hover:border-rose-400/60 hover:bg-rose-500/20 disabled:cursor-wait disabled:opacity-60"
-                        disabled={deletingId === tx.id}
-                        onClick={() => void deleteTransaction(tx)}
-                        aria-label={`Eliminar ${tx.desc}`}
-                        title="Eliminar movimiento"
-                      >
-                        <RiDeleteBinLine className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+      <div className="mt-2 overflow-hidden rounded-tremor-default border border-slate-800 bg-slate-950/40">
+        {sortedTransactions.map((tx, index) => {
+          const isIncome = tx.tipo === 'ingreso';
+          const visual = categoryVisual(tx.cat);
+          const Icon = visual.Icon;
+          const detail = [
+            tx.cat ? capitalize(tx.cat) : 'Sin categoria',
+            `${formatDate(tx.fecha)}${tx.hora ? ` ${tx.hora}` : ''}`,
+            tx.paymentMethod === 'credito' ? 'Credito' : 'Debito',
+          ].join(' · ');
+
+          return (
+            <div
+              key={tx.id || `${tx.fecha}-${tx.desc}-${index}`}
+              className="flex items-center gap-3 border-t border-slate-800/70 px-3 py-3 transition first:border-t-0 hover:bg-slate-900/40 sm:px-4"
+            >
+              <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${visual.badge}`}>
+                <Icon className="h-5 w-5" aria-hidden="true" />
+              </span>
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-slate-100">{tx.desc || 'Sin descripcion'}</p>
+                <p className="mt-0.5 truncate text-xs text-slate-500">
+                  {detail}
+                  {tx.paymentMethod === 'credito' && tx.paymentDueDate ? ` · pagar ${formatDate(tx.paymentDueDate)}` : ''}
+                </p>
+              </div>
+
+              <div className="shrink-0 text-right">
+                <p className={`font-mono text-sm font-semibold ${isIncome ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  {isIncome ? '+' : '-'}{formatMoney(tx.monto, tx.currency)}
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1">
+                {tx.receipt ? (
+                  <button
+                    type="button"
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 transition hover:bg-cyan-500/20 disabled:cursor-wait disabled:opacity-60"
+                    disabled={loadingReceiptId === tx.receipt.id}
+                    onClick={() => void openReceipt(tx)}
+                    aria-label="Ver recibo"
+                    title="Ver recibo"
+                  >
+                    <RiImageLine className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-cyan-400/60 hover:text-cyan-200"
+                  onClick={() => setEditing(tx)}
+                  aria-label={`Editar ${tx.desc}`}
+                  title="Editar movimiento"
+                >
+                  <RiEditLine className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-wait disabled:opacity-60"
+                  disabled={deletingId === tx.id}
+                  onClick={() => void deleteTransaction(tx)}
+                  aria-label={`Eliminar ${tx.desc}`}
+                  title="Eliminar movimiento"
+                >
+                  <RiDeleteBinLine className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {error ? (
@@ -317,6 +283,38 @@ export function TransactionsTable({
         />
       ) : null}
     </>
+  );
+}
+
+function SortChip({
+  label,
+  sortKey,
+  sort,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  sort: { key: SortKey; dir: 'asc' | 'desc' } | null;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = sort?.key === sortKey;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-semibold transition ${
+        active
+          ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200'
+          : 'border-slate-800 bg-slate-900/40 text-slate-400 hover:text-slate-200'
+      }`}
+    >
+      {label}
+      {active ? (
+        sort?.dir === 'asc'
+          ? <RiArrowUpSLine className="h-3.5 w-3.5" aria-hidden="true" />
+          : <RiArrowDownSLine className="h-3.5 w-3.5" aria-hidden="true" />
+      ) : null}
+    </button>
   );
 }
 
@@ -398,6 +396,11 @@ function Meta({ label, value }: { label: string; value: string }) {
       <dd className="mt-0.5 break-words font-medium text-slate-100">{value || '-'}</dd>
     </div>
   );
+}
+
+function capitalize(value: string) {
+  const text = String(value || '').trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
 function formatBytes(value?: number) {

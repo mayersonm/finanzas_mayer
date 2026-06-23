@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Badge, Card, Text, Title, type Color } from '@tremor/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import { SparklesIcon } from '../../components/common/AppIcons';
 import { formatMoney } from '../../lib/formatters';
 import type { DashboardData } from '../../types/dashboard';
@@ -78,26 +78,12 @@ export function AiSection({
     setLoading(true);
 
     try {
-      const url = new URL(apiEndpoint('ai/advisor'));
-      if (chatId) url.searchParams.set('chat_id', chatId);
-
-      const response = await fetch(url.toString(), {
+      const result = await apiRequest<AdvisorResult>('ai/advisor', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          mode: 'chat',
-          question,
-          history: historyPayload(nextMessages),
-        }),
+        token: authToken,
+        query: { chat_id: chatId },
+        body: { mode: 'chat', question, history: historyPayload(nextMessages) },
       });
-      const result = await response.json() as AdvisorResult;
-
-      if (!response.ok || result.ok === false) {
-        throw new Error(result.error || 'No se pudo consultar la IA');
-      }
 
       setMessages((current) => [
         ...current,

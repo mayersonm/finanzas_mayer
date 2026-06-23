@@ -1,5 +1,6 @@
 import { Suspense, lazy, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiEndpoint } from './app/api';
+import { SESSION_EXPIRED_EVENT } from './app/apiClient';
 import { isApiConfigured, SESSION_STORAGE_KEY } from './app/config';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { PasswordPanel } from './components/auth/PasswordPanel';
@@ -428,6 +429,13 @@ export default function App() {
     if (!configured || !token) return;
     void fetchData(token);
   }, [fetchData, configured, token]);
+
+  // Cualquier seccion que reciba 401 vía apiClient dispara este evento y cerramos sesion.
+  useEffect(() => {
+    const onSessionExpired = () => clearSession();
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+  }, [clearSession]);
 
   useEffect(() => {
     if (!configured || !token) return undefined;

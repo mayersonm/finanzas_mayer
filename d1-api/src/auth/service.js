@@ -1,6 +1,6 @@
 
 import { httpError } from '../shared/http.js';
-import { base64UrlDecode, base64UrlEncode, constantTimeEqual, hmacSha1Bytes, hmacSha256, sha256Hex } from '../shared/crypto.js';
+import { base64UrlDecode, base64UrlEncode, constantTimeEqual, hashPassword, hmacSha1Bytes, hmacSha256, sha256Hex, verifyPassword } from '../shared/crypto.js';
 import { getAppSetting, setAppSetting } from '../shared/settings-store.js';
 
 const TOTP_ISSUER = 'Finanzas Mayeson';
@@ -156,7 +156,7 @@ export async function changePassword(env, payload) {
     throw httpError(401, 'Clave actual invalida');
   }
 
-  const passwordHash = await sha256Hex(newPassword);
+  const passwordHash = await hashPassword(newPassword);
   await setAppSetting(env, 'dashboard_password_hash', passwordHash);
 
   const now = Math.floor(Date.now() / 1000);
@@ -222,8 +222,12 @@ export function bearer(request) {
 export async function isValidLoginPassword(env, password) {
   const storedHash = await getAppSetting(env, 'dashboard_password_hash');
   if (storedHash) {
-    const providedHash = await sha256Hex(password);
-    return constantTimeEqual(providedHash, storedHash);
+    const { valid, legacy } = await verifyPassword(password, storedHash);
+    if (valid && legacy) {
+      // Migra de forma transparente el hash SHA-256 antiguo a PBKDF2 en el primer login valido.
+      await setAppSetting(env, 'dashboard_password_hash', await hashPassword(password));
+    }
+    return valid;
   }
 
   if (env.LOGIN_PASSWORD_HASH) {

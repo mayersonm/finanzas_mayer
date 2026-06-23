@@ -8,7 +8,7 @@ import {
   RiRefreshLine,
   RiSave3Line,
 } from '@remixicon/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import type {
   AppSettingsConfig,
   AppSettingsData,
@@ -88,34 +88,12 @@ export function SettingsSection({ authToken, chatId }: { authToken?: string | nu
     setLoading(true);
     setError('');
     try {
-      const settingsUrl = new URL(apiEndpoint('settings'));
-      const categoryUrl = new URL(apiEndpoint('categories'));
-      const rulesUrl = new URL(apiEndpoint('rules'));
-      if (chatId) {
-        settingsUrl.searchParams.set('chat_id', chatId);
-        categoryUrl.searchParams.set('chat_id', chatId);
-        rulesUrl.searchParams.set('chat_id', chatId);
-      }
-
-      const headers = { Authorization: `Bearer ${authToken}` };
-      const [settingsResponse, healthResponse, categoryResponse, rulesResponse] = await Promise.all([
-        fetch(settingsUrl.toString(), { headers }),
-        fetch(apiEndpoint('system-health'), { headers }),
-        fetch(categoryUrl.toString(), { headers }),
-        fetch(rulesUrl.toString(), { headers }),
-      ]);
-
       const [settingsData, healthData, categoryData, rulesData] = await Promise.all([
-        settingsResponse.json() as Promise<AppSettingsData>,
-        healthResponse.json() as Promise<SystemHealthData>,
-        categoryResponse.json() as Promise<CategoriesResponse>,
-        rulesResponse.json() as Promise<RulesResponse>,
+        apiRequest<AppSettingsData>('settings', { token: authToken, query: { chat_id: chatId } }),
+        apiRequest<SystemHealthData>('system-health', { token: authToken }),
+        apiRequest<CategoriesResponse>('categories', { token: authToken, query: { chat_id: chatId } }),
+        apiRequest<RulesResponse>('rules', { token: authToken, query: { chat_id: chatId } }),
       ]);
-
-      if (!settingsResponse.ok || settingsData.ok === false) throw new Error(settingsData.error || 'No se pudo leer configuracion');
-      if (!healthResponse.ok) throw new Error(healthData.error || 'No se pudo leer estado del sistema');
-      if (!categoryResponse.ok || categoryData.ok === false) throw new Error(categoryData.error || 'No se pudo leer categorias');
-      if (!rulesResponse.ok || rulesData.ok === false) throw new Error(rulesData.error || 'No se pudo leer reglas');
 
       setConfig({ ...EMPTY_CONFIG, ...settingsData.config });
       setUserLabel(settingsData.user?.label || settingsData.user?.name || settingsData.user?.chatId || '');
@@ -143,18 +121,12 @@ export function SettingsSection({ authToken, chatId }: { authToken?: string | nu
 
   const post = useCallback(async (path: string, payload: Record<string, unknown>) => {
     if (!authToken) return;
-    const url = new URL(apiEndpoint(path));
-    if (chatId) url.searchParams.set('chat_id', chatId);
-    const response = await fetch(url.toString(), {
+    await apiRequest(path, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ ...payload, chatId }),
+      token: authToken,
+      query: { chat_id: chatId },
+      body: { ...payload, chatId },
     });
-    const data = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(data.error || 'No se pudo guardar');
   }, [authToken, chatId]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {

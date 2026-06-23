@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Badge, Card, Text, Title } from '@tremor/react';
 import { RiAddLine, RiCloseLine, RiDeleteBinLine, RiEditLine, RiSave3Line } from '@remixicon/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatMoney, convertCurrency } from '../../lib/formatters';
 import type { Currency, Investment } from '../../types/dashboard';
@@ -46,12 +46,7 @@ export function InvestmentsSection({
     setLoading(true);
     setError('');
     try {
-      const url = `${apiEndpoint('investments')}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const result = await response.json() as { ok?: boolean; investments?: Investment[]; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudieron cargar inversiones');
+      const result = await apiRequest<{ investments?: Investment[] }>('investments', { token: authToken, query: { chat_id: chatId } });
       setItems(result.investments || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudieron cargar inversiones');
@@ -115,17 +110,12 @@ export function InvestmentsSection({
         currency: draft.currency,
         notes: draft.notes,
       };
-      const url = draft.id ? `${apiEndpoint(`investments/${encodeURIComponent(draft.id)}`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}` : `${apiEndpoint('investments')}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
-      const response = await fetch(url, {
+      await apiRequest(draft.id ? `investments/${encodeURIComponent(draft.id)}` : 'investments', {
         method: draft.id ? 'PATCH' : 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        token: authToken,
+        query: { chat_id: chatId },
+        body: payload,
       });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo guardar la inversion');
       setMessage(draft.id ? 'Inversion actualizada.' : 'Inversion creada.');
       setDraft(emptyDraft);
       await load();
@@ -145,13 +135,11 @@ export function InvestmentsSection({
     setMessage('');
     setError('');
     try {
-      const url = `${apiEndpoint(`investments/${encodeURIComponent(item.id)}`)}${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ''}`;
-      const response = await fetch(url, {
+      await apiRequest(`investments/${encodeURIComponent(item.id)}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${authToken}` },
+        token: authToken,
+        query: { chat_id: chatId },
       });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo eliminar la inversion');
       setMessage('Inversion eliminada.');
       await load();
     } catch (err) {

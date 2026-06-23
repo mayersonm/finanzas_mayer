@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RiDownloadLine } from '@remixicon/react';
 import { Card, Text, Title } from '@tremor/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import { TransactionsTable } from '../../components/dashboard/TransactionsTable';
+import { SummaryBar } from '../../components/common/SummaryBar';
+import { formatMoney } from '../../lib/formatters';
 import type { DashboardData, Transaction } from '../../types/dashboard';
 
 export function MovementsSection({
@@ -27,23 +29,20 @@ export function MovementsSection({
   });
   const [loading, setLoading] = useState(false);
   const categories = useMemo(() => Array.from(new Set(data.categorias.map((item) => item.cat.toLowerCase()))).sort(), [data.categorias]);
+  const totals = useMemo(() => transactions.reduce((acc, tx) => {
+    const amount = Number(tx.monto || 0);
+    if (tx.tipo === 'ingreso') acc.ingresos += amount; else acc.gastos += amount;
+    return acc;
+  }, { ingresos: 0, gastos: 0 }), [transactions]);
 
   const loadTransactions = useCallback(async () => {
     if (!authToken) return;
     setLoading(true);
     try {
-      const url = new URL(apiEndpoint('transactions'));
-      url.searchParams.set('limit', '500');
-      if (chatId) url.searchParams.set('chat_id', chatId);
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) url.searchParams.set(key, value);
+      const result = await apiRequest<{ transacciones?: Transaction[] }>('transactions', {
+        token: authToken,
+        query: { limit: '500', chat_id: chatId, ...filters },
       });
-
-      const response = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const result = await response.json() as { ok?: boolean; transacciones?: Transaction[]; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo leer movimientos');
       setTransactions(result.transacciones || []);
     } catch (error) {
       console.error('Transactions filter error:', error);
@@ -163,6 +162,16 @@ export function MovementsSection({
           <option value="USD">USD</option>
         </select>
       </div>
+
+      <SummaryBar
+        className="mt-4"
+        stats={[
+          { label: 'Movimientos', value: String(transactions.length), detail: filters.month ? formatMonthFilter(filters.month) : 'Historico' },
+          { label: 'Ingresos', value: formatMoney(totals.ingresos), tone: 'good' },
+          { label: 'Gastos', value: formatMoney(totals.gastos), tone: 'bad' },
+          { label: 'Balance', value: formatMoney(totals.ingresos - totals.gastos), tone: totals.ingresos - totals.gastos >= 0 ? 'good' : 'bad' },
+        ]}
+      />
 
       <TransactionsTable
         transactions={transactions}

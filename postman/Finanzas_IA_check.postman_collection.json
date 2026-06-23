@@ -1,0 +1,191 @@
+{
+  "info": {
+    "name": "Finanzas Mayeson - Chequeo IA / 502",
+    "description": "Coleccion independiente para diagnosticar el 502 de SyntheroLink y confirmar que el Worker responde con fallback.\n\nPasos:\n1. Llena las variables de la coleccion (Variables): provider_url, provider_key, login_password, y chat_id si quieres forzar usuario.\n2. Ejecuta '1. Proveedor directo (502 check)' -> dice si SyntheroLink ya volvio.\n3. Ejecuta '2. Login' -> guarda auth_token solo.\n4. Ejecuta '3. Advisor (Worker)' -> confirma source ai/local.\n\nLos resultados clave se imprimen en la Postman Console (View > Show Postman Console).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "https://finanzas-d1-api.mayersonm.workers.dev" },
+    { "key": "provider_url", "value": "https://api.synterolink.com/v1/messages" },
+    { "key": "provider_key", "value": "" },
+    { "key": "provider_model", "value": "claude-haiku-4-5-20251001" },
+    { "key": "login_email", "value": "mayersonm@gmail.com" },
+    { "key": "login_password", "value": "" },
+    { "key": "challenge_token", "value": "" },
+    { "key": "otp_code", "value": "" },
+    { "key": "auth_token", "value": "" },
+    { "key": "chat_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0. Health del Worker",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/health",
+        "auth": { "type": "noauth" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "console.log('Health status:', pm.response.code, pm.response.text());",
+              "pm.test('Worker vivo (200 ok)', () => pm.expect(pm.response.code).to.eql(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Proveedor directo (502 check)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{provider_key}}" },
+          { "key": "anthropic-version", "value": "2023-06-01" }
+        ],
+        "url": "{{provider_url}}",
+        "auth": { "type": "noauth" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{provider_model}}\",\n  \"max_tokens\": 64,\n  \"messages\": [{ \"role\": \"user\", \"content\": \"Responde solo: ok\" }]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Llama DIRECTO a SyntheroLink (sin pasar por tu Worker). Si tu proveedor usa Authorization: Bearer en vez de x-api-key, cambia el header. Asi sabes si el 502 ya paso."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const code = pm.response.code;",
+              "console.log('SyntheroLink status:', code);",
+              "if (code === 200) {",
+              "  console.log('OK -> el proveedor ya responde. Tu chat IA volvera a \"IA activa\" solo.');",
+              "} else if (code === 502 || code === 503 || code === 504) {",
+              "  console.log('Gateway caido (' + code + ') -> sigue el problema del proveedor. Solo esperar.');",
+              "} else if (code === 403) {",
+              "  console.log('403 -> no es caida: revisa el grupo/permiso de tu key para /v1/messages.');",
+              "} else if (code === 401) {",
+              "  console.log('401 -> key invalida o header equivocado (x-api-key vs Authorization Bearer).');",
+              "} else {",
+              "  console.log('Respuesta:', pm.response.text().slice(0, 300));",
+              "}",
+              "pm.test('Proveedor responde 200', () => pm.expect(code).to.eql(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Login (Worker)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/login",
+        "auth": { "type": "noauth" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{login_email}}\",\n  \"password\": \"{{login_password}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Inicia sesion. Si tienes 2FA activo, devuelve requires2fa + challengeToken: usa entonces '2b. Login 2FA'."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const data = pm.response.json();",
+              "if (data.requires2fa && data.challengeToken) {",
+              "  pm.collectionVariables.set('challenge_token', data.challengeToken);",
+              "  console.log('2FA requerido -> pon tu codigo en la variable otp_code y ejecuta \"2b. Login 2FA\".');",
+              "} else if (data.token) {",
+              "  pm.collectionVariables.set('auth_token', data.token);",
+              "  console.log('Login OK -> auth_token guardado.');",
+              "} else {",
+              "  console.log('Login fallo:', pm.response.code, pm.response.text().slice(0, 200));",
+              "}",
+              "pm.test('Login respondio 200', () => pm.expect(pm.response.code).to.eql(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2b. Login 2FA (si aplica)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/login/2fa",
+        "auth": { "type": "noauth" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challengeToken\": \"{{challenge_token}}\",\n  \"code\": \"{{otp_code}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Solo si '2. Login' pidio 2FA. Pon tu codigo de 6 digitos en la variable otp_code antes de ejecutar."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const data = pm.response.json();",
+              "if (data.token) {",
+              "  pm.collectionVariables.set('auth_token', data.token);",
+              "  console.log('2FA OK -> auth_token guardado.');",
+              "} else {",
+              "  console.log('2FA fallo:', pm.response.code, pm.response.text().slice(0, 200));",
+              "}",
+              "pm.test('2FA respondio 200', () => pm.expect(pm.response.code).to.eql(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Advisor (Worker)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/ai/advisor?chat_id={{chat_id}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mode\": \"chat\",\n  \"question\": \"cuanto puedo gastar hoy?\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Pega por tu Worker. Confirma que el dashboard responde aunque SyntheroLink este caido (source: local)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const data = pm.response.json();",
+              "console.log('source:', data.source, '| providerStatus:', data.providerStatus, '| title:', data.title);",
+              "if (data.source === 'ai') {",
+              "  console.log('IA activa -> el proveedor respondio bien.');",
+              "} else if (data.source === 'local') {",
+              "  console.log('Modo local -> tu API responde con analisis local; el proveedor sigue caido.');",
+              "}",
+              "pm.test('Advisor respondio 200', () => pm.expect(pm.response.code).to.eql(200));",
+              "pm.test('Trae un consejo', () => pm.expect(data).to.have.property('ok', true));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

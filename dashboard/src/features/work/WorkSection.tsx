@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { Badge, Card, Text, Title } from '@tremor/react';
 import { RiAddLine, RiCloseLine, RiSave3Line } from '@remixicon/react';
-import { apiEndpoint } from '../../app/api';
+import { apiRequest } from '../../app/apiClient';
 import type { WorkItem, WorkPriority, WorkStatus, WorkSummary } from '../../types/dashboard';
 import { WorkDetailView } from './WorkDetailView';
 
@@ -78,13 +78,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
     setError('');
 
     try {
-      const url = new URL(apiEndpoint('work-items'));
-      if (chatId) url.searchParams.set('chat_id', chatId);
-      const response = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const result = (await response.json()) as WorkResponse;
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo cargar Mi Trabajo');
+      const result = await apiRequest<WorkResponse>('work-items', { token: authToken, query: { chat_id: chatId } });
       const nextItems = normalizeItems(result.items || []);
       setItems(nextItems);
       setSummary(result.summary || summarize(nextItems));
@@ -117,20 +111,12 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
   const persistOrder = useCallback(async (nextItems: WorkItem[]) => {
     if (!authToken) return;
     try {
-      const url = new URL(apiEndpoint('work-items/reorder'));
-      if (chatId) url.searchParams.set('chat_id', chatId);
-      const response = await fetch(url.toString(), {
+      await apiRequest('work-items/reorder', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          items: nextItems.map((item) => ({ id: item.id, status: item.status, sortOrder: item.sortOrder })),
-        }),
+        token: authToken,
+        query: { chat_id: chatId },
+        body: { items: nextItems.map((item) => ({ id: item.id, status: item.status, sortOrder: item.sortOrder })) },
       });
-      const result = await response.json();
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo reordenar');
     } catch {
       // ignore persist errors to keep UI responsive
     }
@@ -201,21 +187,12 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
 
     try {
       const payload = draftToPayload(draft, chatId);
-      const url = draft.id
-        ? new URL(apiEndpoint(`work-items/${encodeURIComponent(draft.id)}`))
-        : new URL(apiEndpoint('work-items'));
-      if (chatId) url.searchParams.set('chat_id', chatId);
-
-      const response = await fetch(url.toString(), {
+      const result = await apiRequest<{ item?: WorkItem }>(draft.id ? `work-items/${encodeURIComponent(draft.id)}` : 'work-items', {
         method: draft.id ? 'PATCH' : 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        token: authToken,
+        query: { chat_id: chatId },
+        body: payload,
       });
-      const result = (await response.json()) as { ok?: boolean; item?: WorkItem; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo guardar');
 
       setMessage(draft.id ? 'Apunte actualizado.' : 'Apunte guardado.');
       setDraft(emptyDraft);
@@ -237,14 +214,11 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
     setMessage('');
     setError('');
     try {
-      const url = new URL(apiEndpoint(`work-items/${encodeURIComponent(item.id)}`));
-      if (chatId) url.searchParams.set('chat_id', chatId);
-      const response = await fetch(url.toString(), {
+      await apiRequest(`work-items/${encodeURIComponent(item.id)}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${authToken}` },
+        token: authToken,
+        query: { chat_id: chatId },
       });
-      const result = (await response.json()) as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo eliminar');
       const nextItems = items.filter((row) => row.id !== item.id);
       setItems(nextItems);
       setSummary(summarize(nextItems));
@@ -264,21 +238,12 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
     setError('');
 
     try {
-      const url = new URL(apiEndpoint(`work-items/${encodeURIComponent(draft.id)}/timeline`));
-      if (chatId) url.searchParams.set('chat_id', chatId);
-      const response = await fetch(url.toString(), {
+      await apiRequest(`work-items/${encodeURIComponent(draft.id)}/timeline`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          eventDate: timelineDraft.date || todayInputDate(),
-          message: timelineDraft.message,
-        }),
+        token: authToken,
+        query: { chat_id: chatId },
+        body: { eventDate: timelineDraft.date || todayInputDate(), message: timelineDraft.message },
       });
-      const result = (await response.json()) as { ok?: boolean; error?: string };
-      if (!response.ok || result.ok === false) throw new Error(result.error || 'No se pudo agregar a la línea de tiempo');
       setTimelineDraft({ date: todayInputDate(), message: '' });
       setMessage('Hito agregado a la línea de tiempo.');
       await load();
