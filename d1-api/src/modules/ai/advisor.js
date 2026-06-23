@@ -229,7 +229,11 @@ async function callProvider(provider, prompt) {
   }
 
   try {
-    return await callMessages(provider, firstUrl, prompt);
+    const text = await callMessages(provider, firstUrl, prompt);
+    // Algunos grupos del proveedor responden 200 en /v1/messages pero con
+    // content vacio (modo container); /v1/chat/completions si entrega el texto.
+    if (text && text.trim()) return text;
+    return callChatCompletions(provider, fallbackChatUrl(firstUrl), prompt);
   } catch (error) {
     if ([400, 403, 404, 405].includes(Number(error.status || 0))) {
       return callChatCompletions(provider, fallbackChatUrl(firstUrl), prompt);
