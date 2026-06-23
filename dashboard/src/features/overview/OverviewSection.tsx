@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
 import { apiRequest } from '../../app/apiClient';
 import { EmptyState } from '../../components/common/EmptyState';
@@ -28,6 +29,10 @@ export function OverviewSection({
   const [closing, setClosing] = useState(false);
   const [closeMessage, setCloseMessage] = useState('');
   const [closeError, setCloseError] = useState('');
+  const [showAdjust, setShowAdjust] = useState(false);
+  const [realBalance, setRealBalance] = useState('');
+  const [adjusting, setAdjusting] = useState(false);
+  const [adjustError, setAdjustError] = useState('');
   const topFugas = data.topFugas || [];
   const monthIncome = data.ingresosMes ?? data.ingresos;
   const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
@@ -98,6 +103,36 @@ export function OverviewSection({
     }
   }
 
+  async function adjustCash() {
+    if (!authToken) return;
+    const real = Number(realBalance);
+    if (realBalance.trim() === '' || !Number.isFinite(real)) {
+      setAdjustError('Ingresa tu saldo real del banco.');
+      return;
+    }
+    setAdjusting(true);
+    setAdjustError('');
+    try {
+      await apiRequest('cash/adjust', {
+        method: 'POST',
+        token: authToken,
+        query: { chat_id: chatId },
+        body: { currentBalance: cashBalance, realBalance: real },
+      });
+      setShowAdjust(false);
+      setRealBalance('');
+      onChanged?.();
+    } catch (err) {
+      setAdjustError(err instanceof Error ? err.message : 'No se pudo ajustar la caja.');
+    } finally {
+      setAdjusting(false);
+    }
+  }
+
+  const adjustDiff = realBalance.trim() !== '' && Number.isFinite(Number(realBalance))
+    ? Math.round((cashBalance - Number(realBalance)) * 100) / 100
+    : null;
+
   return (
     <>
       <SummaryBar
@@ -134,6 +169,15 @@ export function OverviewSection({
               <p className="mt-3 max-w-2xl text-sm text-slate-400">
                 Saldo calculado con movimientos en D1. No es lectura directa del banco.
               </p>
+              <button
+                type="button"
+                className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-tremor-default border border-cyan-500/40 bg-cyan-500/10 px-3 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15 disabled:opacity-60"
+                onClick={() => { setShowAdjust(true); setAdjustError(''); setRealBalance(''); }}
+                disabled={!authToken}
+              >
+                <DatabaseIcon className="h-4 w-4" aria-hidden="true" />
+                Ajustar al saldo del banco
+              </button>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -346,6 +390,41 @@ export function OverviewSection({
           )}
         </Card>
       </section>
+
+      {showAdjust ? createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-tremor-default border border-slate-700 bg-slate-950 p-5 shadow-2xl shadow-black/40">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-100">Ajustar caja</h2>
+                <p className="mt-1 text-sm text-slate-400">Pon el saldo real de tu banco y cuadramos la caja con un movimiento de ajuste.</p>
+              </div>
+              <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-tremor-default border border-slate-700 text-lg text-slate-300 transition hover:bg-slate-900" onClick={() => setShowAdjust(false)} aria-label="Cerrar">×</button>
+            </div>
+            <div className="mt-4 grid gap-3">
+              <div className="flex items-center justify-between gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
+                <span className="text-slate-400">Caja del dashboard hoy</span>
+                <span className="font-mono font-semibold text-slate-100">{formatMoney(cashBalance)}</span>
+              </div>
+              <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Saldo real del banco
+                <input className="form-input" type="number" step="0.01" value={realBalance} onChange={(event) => setRealBalance(event.target.value)} placeholder="Ej: 362.68" autoFocus />
+              </label>
+              {adjustDiff !== null && Math.abs(adjustDiff) >= 0.01 ? (
+                <div className="rounded-tremor-default border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">
+                  Se creara un {adjustDiff > 0 ? 'gasto' : 'ingreso'} de ajuste de {formatMoney(Math.abs(adjustDiff))} para dejar la caja en {formatMoney(Number(realBalance))}.
+                </div>
+              ) : null}
+              {adjustError ? <div className="rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{adjustError}</div> : null}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="rounded-tremor-default border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200" onClick={() => setShowAdjust(false)}>Cancelar</button>
+              <button type="button" className="rounded-tremor-default bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60" disabled={adjusting} onClick={() => void adjustCash()}>{adjusting ? 'Ajustando...' : 'Ajustar caja'}</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      ) : null}
     </>
   );
 }

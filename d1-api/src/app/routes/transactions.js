@@ -1,6 +1,7 @@
 import { auth, route } from '../router.js';
 import { getChatId } from '../../shared/request.js';
 import {
+  adjustCashBalance,
   deleteTransaction,
   insertTransaction,
   transactions,
@@ -11,6 +12,7 @@ import {
 
 export const transactionsRoutes = [
   route('GET', '/api/transactions', auth.dashAdmin, (ctx) => transactions(ctx.env, ctx.query)),
+  route('POST', '/api/cash/adjust', auth.dash, async (ctx) => adjustCashBalance(ctx.env, await ctx.body(), ctx.query)),
   route('POST', '/api/transactions', auth.admin, async (ctx) => insertTransaction(ctx.env, await ctx.body()), 201),
   route('POST', '/api/transactions/delete', auth.admin, async (ctx) => {
     const payload = await ctx.body();

@@ -1,5 +1,6 @@
 import { httpError } from '../../shared/http.js';
 import { getChatId } from '../../shared/request.js';
+import { localDateKey } from '../../shared/dates.js';
 import { round, parseAmount } from '../../shared/money.js';
 import { clamp, normalizeCurrency, normalizeDateOnly, normalizeKey, normalizePaymentMethod, title } from '../../shared/normalizers.js';
 import { classifyCategory, normalizeBaseCategory, normalizeCategory } from '../../shared/categories.js';
@@ -82,6 +83,38 @@ export async function insertTransaction(env, payload) {
   const tx = await normalizeTransaction(env, payload, chatId);
   await upsertTransaction(env, tx);
   return { ok: true, transaction: tx };
+}
+
+// Cuadra la caja del dashboard con el saldo real del banco creando un
+// movimiento de ajuste por la diferencia (gasto si sobra, ingreso si falta).
+export async function adjustCashBalance(env, payload, params) {
+  const chatId = getChatId(env, params);
+  const current = Number(payload?.currentBalance);
+  const real = Number(payload?.realBalance);
+  if (!Number.isFinite(real)) throw httpError(400, 'realBalance (saldo real) requerido');
+  if (!Number.isFinite(current)) throw httpError(400, 'currentBalance requerido');
+
+  const diff = round(current - real);
+  if (Math.abs(diff) < 0.01) {
+    return { ok: true, adjusted: 0, newBalance: real, message: 'La caja ya coincide con tu saldo real.' };
+  }
+
+  const kind = diff > 0 ? 'gasto' : 'ingreso';
+  const amount = Math.abs(diff);
+
+  const result = await insertTransaction(env, {
+    chat_id: chatId,
+    tipo: kind,
+    monto: amount,
+    desc: 'Ajuste de caja',
+    cat: 'ajuste',
+    fecha: localDateKey(new Date()),
+    payment_method: 'debito',
+    currency: 'PEN',
+    source: 'cash_adjust',
+  });
+
+  return { ok: true, adjusted: diff, kind, amount: round(amount), newBalance: real, transaction: result.transaction };
 }
 
 export async function deleteTransaction(env, { id, chatId, deleteFromGas = false }) {
