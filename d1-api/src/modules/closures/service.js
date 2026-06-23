@@ -3,6 +3,7 @@ import { getChatId } from '../../shared/request.js';
 import { round } from '../../shared/money.js';
 import { dateFromKey, localDateKey, localIso, payCycleFromDate, payCycleRelative } from '../../shared/dates.js';
 import { dashboard } from '../dashboard/service.js';
+import { closeCashCycle } from '../transactions/service.js';
 
 export async function financialClosures(env, params) {
   const chatId = getChatId(env, params);
@@ -147,10 +148,19 @@ export async function saveFinancialClosure(env, params, payload = {}) {
     .bind(id)
     .first();
 
+  // Cierre unificado: ademas del snapshot, fija el saldo de apertura del nuevo
+  // ciclo (ancla de caja) cuando el usuario indica con cuanto cierra.
+  const rawOpening = payload?.openingBalance ?? payload?.realBalance;
+  let opening = null;
+  if (rawOpening !== undefined && rawOpening !== null && String(rawOpening).trim() !== '') {
+    opening = await closeCashCycle(env, { openingBalance: rawOpening }, params);
+  }
+
   return {
     ok: true,
     saved: true,
     closure: financialClosureShape(saved),
+    opening,
   };
 }
 
