@@ -39,6 +39,10 @@ export async function saveFinancialClosure(env, params, payload = {}) {
     };
   }
 
+  const rawOpening = payload?.openingBalance ?? payload?.realBalance;
+  const hasOpening = rawOpening !== undefined && rawOpening !== null && String(rawOpening).trim() !== '';
+  const openingBalance = hasOpening ? round(Number(rawOpening)) : null;
+
   const closureKey = data.mesKey || closure.closeDate?.slice(0, 7) || localDateKey(new Date()).slice(0, 7);
   const id = `closure:${chatId}:${closureKey}`.slice(0, 180);
   const currentCycle = payCycleFromDate(dateFromKey(closure.start || data.cycleStart || `${closureKey}-22`));
@@ -53,6 +57,7 @@ export async function saveFinancialClosure(env, params, payload = {}) {
     cierre: closure,
     status: 'closed',
     closedAt,
+    openingBalance,
     suggestedSavings,
     savingsAction,
     nextCycle: cycleShape(nextCycle),
@@ -150,9 +155,8 @@ export async function saveFinancialClosure(env, params, payload = {}) {
 
   // Cierre unificado: ademas del snapshot, fija el saldo de apertura del nuevo
   // ciclo (ancla de caja) cuando el usuario indica con cuanto cierra.
-  const rawOpening = payload?.openingBalance ?? payload?.realBalance;
   let opening = null;
-  if (rawOpening !== undefined && rawOpening !== null && String(rawOpening).trim() !== '') {
+  if (hasOpening) {
     opening = await closeCashCycle(env, { openingBalance: rawOpening }, params);
   }
 
@@ -180,12 +184,15 @@ export async function currentFinancialClosure(env, chatId, closureKey) {
 export function financialClosureShape(row) {
   if (!row) return null;
 
+  const details = safeJsonParse(row.details_json, {});
+
   return {
     id: row.id,
     chatId: row.chat_id,
     key: row.closure_key,
     closeDate: row.close_date,
     label: row.label,
+    openingBalance: details?.openingBalance ?? null,
     monthKey: row.month_key,
     start: row.start_date,
     end: row.end_date,

@@ -594,6 +594,21 @@ export interface CashOpening {
   movimientos: number;
 }
 
+export interface FinancialClosureRecord {
+  id?: string;
+  key?: string;
+  closeDate?: string;
+  label?: string;
+  openingBalance?: number | null;
+  ingresos?: number;
+  gastos?: number;
+  balance?: number;
+  queQueda?: number;
+  suggestedSavings?: number;
+  movimientos?: number;
+  closedAt?: string;
+}
+
 export interface DashboardData {
   ok?: boolean;
   balance: number;
