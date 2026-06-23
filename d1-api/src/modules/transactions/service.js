@@ -1,7 +1,7 @@
 import { httpError } from '../../shared/http.js';
 import { getChatId } from '../../shared/request.js';
-import { localDateKey } from '../../shared/dates.js';
 import { round, parseAmount } from '../../shared/money.js';
+import { getAppSetting, setAppSetting } from '../../shared/settings-store.js';
 import { clamp, normalizeCurrency, normalizeDateOnly, normalizeKey, normalizePaymentMethod, title } from '../../shared/normalizers.js';
 import { classifyCategory, normalizeBaseCategory, normalizeCategory } from '../../shared/categories.js';
 import { stableTransactionId } from '../../shared/files.js';
@@ -85,36 +85,39 @@ export async function insertTransaction(env, payload) {
   return { ok: true, transaction: tx };
 }
 
-// Cuadra la caja del dashboard con el saldo real del banco creando un
-// movimiento de ajuste por la diferencia (gasto si sobra, ingreso si falta).
-export async function adjustCashBalance(env, payload, params) {
+const CASH_OPENING_PREFIX = 'cash_opening_';
+
+// Cierra el ciclo fijando el saldo de apertura del siguiente. No crea
+// movimientos: ancla la caja a un saldo real + un instante. Desde ahi la
+// caja se calcula como saldo_apertura + neto de lo registrado despues.
+export async function closeCashCycle(env, payload, params) {
   const chatId = getChatId(env, params);
-  const current = Number(payload?.currentBalance);
-  const real = Number(payload?.realBalance);
-  if (!Number.isFinite(real)) throw httpError(400, 'realBalance (saldo real) requerido');
-  if (!Number.isFinite(current)) throw httpError(400, 'currentBalance requerido');
+  const real = Number(payload?.openingBalance ?? payload?.realBalance);
+  if (!Number.isFinite(real)) throw httpError(400, 'openingBalance (saldo de cierre) requerido');
 
-  const diff = round(current - real);
-  if (Math.abs(diff) < 0.01) {
-    return { ok: true, adjusted: 0, newBalance: real, message: 'La caja ya coincide con tu saldo real.' };
+  const at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const opening = { balance: round(real), at };
+  await setAppSetting(env, `${CASH_OPENING_PREFIX}${chatId}`, JSON.stringify(opening));
+  return { ok: true, ...opening };
+}
+
+// Lee el ancla de saldo de apertura del ciclo (o null si nunca se cerro caja).
+export async function getCashOpening(env, chatId) {
+  const raw = await getAppSetting(env, `${CASH_OPENING_PREFIX}${chatId}`);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.at) return null;
+    return { balance: Number(parsed.balance || 0), at: String(parsed.at) };
+  } catch (_error) {
+    return null;
   }
+}
 
-  const kind = diff > 0 ? 'gasto' : 'ingreso';
-  const amount = Math.abs(diff);
-
-  const result = await insertTransaction(env, {
-    chat_id: chatId,
-    tipo: kind,
-    monto: amount,
-    desc: 'Ajuste de caja',
-    cat: 'ajuste',
-    fecha: localDateKey(new Date()),
-    payment_method: 'debito',
-    currency: 'PEN',
-    source: 'cash_adjust',
-  });
-
-  return { ok: true, adjusted: diff, kind, amount: round(amount), newBalance: real, transaction: result.transaction };
+// Deshace el cierre (vuelve al calculo acumulado de toda la historia).
+export async function clearCashOpening(env, chatId) {
+  await setAppSetting(env, `${CASH_OPENING_PREFIX}${chatId}`, '');
+  return { ok: true };
 }
 
 export async function deleteTransaction(env, { id, chatId, deleteFromGas = false }) {
