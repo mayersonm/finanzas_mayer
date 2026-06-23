@@ -188,13 +188,14 @@ export function TransactionsTable({
                 {tx.receipt ? (
                   <button
                     type="button"
-                    className="grid h-8 w-8 place-items-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 transition hover:bg-cyan-500/20 disabled:cursor-wait disabled:opacity-60"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-500/20 disabled:cursor-wait disabled:opacity-60"
                     disabled={loadingReceiptId === tx.receipt.id}
                     onClick={() => void openReceipt(tx)}
-                    aria-label="Ver recibo"
-                    title="Ver recibo"
+                    aria-label="Ver foto del recibo"
+                    title="Ver foto del recibo"
                   >
-                    <RiImageLine className="h-4 w-4" aria-hidden="true" />
+                    <RiImageLine className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="hidden sm:inline">{loadingReceiptId === tx.receipt.id ? 'Abriendo' : 'Foto'}</span>
                   </button>
                 ) : null}
                 <button
