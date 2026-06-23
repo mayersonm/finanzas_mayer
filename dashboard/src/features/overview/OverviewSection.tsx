@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
 import { apiRequest } from '../../app/apiClient';
@@ -7,7 +7,7 @@ import { Collapsible, SummaryBar } from '../../components/common/SummaryBar';
 import { DatabaseIcon, SaveIcon } from '../../components/common/AppIcons';
 import { percent } from '../../lib/finance';
 import { formatMoney, formatUpdatedAt } from '../../lib/formatters';
-import type { AutomationCenter, ClosureSummary, DashboardData, MonthTotal, RealExpenses } from '../../types/dashboard';
+import type { AutomationCenter, ClosureSummary, DashboardData, FinancialClosureRecord, MonthTotal, RealExpenses } from '../../types/dashboard';
 
 export function OverviewSection({
   data,
@@ -33,6 +33,16 @@ export function OverviewSection({
   const [realBalance, setRealBalance] = useState('');
   const [adjusting, setAdjusting] = useState(false);
   const [adjustError, setAdjustError] = useState('');
+  const [closures, setClosures] = useState<FinancialClosureRecord[]>([]);
+
+  useEffect(() => {
+    if (!authToken) return;
+    let cancelled = false;
+    apiRequest<{ closures?: FinancialClosureRecord[] }>('closures', { token: authToken, query: { chat_id: chatId } })
+      .then((result) => { if (!cancelled) setClosures(result.closures || []); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [authToken, chatId, data.updatedAt]);
   const topFugas = data.topFugas || [];
   const monthIncome = data.ingresosMes ?? data.ingresos;
   const monthBalance = data.balanceMes ?? monthIncome - data.gastosMes;
@@ -400,6 +410,47 @@ export function OverviewSection({
           ) : (
             <div className="mt-5">
               <EmptyState>Sin fugas fuertes este ciclo.</EmptyState>
+            </div>
+          )}
+        </Card>
+      </section>
+
+      <section className="mt-4 sm:mt-5">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Title>Historial de cierres</Title>
+              <Text>Cada cierre guarda con cuanto cerraste, mas los ingresos y gastos del ciclo.</Text>
+            </div>
+            <Badge color={closures.length ? 'cyan' : 'slate'}>{closures.length || 0}</Badge>
+          </div>
+          {closures.length ? (
+            <div className="mt-4 grid gap-2">
+              {closures.map((item) => (
+                <div key={item.id || item.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-100">{item.label || item.key}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      Cierre {item.closeDate || item.key}
+                      {item.closedAt ? ` · ${formatClosureDateTime(item.closedAt)}` : ''}
+                      {item.movimientos ? ` · ${item.movimientos} mov.` : ''}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-mono text-sm font-semibold text-slate-100">
+                      {item.openingBalance != null ? formatMoney(item.openingBalance) : formatMoney(item.queQueda || 0)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      <span className="text-emerald-300">+{formatMoney(item.ingresos || 0)}</span>{' '}
+                      <span className="text-rose-300">−{formatMoney(item.gastos || 0)}</span>
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4">
+              <EmptyState>Aun no hay cierres guardados. Cierra tu primer ciclo para empezar el historial.</EmptyState>
             </div>
           )}
         </Card>
