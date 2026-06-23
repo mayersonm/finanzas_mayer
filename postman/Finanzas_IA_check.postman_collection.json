@@ -7,6 +7,7 @@
   "variable": [
     { "key": "base_url", "value": "https://finanzas-d1-api.mayersonm.workers.dev" },
     { "key": "provider_url", "value": "https://api.synterolink.com/v1/messages" },
+    { "key": "provider_chat_url", "value": "https://api.synterolink.com/v1/chat/completions" },
     { "key": "provider_key", "value": "" },
     { "key": "provider_model", "value": "claude-haiku-4-5-20251001" },
     { "key": "login_email", "value": "mayersonm@gmail.com" },
@@ -76,6 +77,166 @@
               "  console.log('Respuesta:', pm.response.text().slice(0, 300));",
               "}",
               "pm.test('Proveedor responde 200', () => pm.expect(code).to.eql(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1b. Proveedor /chat/completions (test salida)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{provider_key}}" }
+        ],
+        "url": "{{provider_chat_url}}",
+        "auth": { "type": "noauth" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{provider_model}}\",\n  \"max_tokens\": 64,\n  \"messages\": [\n    { \"role\": \"system\", \"content\": \"Responde en una linea.\" },\n    { \"role\": \"user\", \"content\": \"Responde solo: ok\" }\n  ]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Misma key pero por /v1/chat/completions (formato OpenAI, header Authorization Bearer). Si AQUI viene el texto en choices[].message.content, se puede arreglar por codigo. Si tambien viene vacio, hay que cambiar el grupo de la key o usar Anthropic directo."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const code = pm.response.code;",
+              "let data = {};",
+              "try { data = pm.response.json(); } catch (e) {}",
+              "const text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;",
+              "console.log('chat/completions status:', code, '| texto:', text ? JSON.stringify(text) : '(vacio)');",
+              "if (text) {",
+              "  console.log('SI hay texto por chat/completions -> se puede arreglar por codigo (fallback ante content vacio).');",
+              "} else {",
+              "  console.log('Tambien vacio -> cambia el grupo de la key en SyntheroLink o usa Anthropic directo.');",
+              "}",
+              "pm.test('chat/completions trae texto', () => pm.expect(Boolean(text)).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1c. Formato foto (content array, sin system)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{provider_key}}" },
+          { "key": "anthropic-version", "value": "2023-06-01" }
+        ],
+        "url": "{{provider_url}}",
+        "auth": { "type": "noauth" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{provider_model}}\",\n  \"max_tokens\": 300,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": [\n      { \"type\": \"text\", \"text\": \"Responde SOLO con este JSON: {\\\"ok\\\": true}\" }\n    ]\n  }]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Replica el formato EXACTO del analisis de foto (content como array de bloques, sin parametro system top-level), pero solo texto. Si AQUI viene content con texto, la solucion es cambiar el formato del chat al de la foto (arreglable por codigo)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const code = pm.response.code;",
+              "let data = {};",
+              "try { data = pm.response.json(); } catch (e) {}",
+              "const block = (data.content || []).find(b => b && b.type === 'text');",
+              "const text = block && block.text;",
+              "console.log('formato-foto status:', code, '| content.length:', (data.content || []).length, '| texto:', text ? JSON.stringify(text) : '(vacio)');",
+              "if (text) {",
+              "  console.log('FUNCIONA con formato array -> arreglo el chat por codigo replicando el formato de la foto.');",
+              "} else {",
+              "  console.log('Tambien vacio -> el grupo nunca devuelve texto; toca cambiar grupo/Anthropic directo.');",
+              "}",
+              "pm.test('content trae texto', () => pm.expect(Boolean(text)).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1d. Formato recibo (imagen 1x1 + texto)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{provider_key}}" },
+          { "key": "anthropic-version", "value": "2023-06-01" }
+        ],
+        "url": "{{provider_url}}",
+        "auth": { "type": "noauth" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{provider_model}}\",\n  \"max_tokens\": 64,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": [\n      { \"type\": \"image\", \"source\": { \"type\": \"base64\", \"media_type\": \"image/png\", \"data\": \"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\" } },\n      { \"type\": \"text\", \"text\": \"Ignora la imagen (esta vacia). Responde SOLO con este JSON: {\\\"ok\\\": true}\" }\n    ]\n  }]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Replica el modo multimodal del recibo: una imagen 1x1 transparente + texto. Si AQUI viene content con texto, confirmamos que el truco funciona y lo aplico al chat (imagen invisible para forzar el modo que si responde)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const code = pm.response.code;",
+              "let data = {};",
+              "try { data = pm.response.json(); } catch (e) {}",
+              "const block = (data.content || []).find(b => b && b.type === 'text');",
+              "const text = block && block.text;",
+              "console.log('imagen+texto status:', code, '| content.length:', (data.content || []).length, '| texto:', text ? JSON.stringify(text) : '(vacio)');",
+              "if (text) {",
+              "  console.log('FUNCIONA -> aplico el truco de imagen invisible al chat IA por codigo.');",
+              "} else {",
+              "  console.log('Vacio incluso con imagen -> ni el modo recibo da texto; toca cambiar grupo/Anthropic.');",
+              "}",
+              "pm.test('content trae texto con imagen', () => pm.expect(Boolean(text)).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1e. Streaming (como el SDK / OpenCode)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{provider_key}}" },
+          { "key": "anthropic-version", "value": "2023-06-01" }
+        ],
+        "url": "{{provider_url}}",
+        "auth": { "type": "noauth" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"{{provider_model}}\",\n  \"max_tokens\": 64,\n  \"stream\": true,\n  \"messages\": [{ \"role\": \"user\", \"content\": \"Responde solo: ok\" }]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Llama con stream:true, como hace el SDK de Anthropic (OpenCode). La respuesta es SSE (eventos). Si aqui aparece el texto en content_block_delta/text_delta, entonces SyntheroLink solo entrega por streaming y ahi esta la solucion."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const raw = pm.response.text();",
+              "console.log('streaming status:', pm.response.code);",
+              "console.log('crudo (primeros 800):', raw.slice(0, 800));",
+              "const hasText = /text_delta|content_block_delta/.test(raw);",
+              "if (hasText) {",
+              "  console.log('HAY texto en el stream -> SyntheroLink entrega por STREAMING. La solucion es usar stream:true.');",
+              "} else {",
+              "  console.log('Sin texto en el stream tampoco -> el grupo de la key no entrega texto por ningun modo.');",
+              "}",
+              "pm.test('El stream trae deltas de texto', () => pm.expect(hasText).to.eql(true));"
             ]
           }
         }

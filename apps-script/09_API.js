@@ -340,8 +340,22 @@ function dashAiAdvisor_(params, body) {
     chatCompletionsFallback = responseCode < 300;
   }
 
-  const result = parseJsonSeguro_(raw, null);
-  const text = dashAiText_(result, chatCompletionsFallback);
+  let result = parseJsonSeguro_(raw, null);
+  let text = dashAiText_(result, chatCompletionsFallback);
+
+  // Algunos grupos de SyntheroLink responden 200 en /v1/messages pero con
+  // content vacio (modo container). En ese caso /v1/chat/completions si entrega
+  // el texto en choices[].message.content, asi que caemos ahi.
+  if (!text && !chatCompletionsFallback && responseCode < 300) {
+    Logger.log('Dashboard advisor /v1/messages devolvio vacio; reintentando /v1/chat/completions.');
+    resp = llamarIAChatCompletions_(apiKey, claudeUrl, claudeModel, 700, system ? system + '\n\n' + user : user, '', '');
+    raw = resp.getContentText();
+    responseCode = resp.getResponseCode();
+    chatCompletionsFallback = responseCode < 300;
+    result = parseJsonSeguro_(raw, null);
+    text = dashAiText_(result, chatCompletionsFallback);
+  }
+
   if (responseCode >= 300 || !text) {
     Logger.log('Dashboard advisor IA error: ' + raw);
     throw new Error(resumenErrorClaude_(raw) || ('HTTP ' + responseCode));
