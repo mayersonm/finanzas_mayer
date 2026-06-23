@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RiDownloadLine } from '@remixicon/react';
+import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiDownloadLine, RiSearchLine } from '@remixicon/react';
 import { Card, Text, Title } from '@tremor/react';
 import { apiRequest } from '../../app/apiClient';
 import { TransactionsTable } from '../../components/dashboard/TransactionsTable';
@@ -34,6 +34,13 @@ export function MovementsSection({
     if (tx.tipo === 'ingreso') acc.ingresos += amount; else acc.gastos += amount;
     return acc;
   }, { ingresos: 0, gastos: 0 }), [transactions]);
+
+  const setFilter = (key: keyof typeof filters, value: string) => setFilters((current) => ({ ...current, [key]: value }));
+  const shiftMonth = (offset: number) => setFilters((current) => ({ ...current, month: addMonths(current.month || currentMonthKey(), offset) }));
+  const toggleAllMonths = () => setFilters((current) => ({ ...current, month: current.month ? '' : currentMonthKey() }));
+  const clearFilters = () => setFilters({ q: '', month: currentMonthKey(), category: '', type: '', payment: '', currency: '' });
+  const isCurrentMonth = filters.month === currentMonthKey();
+  const hasActiveFilters = Boolean(filters.q || filters.category || filters.type || filters.payment || filters.currency) || filters.month !== currentMonthKey();
 
   const loadTransactions = useCallback(async () => {
     if (!authToken) return;
@@ -104,63 +111,99 @@ export function MovementsSection({
           <Title>Movimientos</Title>
           <Text>{transactions.length} registros {loading ? 'cargando...' : 'filtrados'}</Text>
         </div>
-        <div className="flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center">
+        <button
+          type="button"
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-tremor-default border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 shadow-sm transition hover:border-emerald-400/60 hover:bg-emerald-500/15 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:opacity-55 sm:w-auto"
+          disabled={!transactions.length || loading}
+          onClick={exportFiltered}
+        >
+          <RiDownloadLine className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Exportar
+        </button>
+      </div>
+
+      {/* Busqueda + navegacion de mes */}
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <RiSearchLine className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+          <input
+            className="form-input !pl-9"
+            placeholder="Buscar por descripcion o categoria"
+            value={filters.q}
+            onChange={(event) => setFilter('q', event.target.value)}
+          />
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            className="inline-flex h-10 w-full min-w-[9.5rem] items-center justify-center gap-2 rounded-tremor-default border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 shadow-sm transition hover:border-emerald-400/60 hover:bg-emerald-500/15 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:opacity-55 min-[420px]:w-auto"
-            disabled={!transactions.length || loading}
-            onClick={exportFiltered}
+            className="grid h-10 w-10 place-items-center rounded-tremor-default border border-slate-700 bg-slate-900/60 text-slate-200 transition hover:bg-slate-800 disabled:opacity-40"
+            onClick={() => shiftMonth(-1)}
+            disabled={!filters.month}
+            aria-label="Mes anterior"
           >
-            <RiDownloadLine className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Exportar Movimiento
+            <RiArrowLeftSLine className="h-4 w-4" aria-hidden="true" />
           </button>
-          <span className="inline-flex h-10 w-full min-w-[8.5rem] items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-3 text-sm font-semibold text-slate-300 shadow-sm min-[420px]:w-auto">
-            Filtro: {filters.month ? formatMonthFilter(filters.month) : 'Historico'}
+          <span className="min-w-[7.5rem] text-center text-sm font-semibold text-slate-100">
+            {filters.month ? monthLabel(filters.month) : 'Todos los meses'}
           </span>
+          <button
+            type="button"
+            className="grid h-10 w-10 place-items-center rounded-tremor-default border border-slate-700 bg-slate-900/60 text-slate-200 transition hover:bg-slate-800 disabled:opacity-40"
+            onClick={() => shiftMonth(1)}
+            disabled={!filters.month || isCurrentMonth}
+            aria-label="Mes siguiente"
+          >
+            <RiArrowRightSLine className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className={`h-10 rounded-tremor-default border px-3 text-xs font-semibold transition ${
+              filters.month
+                ? 'border-slate-700 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+                : 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200'
+            }`}
+            onClick={toggleAllMonths}
+          >
+            {filters.month ? 'Todos' : 'Mes'}
+          </button>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 md:grid-cols-3 lg:grid-cols-6">
-        <input className="form-input" placeholder="Buscar" value={filters.q} onChange={(event) => setFilters((current) => ({ ...current, q: event.target.value }))} />
-        <div className="grid grid-cols-[minmax(8rem,0.85fr)_minmax(0,1fr)] gap-2 md:col-span-2 lg:col-span-2">
-          <select
-            className="form-input"
-            value={filters.month ? 'month' : 'all'}
-            onChange={(event) => {
-              const mode = event.target.value;
-              setFilters((current) => ({ ...current, month: mode === 'all' ? '' : current.month || currentMonthKey() }));
-            }}
-          >
-            <option value="month">Mes especifico</option>
-            <option value="all">Todos los meses</option>
-          </select>
-          <input
-            className="form-input min-w-0 disabled:cursor-not-allowed disabled:opacity-55"
-            type="month"
-            value={filters.month}
-            disabled={!filters.month}
-            onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value || currentMonthKey() }))}
-          />
-        </div>
-        <select className="form-input" value={filters.category} onChange={(event) => setFilters((current) => ({ ...current, category: event.target.value }))}>
+      {/* Filtros rapidos */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Segmented
+          value={filters.type}
+          onChange={(value) => setFilter('type', value)}
+          options={[{ value: '', label: 'Todos' }, { value: 'ingreso', label: 'Ingreso' }, { value: 'gasto', label: 'Gasto' }]}
+        />
+        <Segmented
+          value={filters.payment}
+          onChange={(value) => setFilter('payment', value)}
+          options={[{ value: '', label: 'Pago' }, { value: 'debito', label: 'Debito' }, { value: 'credito', label: 'Credito' }]}
+        />
+        <Segmented
+          value={filters.currency}
+          onChange={(value) => setFilter('currency', value)}
+          options={[{ value: '', label: 'Moneda' }, { value: 'PEN', label: 'PEN' }, { value: 'USD', label: 'USD' }]}
+        />
+        <select
+          className="form-input !h-9 w-auto min-w-[8rem] capitalize"
+          value={filters.category}
+          onChange={(event) => setFilter('category', event.target.value)}
+        >
           <option value="">Categoria</option>
           {categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
         </select>
-        <select className="form-input" value={filters.type} onChange={(event) => setFilters((current) => ({ ...current, type: event.target.value }))}>
-          <option value="">Tipo</option>
-          <option value="gasto">Gasto</option>
-          <option value="ingreso">Ingreso</option>
-        </select>
-        <select className="form-input" value={filters.payment} onChange={(event) => setFilters((current) => ({ ...current, payment: event.target.value }))}>
-          <option value="">Pago</option>
-          <option value="debito">Debito</option>
-          <option value="credito">Credito</option>
-        </select>
-        <select className="form-input" value={filters.currency} onChange={(event) => setFilters((current) => ({ ...current, currency: event.target.value }))}>
-          <option value="">Moneda</option>
-          <option value="PEN">PEN</option>
-          <option value="USD">USD</option>
-        </select>
+        {hasActiveFilters ? (
+          <button
+            type="button"
+            className="inline-flex h-9 items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/20"
+            onClick={clearFilters}
+          >
+            <RiCloseLine className="h-3.5 w-3.5" aria-hidden="true" />
+            Limpiar
+          </button>
+        ) : null}
       </div>
 
       <SummaryBar
@@ -184,6 +227,48 @@ export function MovementsSection({
       />
     </Card>
   );
+}
+
+function Segmented({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900/40 p-0.5">
+      {options.map((option) => {
+        const active = value === option.value;
+        return (
+          <button
+            key={option.value || 'all'}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+              active ? 'bg-cyan-500/15 text-cyan-200' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function addMonths(monthKey: string, offset: number) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const date = new Date(Date.UTC(year || new Date().getFullYear(), (month || 1) - 1 + offset, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const date = new Date(Date.UTC(year || 2026, (month || 1) - 1, 1));
+  return date.toLocaleDateString('es-PE', { month: 'short', year: 'numeric' });
 }
 
 function csvCell(value: unknown) {
