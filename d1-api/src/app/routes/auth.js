@@ -1,9 +1,11 @@
 import { auth, route } from '../router.js';
 import {
   changePassword,
+  confirmPasswordReset,
   disableTwoFactor,
   enableTwoFactor,
   login,
+  requestPasswordReset,
   setupTwoFactor,
   twoFactorStatus,
   verifyTwoFactorLogin,
@@ -15,6 +17,8 @@ export const authRoutes = [
   route('GET', '/api/session', auth.dash, () => ({ ok: true, authenticated: true })),
   route('POST', '/api/logout', auth.public, () => ({ ok: true })),
   route('POST', '/api/password', auth.dash, async (ctx) => changePassword(ctx.env, await ctx.body())),
+  route('POST', '/api/password/reset/request', auth.public, async (ctx) => requestPasswordReset(ctx.env, await ctx.body())),
+  route('POST', '/api/password/reset/confirm', auth.public, async (ctx) => confirmPasswordReset(ctx.env, await ctx.body())),
   route('GET', '/api/2fa/status', auth.dash, (ctx) => twoFactorStatus(ctx.env)),
   route('POST', '/api/2fa/setup', auth.dash, (ctx) => setupTwoFactor(ctx.env)),
   route('POST', '/api/2fa/enable', auth.dash, async (ctx) => enableTwoFactor(ctx.env, await ctx.body())),

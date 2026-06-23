@@ -2,6 +2,10 @@
 import { httpError } from '../shared/http.js';
 import { base64UrlDecode, base64UrlEncode, constantTimeEqual, hashPassword, hmacSha1Bytes, hmacSha256, sha256Hex, verifyPassword } from '../shared/crypto.js';
 import { getAppSetting, setAppSetting } from '../shared/settings-store.js';
+import { gasConfigRequest } from '../modules/system/gas.js';
+
+const RESET_TTL_SECONDS = 15 * 60;
+const RESET_MAX_ATTEMPTS = 5;
 
 const TOTP_ISSUER = 'Finanzas Mayeson';
 const TOTP_PERIOD_SECONDS = 30;
@@ -178,6 +182,76 @@ export async function dashboardLoginEmail(env) {
   const stored = String(await getAppSetting(env, 'dashboard_login_email') || '').trim().toLowerCase();
   const configured = String(env.LOGIN_EMAIL || env.DASHBOARD_LOGIN_EMAIL || '').trim().toLowerCase();
   return stored || configured || 'mayersonm@gmail.com';
+}
+
+// Genera y envia por correo un codigo de 6 digitos para recuperar la clave.
+// Respuesta uniforme para no revelar si el correo corresponde a la cuenta.
+export async function requestPasswordReset(env, payload) {
+  const email = String(payload?.email || '').trim().toLowerCase();
+  const expectedEmail = await dashboardLoginEmail(env);
+  const genericOk = { ok: true, message: 'Si el correo es valido, te enviaremos un codigo.' };
+  if (!email || email !== expectedEmail) return genericOk;
+
+  const code = generateResetCode();
+  const codeHash = await sha256Hex(code);
+  const expiresAt = Math.floor(Date.now() / 1000) + RESET_TTL_SECONDS;
+  await setAppSetting(env, 'password_reset_code_hash', codeHash);
+  await setAppSetting(env, 'password_reset_expires', String(expiresAt));
+  await setAppSetting(env, 'password_reset_attempts', '0');
+
+  try {
+    const params = new URLSearchParams({ to: expectedEmail, code });
+    await gasConfigRequest(env, 'send_password_reset', params);
+  } catch (_error) {
+    // No revelamos detalles del envio; el usuario puede reintentar.
+  }
+
+  return genericOk;
+}
+
+// Valida el codigo del correo y actualiza la clave. No inicia sesion:
+// el usuario entra luego con su nueva clave (y su 2FA, si lo tiene activo).
+export async function confirmPasswordReset(env, payload) {
+  const code = String(payload?.code || '').replace(/\s+/g, '');
+  const newPassword = String(payload?.newPassword || '');
+  if (!code || !newPassword) throw httpError(400, 'Codigo y nueva clave requeridos');
+  if (newPassword.length < 12) throw httpError(400, 'La nueva clave debe tener al menos 12 caracteres');
+
+  const storedHash = await getAppSetting(env, 'password_reset_code_hash');
+  const expiresAt = Number(await getAppSetting(env, 'password_reset_expires') || 0);
+  const attempts = Number(await getAppSetting(env, 'password_reset_attempts') || 0);
+
+  if (!storedHash || !expiresAt) throw httpError(400, 'No hay recuperacion pendiente. Solicita un codigo.');
+  if (Math.floor(Date.now() / 1000) > expiresAt) {
+    await clearPasswordReset(env);
+    throw httpError(400, 'El codigo expiro. Solicita uno nuevo.');
+  }
+  if (attempts >= RESET_MAX_ATTEMPTS) {
+    await clearPasswordReset(env);
+    throw httpError(429, 'Demasiados intentos. Solicita un codigo nuevo.');
+  }
+
+  const providedHash = await sha256Hex(code);
+  if (!constantTimeEqual(providedHash, storedHash)) {
+    await setAppSetting(env, 'password_reset_attempts', String(attempts + 1));
+    throw httpError(400, 'Codigo invalido');
+  }
+
+  await setAppSetting(env, 'dashboard_password_hash', await hashPassword(newPassword));
+  await clearPasswordReset(env);
+  return { ok: true, message: 'Clave actualizada. Inicia sesion con tu nueva clave.' };
+}
+
+function generateResetCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  const num = ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
+  return String(num % 1000000).padStart(6, '0');
+}
+
+async function clearPasswordReset(env) {
+  await setAppSetting(env, 'password_reset_code_hash', '');
+  await setAppSetting(env, 'password_reset_expires', '');
+  await setAppSetting(env, 'password_reset_attempts', '0');
 }
 
 export async function requireDashboardAccess(request, env) {
