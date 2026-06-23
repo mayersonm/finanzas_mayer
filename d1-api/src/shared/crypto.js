@@ -38,7 +38,7 @@ export async function sha256Hex(value) {
   return bytesToHex(new Uint8Array(digest));
 }
 
-const PBKDF2_ITERATIONS = 120000;
+const PBKDF2_ITERATIONS = 50000;
 
 // Deriva la clave con PBKDF2-SHA256 y devuelve `pbkdf2$iter$salt$hash` (salt y hash en base64url).
 export async function hashPassword(password, iterations = PBKDF2_ITERATIONS) {

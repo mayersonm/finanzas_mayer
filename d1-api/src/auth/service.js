@@ -222,11 +222,9 @@ export function bearer(request) {
 export async function isValidLoginPassword(env, password) {
   const storedHash = await getAppSetting(env, 'dashboard_password_hash');
   if (storedHash) {
-    const { valid, legacy } = await verifyPassword(password, storedHash);
-    if (valid && legacy) {
-      // Migra de forma transparente el hash SHA-256 antiguo a PBKDF2 en el primer login valido.
-      await setAppSetting(env, 'dashboard_password_hash', await hashPassword(password));
-    }
+    // Verificacion solamente: nada de re-hash en el path de login (un PBKDF2 extra
+    // aqui puede exceder el limite de CPU del Worker y abortar el inicio de sesion).
+    const { valid } = await verifyPassword(password, storedHash);
     return valid;
   }
 
