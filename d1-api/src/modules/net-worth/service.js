@@ -2,6 +2,7 @@ import { getChatId } from '../../shared/request.js';
 import { round, currencyToPen } from '../../shared/money.js';
 import { localDateKey, localIso, payCycleFromDate } from '../../shared/dates.js';
 import { fixedExpensesSummary, netWorthInsights } from '../dashboard/planning.js';
+import { computeCashBalance } from '../transactions/service.js';
 import { investmentsList } from '../investments/service.js';
 import { exchangeRate } from '../system/exchange-rate.js';
 import { fixedExpensesList } from '../commitments/fixed-expenses.js';
@@ -33,7 +34,8 @@ export async function netWorth(env, params) {
   const goals = await goalsList(env, chatId);
   const fixedExpenses = await fixedExpensesList(env, chatId, monthKey, rate, cycle);
   const fixedSummary = fixedExpensesSummary(fixedExpenses, rate);
-  const cash = round(incomePen - expensesPen - fixedSummary.paid);
+  const cashResult = await computeCashBalance(env, chatId, rate, { ingresos: incomePen, gastos: expensesPen, fixedPaid: fixedSummary.paid });
+  const cash = cashResult.balance;
 
   const investmentValue = round(investments.reduce((total, item) => (
     total + currencyToPen(Number(item.currentValue || 0), item.currency || 'PEN', rate)

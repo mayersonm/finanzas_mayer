@@ -9,7 +9,7 @@ import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPl
 import { automationCenter } from './automation.js';
 import { advisorResponse } from '../ai/advisor.js';
 import { exchangeRate } from '../system/exchange-rate.js';
-import { getCashOpening, txShape } from '../transactions/service.js';
+import { computeCashBalance, txShape } from '../transactions/service.js';
 import { budgetsRows } from '../budgeting/service.js';
 import { cycleExpenseRows, categoriesFromExpenseRows, topLeaksFromExpenseRows, budgetsFromExpenseRows, lastMonths } from './analytics.js';
 import { fixedExpensesList } from '../commitments/fixed-expenses.js';
@@ -187,27 +187,9 @@ export async function dashboard(env, params) {
 
   // Si se cerro caja, la caja parte del saldo de apertura anclado y solo suma
   // el neto de lo registrado despues del cierre. Si no, usa el acumulado total.
-  const cashOpening = await getCashOpening(env, chatId);
-  let balanceCaja;
-  let cashSinceOpening = 0;
-  let cashMovesSinceOpening = 0;
-  if (cashOpening) {
-    const sinceOpening = await env.DB.prepare(`
-      SELECT
-        COALESCE(SUM(CASE
-          WHEN type = 'ingreso' THEN (CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
-          WHEN type = 'gasto' THEN -(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
-          ELSE 0 END), 0) AS neto,
-        COUNT(*) AS movimientos
-      FROM transactions
-      WHERE chat_id = ? AND created_at > ?
-    `).bind(usdRate, usdRate, chatId, cashOpening.at).first();
-    cashSinceOpening = round(Number(sinceOpening?.neto || 0));
-    cashMovesSinceOpening = Number(sinceOpening?.movimientos || 0);
-    balanceCaja = round(cashOpening.balance + cashSinceOpening);
-  } else {
-    balanceCaja = round(ingresos - gastosConFijosPagados);
-  }
+  const cashResult = await computeCashBalance(env, chatId, usdRate, { ingresos, gastos, fixedPaid: fixedSummary.paid });
+  const balanceCaja = cashResult.balance;
+  const cashOpening = cashResult.opening;
 
   const balanceMesCaja = round(ingresosMes - gastosMesConFijosPagados);
   const patrimonioDisponible = round(balanceCaja - deudaPendiente - fixedSummary.pending);
@@ -321,7 +303,7 @@ export async function dashboard(env, params) {
   return {
     ok: true,
     balance: balanceCaja,
-    cashOpening: cashOpening ? { balance: round(cashOpening.balance), at: cashOpening.at, since: cashSinceOpening, movimientos: cashMovesSinceOpening } : null,
+    cashOpening,
     patrimonio: patrimonioDisponible,
     patrimonioDisponible,
     balanceGeneralNeto: patrimonioDisponible,

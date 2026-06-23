@@ -181,17 +181,8 @@ export function OverviewSection({
               <p className="mt-3 max-w-2xl text-sm text-slate-400">
                 Saldo calculado con movimientos en D1. No es lectura directa del banco.
               </p>
-              <button
-                type="button"
-                className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-tremor-default border border-cyan-500/40 bg-cyan-500/10 px-3 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15 disabled:opacity-60"
-                onClick={() => { setShowAdjust(true); setAdjustError(''); setRealBalance(String(cashBalance)); }}
-                disabled={!authToken}
-              >
-                <DatabaseIcon className="h-4 w-4" aria-hidden="true" />
-                Cerrar ciclo
-              </button>
               {cashOpening ? (
-                <p className="mt-2 max-w-xl text-xs text-slate-500">
+                <p className="mt-3 max-w-xl text-xs text-slate-500">
                   Cerraste en {formatMoney(cashOpening.balance)} el {formatClosureDateTime(cashOpening.at)}
                   {cashOpening.movimientos > 0
                     ? ` · ${cashOpening.since >= 0 ? '+' : '−'}${formatMoney(Math.abs(cashOpening.since))} en ${cashOpening.movimientos} mov. desde entonces`

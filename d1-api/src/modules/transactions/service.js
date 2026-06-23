@@ -120,6 +120,34 @@ export async function clearCashOpening(env, chatId) {
   return { ok: true };
 }
 
+// Calculo unico de la caja para dashboard y patrimonio. Si hay cierre, parte
+// del saldo de apertura + neto de lo registrado despues; si no, usa el
+// acumulado (ingresos - gastos - fijos pagados a mano) de los totales dados.
+export async function computeCashBalance(env, chatId, usdRate, fallback = {}) {
+  const opening = await getCashOpening(env, chatId);
+  if (opening) {
+    const since = await env.DB.prepare(`
+      SELECT
+        COALESCE(SUM(CASE
+          WHEN type = 'ingreso' THEN (CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
+          WHEN type = 'gasto' THEN -(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
+          ELSE 0 END), 0) AS neto,
+        COUNT(*) AS movimientos
+      FROM transactions
+      WHERE chat_id = ? AND created_at > ?
+    `).bind(usdRate, usdRate, chatId, opening.at).first();
+    const neto = round(Number(since?.neto || 0));
+    return {
+      balance: round(opening.balance + neto),
+      opening: { balance: round(opening.balance), at: opening.at, since: neto, movimientos: Number(since?.movimientos || 0) },
+    };
+  }
+  const ingresos = Number(fallback.ingresos || 0);
+  const gastos = Number(fallback.gastos || 0);
+  const fixedPaid = Number(fallback.fixedPaid || 0);
+  return { balance: round(ingresos - gastos - fixedPaid), opening: null };
+}
+
 export async function deleteTransaction(env, { id, chatId, deleteFromGas = false }) {
   const cleanId = String(id || '').trim();
   const cleanChatId = String(chatId || '').trim();
