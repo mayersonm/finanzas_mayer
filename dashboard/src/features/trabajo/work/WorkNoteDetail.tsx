@@ -146,7 +146,7 @@ function DetailBlock({ title, value, empty, tone = 'slate' }: { title: string; v
 
 function TimelineRow({ event }: { event: WorkTimelineEvent }) {
   return (
-    <div className="grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/45 p-3 sm:grid-cols-[7rem_minmax(0,1fr)]">
+    <div className="grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-[7rem_minmax(0,1fr)]">
       <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
         <RiCalendarLine className="h-4 w-4" />
         {formatDate(event.eventDate)}

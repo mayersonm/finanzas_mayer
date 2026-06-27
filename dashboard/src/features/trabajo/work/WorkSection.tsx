@@ -352,7 +352,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
 
       <div className={`grid gap-4 ${showForm ? 'xl:grid-cols-[22rem_minmax(0,1fr)]' : ''}`}>
         {showForm ? (
-          <Card className="rounded-tremor-default border-slate-800 bg-slate-900/95 !p-4 sm:!p-5 shadow-slate-950/10">
+          <Card className="rounded-tremor-default border-slate-800 bg-slate-900/80 !p-4 sm:!p-5 shadow-slate-950/10">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <Title className="text-base">{draft.id ? 'Editar apunte' : 'Nuevo apunte'}</Title>
@@ -425,7 +425,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
           </Card>
         ) : null}
 
-        <Card className="rounded-tremor-default border-slate-800 bg-slate-900/95 !p-4 sm:!p-5 shadow-slate-950/10">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-900/80 !p-4 sm:!p-5 shadow-slate-950/10">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <Title className="text-base">Tablero</Title>
@@ -463,7 +463,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
                       <article
                         key={item.id}
                         draggable
-                        className={`rounded-tremor-default border p-3 transition hover:border-slate-700 hover:bg-slate-900/70 ${draggingId === item.id ? 'opacity-60 ring-2 ring-emerald-400/50' : 'bg-slate-900/90 border-slate-800 cursor-grab'}`}
+                        className={`rounded-tremor-default border p-3 transition hover:border-slate-700 hover:bg-slate-900/70 ${draggingId === item.id ? 'opacity-60 ring-2 ring-emerald-400/50' : 'bg-slate-900/80 border-slate-800 cursor-grab'}`}
                         onDragStart={(event) => {
                           event.dataTransfer.effectAllowed = 'move';
                           event.dataTransfer.setData('text/plain', item.id);
