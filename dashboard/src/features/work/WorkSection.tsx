@@ -139,6 +139,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
       .map((item) => ({ ...item, sortOrder: item.status === targetStatus ? reorderedTarget.findIndex((row) => row.id === item.id) : item.sortOrder }));
 
     setItems(ordered);
+    setSummary(summarize(ordered));
     setDraggingId('');
     setDropTarget('');
     await persistOrder(ordered);
