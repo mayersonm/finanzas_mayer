@@ -1,9 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Badge, Card, Text, Title, type Color } from '@tremor/react';
-import { apiRequest } from '../../app/apiClient';
-import { SparklesIcon } from '../../components/common/AppIcons';
-import { formatMoney } from '../../lib/formatters';
-import type { DashboardData } from '../../types/dashboard';
+import { apiRequest } from '../../../app/apiClient';
+import { SparklesIcon } from '../../../components/common/AppIcons';
+import { formatMoney } from '../../../lib/formatters';
+import type { DashboardData } from '../../../types/dashboard';
 
 type AiMessageRole = 'user' | 'assistant';
 

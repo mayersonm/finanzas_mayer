@@ -1,15 +1,15 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Badge, Card, Text, Title } from '@tremor/react';
 import { RiAddLine, RiCloseLine, RiSave3Line } from '@remixicon/react';
-import { apiRequest } from '../../app/apiClient';
-import { BudgetProgress } from '../../components/dashboard/BudgetProgress';
-import { DebtRow } from '../../components/dashboard/DebtRow';
-import { EmailPanel } from '../../components/dashboard/EmailPanel';
-import { FixedExpenseRow } from '../../components/dashboard/FixedExpenseRow';
-import { EmptyState } from '../../components/common/EmptyState';
-import { SummaryBar } from '../../components/common/SummaryBar';
-import { formatMoney, convertCurrency } from '../../lib/formatters';
-import type { Currency, DashboardData, Debt, FixedExpense, RealExpenses } from '../../types/dashboard';
+import { apiRequest } from '../../../app/apiClient';
+import { BudgetProgress } from '../../../components/dashboard/BudgetProgress';
+import { DebtRow } from '../../../components/dashboard/DebtRow';
+import { EmailPanel } from '../../../components/dashboard/EmailPanel';
+import { FixedExpenseRow } from '../../../components/dashboard/FixedExpenseRow';
+import { EmptyState } from '../../../components/common/EmptyState';
+import { SummaryBar } from '../../../components/common/SummaryBar';
+import { formatMoney, convertCurrency } from '../../../lib/formatters';
+import type { Currency, DashboardData, Debt, FixedExpense, RealExpenses } from '../../../types/dashboard';
 
 interface FixedDraft {
   id?: string;

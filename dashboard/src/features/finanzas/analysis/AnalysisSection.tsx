@@ -1,9 +1,9 @@
 import { AreaChart, Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
-import { EmptyState } from '../../components/common/EmptyState';
-import { percent } from '../../lib/finance';
-import { formatMoney } from '../../lib/formatters';
-import { categoryColors } from '../../lib/tremorColors';
-import type { Budget, DashboardData } from '../../types/dashboard';
+import { EmptyState } from '../../../components/common/EmptyState';
+import { percent } from '../../../lib/finance';
+import { formatMoney } from '../../../lib/formatters';
+import { categoryColors } from '../../../lib/tremorColors';
+import type { Budget, DashboardData } from '../../../types/dashboard';
 
 function key(value: string): string {
   return value

@@ -8,7 +8,7 @@ import {
   RiEditLine,
   RiTimeLine,
 } from '@remixicon/react';
-import type { WorkItem, WorkPriority, WorkStatus, WorkTimelineEvent } from '../../types/dashboard';
+import type { WorkItem, WorkPriority, WorkStatus, WorkTimelineEvent } from '../../../types/dashboard';
 
 const statusLabels: Record<WorkStatus, string> = { todo: 'Todo', in_progress: 'En progreso', done: 'Done' };
 const priorityLabels: Record<WorkPriority, string> = { low: 'Baja', medium: 'Media', high: 'Alta' };

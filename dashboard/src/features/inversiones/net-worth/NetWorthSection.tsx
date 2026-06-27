@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
 import { RiRefreshLine, RiSave3Line } from '@remixicon/react';
-import { apiRequest } from '../../app/apiClient';
-import { EmptyState } from '../../components/common/EmptyState';
-import { formatMoney, formatUpdatedAt } from '../../lib/formatters';
-import type { NetWorthData, NetWorthInsight } from '../../types/dashboard';
+import { apiRequest } from '../../../app/apiClient';
+import { EmptyState } from '../../../components/common/EmptyState';
+import { formatMoney, formatUpdatedAt } from '../../../lib/formatters';
+import type { NetWorthData, NetWorthInsight } from '../../../types/dashboard';
 
 const emptyNetWorth: NetWorthData = {
   currency: 'PEN',

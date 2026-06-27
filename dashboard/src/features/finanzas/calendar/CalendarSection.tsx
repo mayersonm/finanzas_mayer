@@ -11,10 +11,10 @@ import {
   RiTargetLine,
 } from '@remixicon/react';
 import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
-import { apiRequest } from '../../app/apiClient';
-import { EmptyState } from '../../components/common/EmptyState';
-import { formatDate, formatMoney } from '../../lib/formatters';
-import type { CalendarEvent, DashboardData, FinancialCalendar, WeeklyGoal } from '../../types/dashboard';
+import { apiRequest } from '../../../app/apiClient';
+import { EmptyState } from '../../../components/common/EmptyState';
+import { formatDate, formatMoney } from '../../../lib/formatters';
+import type { CalendarEvent, DashboardData, FinancialCalendar, WeeklyGoal } from '../../../types/dashboard';
 
 const WEEK_DAYS = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
 

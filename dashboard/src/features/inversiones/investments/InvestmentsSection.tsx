@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Badge, Card, Text, Title } from '@tremor/react';
 import { RiAddLine, RiCloseLine, RiDeleteBinLine, RiEditLine, RiSave3Line } from '@remixicon/react';
-import { apiRequest } from '../../app/apiClient';
-import { EmptyState } from '../../components/common/EmptyState';
-import { formatMoney, convertCurrency } from '../../lib/formatters';
-import type { Currency, Investment } from '../../types/dashboard';
+import { apiRequest } from '../../../app/apiClient';
+import { EmptyState } from '../../../components/common/EmptyState';
+import { formatMoney, convertCurrency } from '../../../lib/formatters';
+import type { Currency, Investment } from '../../../types/dashboard';
 
 interface Draft {
   id?: string;

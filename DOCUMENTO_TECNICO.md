@@ -96,13 +96,13 @@ Archivos relevantes:
 - `dashboard/src/app/api.ts`
 - `dashboard/src/app/tabs.ts`
 - `dashboard/src/types/dashboard.ts`
-- `dashboard/src/features/overview/OverviewSection.tsx`
-- `dashboard/src/features/movements/MovementsSection.tsx`
-- `dashboard/src/features/commitments/CommitmentsSection.tsx`
-- `dashboard/src/features/freeMoney/FreeMoneySection.tsx`
-- `dashboard/src/features/netWorth/NetWorthSection.tsx`
-- `dashboard/src/features/investments/InvestmentsSection.tsx`
-- `dashboard/src/features/settings/SettingsSection.tsx`
+- `dashboard/src/features/finanzas/overview/OverviewSection.tsx`
+- `dashboard/src/features/finanzas/movements/MovementsSection.tsx`
+- `dashboard/src/features/finanzas/commitments/CommitmentsSection.tsx`
+- `dashboard/src/features/finanzas/free-money/FreeMoneySection.tsx`
+- `dashboard/src/features/inversiones/net-worth/NetWorthSection.tsx`
+- `dashboard/src/features/inversiones/investments/InvestmentsSection.tsx`
+- `dashboard/src/features/sistema/settings/SettingsSection.tsx`
 
 ## 3. Fuente de verdad
 

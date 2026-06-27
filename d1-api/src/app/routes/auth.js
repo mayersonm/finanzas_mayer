@@ -9,7 +9,7 @@ import {
   setupTwoFactor,
   twoFactorStatus,
   verifyTwoFactorLogin,
-} from '../../auth/service.js';
+} from '../../modules/auth/service.js';
 
 export const authRoutes = [
   route('POST', '/api/login', auth.public, async (ctx) => login(ctx.env, await ctx.body())),

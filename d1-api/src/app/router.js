@@ -3,7 +3,7 @@ import {
   requireAdminKey,
   requireDashboardAccess,
   requireDashboardOrAdminAccess,
-} from '../auth/service.js';
+} from '../modules/auth/service.js';
 
 // Estrategias de autorizacion reutilizables por las rutas declarativas.
 export const auth = {
