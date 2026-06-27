@@ -6,7 +6,7 @@ import { round, parseAmount } from '../../shared/money.js';
 import { clamp, normalizeCurrency, normalizeInvestmentHorizon, normalizeInvestorProfile, normalizeKey, normalizePaymentMethod } from '../../shared/normalizers.js';
 import { normalizeBaseCategory } from '../../shared/categories.js';
 import { safeObjectSegment } from '../../shared/files.js';
-import { dashboardLoginEmail } from '../../auth/service.js';
+import { dashboardLoginEmail } from '../auth/service.js';
 
 export async function dashboardSettings(env, params = new URLSearchParams()) {
   const chatId = getChatId(env, params);

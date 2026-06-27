@@ -6,21 +6,21 @@ import { LoginScreen } from './components/auth/LoginScreen';
 import { PasswordPanel } from './components/auth/PasswordPanel';
 import { AppHeader } from './components/layout/AppHeader';
 import { DashboardSidebar, DashboardTabs } from './components/layout/DashboardTabs';
-import { OverviewSection } from './features/overview/OverviewSection';
+import { OverviewSection } from './features/finanzas/overview/OverviewSection';
 import { getRealExpenses } from './lib/finance';
 import type { ApiStatus, DashboardBootstrapData, DashboardData, DashboardUser, TabId } from './types/dashboard';
 
-const AnalysisSection = lazy(() => import('./features/analysis/AnalysisSection').then((mod) => ({ default: mod.AnalysisSection })));
-const AiSection = lazy(() => import('./features/ai/AiSection').then((mod) => ({ default: mod.AiSection })));
-const CalendarSection = lazy(() => import('./features/calendar/CalendarSection').then((mod) => ({ default: mod.CalendarSection })));
-const CommitmentsSection = lazy(() => import('./features/commitments/CommitmentsSection').then((mod) => ({ default: mod.CommitmentsSection })));
-const FreeMoneySection = lazy(() => import('./features/freeMoney/FreeMoneySection').then((mod) => ({ default: mod.FreeMoneySection })));
-const GoalsSection = lazy(() => import('./features/goals/GoalsSection').then((mod) => ({ default: mod.GoalsSection })));
-const InvestmentsSection = lazy(() => import('./features/investments/InvestmentsSection').then((mod) => ({ default: mod.InvestmentsSection })));
-const MovementsSection = lazy(() => import('./features/movements/MovementsSection').then((mod) => ({ default: mod.MovementsSection })));
-const NetWorthSection = lazy(() => import('./features/netWorth/NetWorthSection').then((mod) => ({ default: mod.NetWorthSection })));
-const SettingsSection = lazy(() => import('./features/settings/SettingsSection').then((mod) => ({ default: mod.SettingsSection })));
-const WorkSection = lazy(() => import('./features/work/WorkSection').then((mod) => ({ default: mod.WorkSection })));
+const AnalysisSection = lazy(() => import('./features/finanzas/analysis/AnalysisSection').then((mod) => ({ default: mod.AnalysisSection })));
+const AiSection = lazy(() => import('./features/sistema/ai/AiSection').then((mod) => ({ default: mod.AiSection })));
+const CalendarSection = lazy(() => import('./features/finanzas/calendar/CalendarSection').then((mod) => ({ default: mod.CalendarSection })));
+const CommitmentsSection = lazy(() => import('./features/finanzas/commitments/CommitmentsSection').then((mod) => ({ default: mod.CommitmentsSection })));
+const FreeMoneySection = lazy(() => import('./features/finanzas/free-money/FreeMoneySection').then((mod) => ({ default: mod.FreeMoneySection })));
+const GoalsSection = lazy(() => import('./features/finanzas/goals/GoalsSection').then((mod) => ({ default: mod.GoalsSection })));
+const InvestmentsSection = lazy(() => import('./features/inversiones/investments/InvestmentsSection').then((mod) => ({ default: mod.InvestmentsSection })));
+const MovementsSection = lazy(() => import('./features/finanzas/movements/MovementsSection').then((mod) => ({ default: mod.MovementsSection })));
+const NetWorthSection = lazy(() => import('./features/inversiones/net-worth/NetWorthSection').then((mod) => ({ default: mod.NetWorthSection })));
+const SettingsSection = lazy(() => import('./features/sistema/settings/SettingsSection').then((mod) => ({ default: mod.SettingsSection })));
+const WorkSection = lazy(() => import('./features/trabajo/work/WorkSection').then((mod) => ({ default: mod.WorkSection })));
 
 type Theme = 'light' | 'dark';
 

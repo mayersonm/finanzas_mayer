@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { RiArrowRightLine, RiBankLine, RiShieldCheckLine, RiShoppingBag3Line, RiSparklingLine } from '@remixicon/react';
 import { Badge, Card, ProgressBar, Text, Title } from '@tremor/react';
-import { formatDate, formatMoney } from '../../lib/formatters';
-import type { DashboardData, FreeMoneyPlan } from '../../types/dashboard';
+import { formatDate, formatMoney } from '../../../lib/formatters';
+import type { DashboardData, FreeMoneyPlan } from '../../../types/dashboard';
 
 export function FreeMoneySection({ data }: { data: DashboardData }) {
   const plan = data.dineroLibre || fallbackFreeMoney(data);

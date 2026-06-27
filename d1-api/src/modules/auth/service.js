@@ -1,8 +1,8 @@
 
-import { httpError } from '../shared/http.js';
-import { base64UrlDecode, base64UrlEncode, constantTimeEqual, hashPassword, hmacSha1Bytes, hmacSha256, sha256Hex, verifyPassword } from '../shared/crypto.js';
-import { getAppSetting, setAppSetting } from '../shared/settings-store.js';
-import { gasConfigRequest } from '../modules/system/gas.js';
+import { httpError } from '../../shared/http.js';
+import { base64UrlDecode, base64UrlEncode, constantTimeEqual, hashPassword, hmacSha1Bytes, hmacSha256, sha256Hex, verifyPassword } from '../../shared/crypto.js';
+import { getAppSetting, setAppSetting } from '../../shared/settings-store.js';
+import { gasConfigRequest } from '../system/gas.js';
 
 const RESET_TTL_SECONDS = 15 * 60;
 const RESET_MAX_ATTEMPTS = 5;

@@ -8,7 +8,7 @@ import {
   RiRefreshLine,
   RiSave3Line,
 } from '@remixicon/react';
-import { apiRequest } from '../../app/apiClient';
+import { apiRequest } from '../../../app/apiClient';
 import type {
   AppSettingsConfig,
   AppSettingsData,
@@ -17,7 +17,7 @@ import type {
   CategoryRuleItem,
   HealthCheck,
   SystemHealthData,
-} from '../../types/dashboard';
+} from '../../../types/dashboard';
 
 const EMPTY_CONFIG: AppSettingsConfig = {
   creditCutoffDay: 25,

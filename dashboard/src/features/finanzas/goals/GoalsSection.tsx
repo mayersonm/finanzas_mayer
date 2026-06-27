@@ -1,7 +1,7 @@
 import { Badge, Text, Title } from '@tremor/react';
-import { EmptyState } from '../../components/common/EmptyState';
-import { GoalProgress } from '../../components/dashboard/GoalProgress';
-import type { DashboardData } from '../../types/dashboard';
+import { EmptyState } from '../../../components/common/EmptyState';
+import { GoalProgress } from '../../../components/dashboard/GoalProgress';
+import type { DashboardData } from '../../../types/dashboard';
 
 export function GoalsSection({ data }: { data: DashboardData }) {
   return (

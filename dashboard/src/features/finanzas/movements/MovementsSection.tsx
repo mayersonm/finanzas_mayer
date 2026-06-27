@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiDownloadLine, RiSearchLine } from '@remixicon/react';
 import { Card, Text, Title } from '@tremor/react';
-import { apiRequest } from '../../app/apiClient';
-import { TransactionsTable } from '../../components/dashboard/TransactionsTable';
-import { SummaryBar } from '../../components/common/SummaryBar';
-import { convertCurrency, formatMoney } from '../../lib/formatters';
-import type { DashboardData, Transaction } from '../../types/dashboard';
+import { apiRequest } from '../../../app/apiClient';
+import { TransactionsTable } from '../../../components/dashboard/TransactionsTable';
+import { SummaryBar } from '../../../components/common/SummaryBar';
+import { convertCurrency, formatMoney } from '../../../lib/formatters';
+import type { DashboardData, Transaction } from '../../../types/dashboard';
 
 export function MovementsSection({
   data,

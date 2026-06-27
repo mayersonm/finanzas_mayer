@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { Badge, Card, Text, Title } from '@tremor/react';
 import { RiAddLine, RiCloseLine, RiSave3Line } from '@remixicon/react';
-import { apiRequest } from '../../app/apiClient';
-import type { WorkItem, WorkPriority, WorkStatus, WorkSummary } from '../../types/dashboard';
+import { apiRequest } from '../../../app/apiClient';
+import type { WorkItem, WorkPriority, WorkStatus, WorkSummary } from '../../../types/dashboard';
 import { WorkNoteDetail } from './WorkNoteDetail';
 
 interface Draft {

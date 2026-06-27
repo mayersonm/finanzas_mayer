@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Badge, Card, ProgressBar, Text, Title, type Color } from '@tremor/react';
-import { apiRequest } from '../../app/apiClient';
-import { EmptyState } from '../../components/common/EmptyState';
-import { Collapsible, SummaryBar } from '../../components/common/SummaryBar';
-import { DatabaseIcon, SaveIcon } from '../../components/common/AppIcons';
-import { percent } from '../../lib/finance';
-import { formatMoney, formatUpdatedAt } from '../../lib/formatters';
-import type { AutomationCenter, ClosureSummary, DashboardData, FinancialClosureRecord, MonthTotal, RealExpenses } from '../../types/dashboard';
+import { apiRequest } from '../../../app/apiClient';
+import { EmptyState } from '../../../components/common/EmptyState';
+import { Collapsible, SummaryBar } from '../../../components/common/SummaryBar';
+import { DatabaseIcon, SaveIcon } from '../../../components/common/AppIcons';
+import { percent } from '../../../lib/finance';
+import { formatMoney, formatUpdatedAt } from '../../../lib/formatters';
+import type { AutomationCenter, ClosureSummary, DashboardData, FinancialClosureRecord, MonthTotal, RealExpenses } from '../../../types/dashboard';
 
 export function OverviewSection({
   data,
