@@ -95,6 +95,27 @@ describe('freeMoneyPlan', () => {
     expect(plan.availableToSpend).toBeGreaterThanOrEqual(0);
     expect(plan.daily.safe).toBeLessThanOrEqual(plan.daily.normal);
   });
+
+  it('reserva fijos pendientes antes del gasto disponible', () => {
+    const plan = freeMoneyPlan({ ...baseArgs, fixedSummary: { pending: 1500 } });
+    expect(plan.committedObligations).toBe(1500);
+    expect(plan.freeAfterCommitments).toBe(500);
+    expect(plan.availableToSpend).toBe(500);
+  });
+
+  it('incluye deudas que vencen en el ciclo dentro de las obligaciones', () => {
+    const plan = freeMoneyPlan({ ...baseArgs, fixedSummary: { pending: 200 }, debtDueCycle: 300 });
+    expect(plan.committedObligations).toBe(500);
+    expect(plan.debtDueCycle).toBe(300);
+    expect(plan.freeAfterCommitments).toBe(1500);
+  });
+
+  it('sin compromisos no cambia el calculo anterior', () => {
+    const plan = freeMoneyPlan(baseArgs);
+    expect(plan.committedObligations).toBe(0);
+    expect(plan.freeAfterCommitments).toBe(2000);
+    expect(plan.availableToSpend).toBe(800);
+  });
 });
 
 describe('weeklyGoalMessage', () => {

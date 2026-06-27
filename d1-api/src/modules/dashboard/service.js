@@ -2,14 +2,14 @@ import { safeJsonParse } from '../../shared/http.js';
 import { getChatId } from '../../shared/request.js';
 import { round, currencyToPen } from '../../shared/money.js';
 import { clamp, normalizeDateOnly, normalizeMonthKey } from '../../shared/normalizers.js';
-import { dateFromKey, dateKeyFromParts, localDateKey, localIso, monthLongNameFromKey, parseDateKeyParts, payCycleFromDate } from '../../shared/dates.js';
+import { dateFromKey, dateKeyFromParts, localDateKey, localIso, monthLongNameFromKey, parseDateKeyParts, payCycleFromDate, payCycleRelative } from '../../shared/dates.js';
 import { budgetRulesForDashboard, loadBudgetRules, loadCategoryRules } from '../../shared/categories.js';
 import { ensureUserForChat, getUserSettings, normalizeSettingsConfig, userSettingsToConfig, usersList } from '../settings/service.js';
 import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPlan, monthlyCalendar, realExpenses, smartAlerts, smartInsights, weeklyGoalPlan } from './planning.js';
 import { automationCenter } from './automation.js';
 import { advisorResponse } from '../ai/advisor.js';
 import { exchangeRate } from '../system/exchange-rate.js';
-import { computeCashBalance, txShape } from '../transactions/service.js';
+import { computeCashBalance, loadSalaryDates, txShape } from '../transactions/service.js';
 import { budgetsRows } from '../budgeting/service.js';
 import { cycleExpenseRows, categoriesFromExpenseRows, topLeaksFromExpenseRows, budgetsFromExpenseRows, lastMonths } from './analytics.js';
 import { fixedExpensesList } from '../commitments/fixed-expenses.js';
@@ -64,22 +64,53 @@ export async function aiAdvisor(env, params, payload) {
   return advisorResponse(env, dashboardData, settings, payload);
 }
 
+// El ciclo se ancla al SUELDO, no al dia 22: empieza el dia que se registra el
+// sueldo. Las transacciones anteriores al sueldo quedan en el ciclo anterior.
+// El 22 sigue siendo la malla nominal (mes contable y fallback sin sueldos).
+export async function resolveCurrentCycle(env, chatId, now) {
+  const today = localDateKey(now);
+  const dateCycle = payCycleFromDate(now);
+  const salaryDates = await loadSalaryDates(env, chatId, today);
+  // Sin sueldos registrados -> malla 22->22 de siempre.
+  if (!salaryDates.length) return dateCycle;
+
+  const startKey = salaryDates[0]; // ultimo sueldo <= hoy: abre el ciclo actual.
+  // Si el ultimo sueldo es anterior al corte nominal, todavia no cobramos el
+  // ciclo nuevo: seguimos en el anterior, extendido hasta hoy.
+  const awaitingSalary = startKey < dateCycle.startKey;
+  const endKey = awaitingSalary ? today : dateCycle.endKey;
+  const key = (awaitingSalary ? payCycleRelative(dateCycle, -1) : dateCycle).key;
+  return {
+    ...dateCycle,
+    startKey,
+    endKey,
+    key,
+    rangeLabel: `${startKey.slice(8, 10)}/${startKey.slice(5, 7)}/${startKey.slice(0, 4)} - ${endKey.slice(8, 10)}/${endKey.slice(5, 7)}/${endKey.slice(0, 4)}`,
+    awaitingSalary,
+  };
+}
+
 export async function dashboard(env, params) {
   const chatId = getChatId(env, params);
   const now = new Date();
   const requestedCycleStart = normalizeDateOnly(params.get('cycle_start') || params.get('cycleStart') || '');
   const requestedCalendarMonth = normalizeMonthKey(params.get('calendar_month') || params.get('calendarMonth') || '');
-  const cycle = requestedCycleStart ? payCycleFromDate(dateFromKey(requestedCycleStart)) : payCycleFromDate(now);
-  const monthKey = cycle.key;
-  const calendarMonth = cycle;
-  const cycleKey = monthKey;
-  const monthName = monthLongNameFromKey(localDateKey(now));
   const rateInfo = await exchangeRate(env);
   const usdRate = Number(rateInfo.rate || 3.85);
   const user = await ensureUserForChat(env, chatId);
   const settings = normalizeSettingsConfig(userSettingsToConfig(await getUserSettings(env, user.id)));
-  const cycleStartParts = parseDateKeyParts(calendarMonth.startKey);
   const cycleIncomeLeadDays = clamp(Number(settings.cycleIncomeLeadDays ?? 0), 0, 7);
+  // El ciclo no salta al siguiente solo por la fecha de corte: espera a que se
+  // registre el sueldo del nuevo ciclo (ver resolveCurrentCycle).
+  const cycle = requestedCycleStart
+    ? payCycleFromDate(dateFromKey(requestedCycleStart))
+    : await resolveCurrentCycle(env, chatId, now);
+  const monthKey = cycle.key;
+  const calendarMonth = cycle;
+  const cycleKey = monthKey;
+  const awaitingSalary = Boolean(cycle.awaitingSalary);
+  const monthName = monthLongNameFromKey(localDateKey(now));
+  const cycleStartParts = parseDateKeyParts(calendarMonth.startKey);
   const cycleIncomeStartKey = dateKeyFromParts(
     cycleStartParts.year,
     cycleStartParts.monthIndex,
@@ -174,6 +205,15 @@ export async function dashboard(env, params) {
   const deudaPendiente = round(debts
     .filter((item) => item.estado !== 'pagada')
     .reduce((total, item) => total + currencyToPen(Number(item.pendiente || 0), item.currency || 'PEN', usdRate), 0));
+  // Deudas que vencen dentro del ciclo actual (las que conviene reservar de la
+  // caja para el calculo de dinero libre). Las que no tienen vencimiento no se
+  // fuerzan a reservar este ciclo.
+  const deudaVenceCiclo = round(debts
+    .filter((item) => item.estado !== 'pagada'
+      && item.vencimiento
+      && item.vencimiento >= calendarMonth.startKey
+      && item.vencimiento <= calendarMonth.endKey)
+    .reduce((total, item) => total + currencyToPen(Number(item.pendiente || 0), item.currency || 'PEN', usdRate), 0));
 
   const ingresos = Number(totals?.ingresos || 0);
   const gastos = Number(totals?.gastos || 0);
@@ -190,6 +230,22 @@ export async function dashboard(env, params) {
   const cashResult = await computeCashBalance(env, chatId, usdRate, { ingresos, gastos, fixedPaid: fixedSummary.paid });
   const balanceCaja = cashResult.balance;
   const cashOpening = cashResult.opening;
+
+  // Si entro un sueldo despues del ultimo ancla de caja, el ciclo nuevo arranca
+  // ahi: se pide confirmar el saldo real para anclar la caja (sueldo abre el
+  // ciclo, el usuario reconcilia con el banco). created_at compara contra el at
+  // del ancla (mismo formato 'YYYY-MM-DD HH:MM:SS').
+  const lastSalaryRow = await env.DB.prepare(`
+    SELECT tx_date, amount, currency, created_at
+    FROM transactions
+    WHERE chat_id = ? AND type = 'ingreso' AND category = 'salario'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(chatId).first();
+  const cashAnchorPending = Boolean(lastSalaryRow && (!cashOpening || String(lastSalaryRow.created_at) > String(cashOpening.at)));
+  const pendingSalary = cashAnchorPending && lastSalaryRow
+    ? { date: lastSalaryRow.tx_date, amount: round(currencyToPen(Number(lastSalaryRow.amount || 0), lastSalaryRow.currency || 'PEN', usdRate)) }
+    : null;
 
   const balanceMesCaja = round(ingresosMes - gastosMesConFijosPagados);
   const patrimonioDisponible = round(balanceCaja - deudaPendiente - fixedSummary.pending);
@@ -230,6 +286,7 @@ export async function dashboard(env, params) {
     budget,
     fixedSummary,
     deudaPendiente,
+    debtDueCycle: deudaVenceCiclo,
     goals,
     cashBalance: balanceCaja,
     patrimonioDisponible,
@@ -318,6 +375,9 @@ export async function dashboard(env, params) {
     mesKey: monthKey,
     cycleKey,
     cycleLabel: cycle.label,
+    awaitingSalary,
+    cashAnchorPending,
+    pendingSalary,
     cycleStart: calendarMonth.startKey,
     cycleEnd: calendarMonth.endKey,
     cycleIncomeStart: cycleIncomeStartKey,

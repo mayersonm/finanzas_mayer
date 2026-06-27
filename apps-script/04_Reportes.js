@@ -2,27 +2,32 @@
 function sendBalance(chatId) {
   const d1 = leerDashboardD1_(chatId);
   if (d1 && d1.ok) {
-    const ingresos = Number(d1.ingresos || 0);
-    const gastos = Number(d1.gastos || 0);
-    const balance = Number(d1.balance || ingresos - gastos);
+    // Flujos del CICLO actual (no de toda la historia).
+    const ingresos = Number(d1.ingresosMes || 0);
+    const gastos = Number(d1.gastosMes || 0);
+    const resultadoCiclo = Number(d1.balanceMes != null ? d1.balanceMes : ingresos - gastos);
+    const caja = Number(d1.balance || 0);
     const deudaPendiente = Number(d1.deudaPendiente || 0);
     const fijosPendientes = Number(d1.fijosPendientes || (d1.gastosReales && d1.gastosReales.totalFijos) || 0);
     const fijosPagadosMes = Number(d1.fijosPagadosMes || (d1.gastosReales && d1.gastosReales.totalFijosPagados) || 0);
-    const patrimonioDisponible = Number(d1.patrimonioDisponible || d1.patrimonio || d1.balanceGeneralNeto || d1.balanceNeto || (balance - deudaPendiente - fijosPendientes));
-    const emoji = balance >= 0 ? '🟢' : '🔴';
+    const patrimonioDisponible = Number(d1.patrimonioDisponible || d1.patrimonio || d1.balanceGeneralNeto || d1.balanceNeto || (caja - deudaPendiente - fijosPendientes));
+    const movimientosMes = Number(d1.movimientosMes || 0);
+    const rango = d1.cycleRange || d1.cycleLabel || d1.mes || '';
+    const emoji = resultadoCiclo >= 0 ? '🟢' : '🔴';
     const emojiPatrimonio = patrimonioDisponible >= 0 ? '🟢' : '🔴';
 
     return sendMessage(chatId,
-      `💰 *Tu Balance*\n\n` +
-      `📥 Ingresos:  S/ ${ingresos.toFixed(2)}\n` +
-      `📤 Gastos:    S/ ${gastos.toFixed(2)}\n` +
+      `💰 *Tu Balance — Ciclo*${rango ? `\n_${rango}_` : ''}\n\n` +
+      `📥 Ingresos del ciclo:  S/ ${ingresos.toFixed(2)}\n` +
+      `📤 Gastos del ciclo:    S/ ${gastos.toFixed(2)}\n` +
       `✅ Fijos pagados: S/ ${fijosPagadosMes.toFixed(2)}\n` +
       `🔁 Fijos pendientes: S/ ${fijosPendientes.toFixed(2)}\n` +
       `💳 Deudas pendientes: S/ ${deudaPendiente.toFixed(2)}\n` +
       `─────────────────\n` +
-      `${emoji} Balance caja: S/ ${balance.toFixed(2)}\n` +
+      `${emoji} Resultado del ciclo: S/ ${resultadoCiclo.toFixed(2)}\n` +
+      `💵 Caja actual: S/ ${caja.toFixed(2)}\n` +
       `${emojiPatrimonio} Patrimonio disponible: S/ ${patrimonioDisponible.toFixed(2)}\n\n` +
-      `_Fuente: D1 · ${d1.movimientos || 0} movimiento${d1.movimientos !== 1 ? 's' : ''}_`,
+      `_Fuente: D1 · ${movimientosMes} movimiento${movimientosMes !== 1 ? 's' : ''} en el ciclo_`,
       true
     );
   }

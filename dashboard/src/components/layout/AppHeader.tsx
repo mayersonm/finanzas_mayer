@@ -51,6 +51,11 @@ export function AppHeader({
             <span className="inline-flex h-7 items-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-2.5 text-xs font-semibold text-slate-300">
               Ciclo: {cycleLabel(data)}
             </span>
+            {data.exchangeRate ? (
+              <span className="inline-flex h-7 items-center rounded-tremor-default border border-slate-700 bg-slate-900/70 px-2.5 text-xs font-semibold text-slate-300">
+                Dólar: S/ {Number(data.exchangeRate).toFixed(3)}
+              </span>
+            ) : null}
           </div>
           <h1 className="text-xl font-semibold text-slate-100 sm:text-3xl">Mayeson Finanzas</h1>
           <p className="mt-1 text-xs text-slate-400 sm:text-sm">Ultima actualizacion: {loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)}</p>

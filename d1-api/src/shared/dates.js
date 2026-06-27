@@ -108,6 +108,23 @@ export function payCycleFromDate(date) {
   };
 }
 
+export function dayBeforeKey(key) {
+  const p = parseDateKeyParts(key);
+  return dateKeyFromParts(p.year, p.monthIndex, p.day - 1);
+}
+
+// Ventana de un ciclo anclado al sueldo. `salaryDatesDesc` son las fechas de
+// los sueldos (mas reciente primero, todas <= hoy). offset 0 = ciclo actual
+// (desde el ultimo sueldo hasta hoy); -1 = anterior (entre dos sueldos); etc.
+// Devuelve null si no hay sueldo para ese offset (el caller usa la malla 22).
+export function salaryCycleWindow(salaryDatesDesc, todayKey, offset) {
+  const idx = -Number(offset || 0);
+  if (!Array.isArray(salaryDatesDesc) || idx < 0 || idx >= salaryDatesDesc.length) return null;
+  const startKey = salaryDatesDesc[idx];
+  const endKey = idx === 0 ? todayKey : dayBeforeKey(salaryDatesDesc[idx - 1]);
+  return { startKey, endKey };
+}
+
 export function payCycleRelative(cycle, offset) {
   const start = parseDateKeyParts(cycle.startKey);
   return payCycleFromDate(new Date(Date.UTC(start.year, start.monthIndex + offset, 23, 12)));

@@ -101,24 +101,21 @@ async function syncStatus(env, chatId, now) {
   const lastDate = String(latest.created_at || '').slice(0, 10);
   const ageDays = lastDate ? Math.max(0, daysBetween(lastDate, today)) : 999;
   const ageHours = round(ageDays * 24);
-  const status = latest.status !== 'ok'
-    ? 'error'
-    : ageHours > 168
-      ? 'stale'
-      : 'ok';
+  // D1 es la fuente principal; el sync Sheets->D1 solo importa si editas Sheets
+  // a mano. Un sync antiguo NO es alarma: solo marcamos 'error' si la ultima
+  // corrida fallo de verdad.
+  const status = latest.status !== 'ok' ? 'error' : 'ok';
 
   return {
     status,
-    statusLabel: status === 'ok' ? 'Respaldo OK' : status === 'stale' ? 'Backup viejo' : 'Revisar',
+    statusLabel: status === 'ok' ? 'Respaldo OK' : 'Revisar',
     lastAt: latest.created_at || '',
     ageHours,
     source: latest.source || 'gas',
     details: safeJson(latest.details),
     message: status === 'ok'
-      ? 'D1 esta al dia; Sheets queda como respaldo.'
-      : status === 'stale'
-        ? 'D1 es la fuente principal. Sincroniza solo si hubo cambios manuales en Sheets.'
-        : 'La ultima sync no quedo OK.',
+      ? 'D1 es la fuente principal. Sheets es respaldo opcional (sincroniza solo si editas Sheets a mano).'
+      : 'La ultima sync no quedo OK.',
   };
 }
 

@@ -9,6 +9,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
   const actualSavings = plan.actualSavings ?? plan.savingsTarget;
   const distributionBase = Math.max(plan.freeAfterCommitments, 0);
   const extraMargin = Math.max(plan.investment.amount || 0, 0);
+  const committedObligations = plan.committedObligations ?? (plan.fixedPending + plan.debtPending);
   const [purchaseAmount, setPurchaseAmount] = useState('');
   const [purchaseName, setPurchaseName] = useState('');
   const purchase = useMemo(() => purchaseVerdict(plan, Number(purchaseAmount || 0), purchaseName), [plan, purchaseAmount, purchaseName]);
@@ -36,7 +37,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Metric icon={RiShieldCheckLine} label="Caja proyectada" value={formatMoney(distributionBase)} sub="base: caja actual" tone="emerald" />
+          <Metric icon={RiShieldCheckLine} label="Caja libre" value={formatMoney(distributionBase)} sub="tras ahorro, colchon y compromisos" tone="emerald" />
           <Metric icon={RiShoppingBag3Line} label="Para gastar ciclo" value={formatMoney(plan.availableToSpend)} sub={`${plan.daysLeft} dias restantes`} tone="cyan" />
           <Metric icon={RiSparklingLine} label="Puedes ahorrar" value={formatMoney(plan.recommendedSavings)} sub="sugerencia del ciclo" tone="emerald" />
           <Metric icon={RiBankLine} label="Margen extra" value={formatMoney(extraMargin)} sub="despues de gastar y ahorrar" tone="amber" />
@@ -57,9 +58,9 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
             <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
               <Mini label="Caja actual" value={formatMoney(plan.baseBalance)} />
               <Mini label="Ahorro real" value={formatMoney(actualSavings)} />
-              <Mini label="Sugerencia" value={formatMoney(plan.recommendedSavings)} />
-              <Mini label="Fijos/deudas ref." value={formatMoney(plan.fixedPending + plan.debtPending)} />
               <Mini label="Colchon" value={formatMoney(plan.emergencyBuffer)} />
+              <Mini label="Compromisos del ciclo" value={formatMoney(committedObligations)} />
+              <Mini label="Sugerencia ahorro" value={formatMoney(plan.recommendedSavings)} />
             </div>
           </div>
 
