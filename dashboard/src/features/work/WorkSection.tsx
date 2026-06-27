@@ -145,6 +145,18 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
     await persistOrder(ordered);
   }, [draggingId, items, persistOrder]);
 
+  // Cambio de estado directo desde la tarjeta (funciona en tactil, a diferencia
+  // del drag & drop). Manda el item al final de la columna destino.
+  const changeStatus = useCallback(async (item: WorkItem, targetStatus: WorkStatus) => {
+    if (item.status === targetStatus) return;
+    const others = items.filter((row) => row.id !== item.id);
+    const targetCount = others.filter((row) => row.status === targetStatus).length;
+    const ordered = others.concat({ ...item, status: targetStatus, sortOrder: targetCount });
+    setItems(ordered);
+    setSummary(summarize(ordered));
+    await persistOrder(ordered);
+  }, [items, persistOrder]);
+
   const startEdit = (item: WorkItem) => {
     setDraft({
       id: item.id,
@@ -479,6 +491,22 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
                             ) : null}
                           </div>
                         </button>
+                        <div className="mt-3 flex items-center gap-1.5 border-t border-slate-800 pt-2">
+                          <span className="text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-slate-500">Mover a</span>
+                          <select
+                            value={item.status}
+                            aria-label="Cambiar estado"
+                            draggable={false}
+                            className="ml-auto rounded-tremor-default border border-slate-700 bg-slate-950/80 px-2 py-1 text-xs font-semibold text-slate-200 focus:border-emerald-400/60 focus:outline-none"
+                            onClick={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onChange={(event) => void changeStatus(item, event.target.value as WorkStatus)}
+                          >
+                            <option value="todo">Pendientes</option>
+                            <option value="in_progress">En progreso</option>
+                            <option value="done">Completadas</option>
+                          </select>
+                        </div>
                       </article>
                       );
                     }) : (
