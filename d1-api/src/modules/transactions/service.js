@@ -5,6 +5,7 @@ import { getAppSetting, setAppSetting } from '../../shared/settings-store.js';
 import { clamp, normalizeCurrency, normalizeDateOnly, normalizeKey, normalizePaymentMethod, title } from '../../shared/normalizers.js';
 import { classifyCategory, normalizeBaseCategory, normalizeCategory } from '../../shared/categories.js';
 import { stableTransactionId } from '../../shared/files.js';
+import { localDateKey, payCycleFromDate, payCycleRelative, salaryCycleWindow } from '../../shared/dates.js';
 
 export async function transactions(env, params) {
   const chatId = getChatId(env, params);
@@ -43,6 +44,50 @@ export async function transactions(env, params) {
     values.push(month);
   }
 
+  // Rango de fechas (para ver un ciclo, no solo un mes calendario).
+  const fromDate = normalizeDateOnly(params.get('from') || '');
+  const toDate = normalizeDateOnly(params.get('to') || '');
+  if (fromDate) {
+    where.push('t.tx_date >= ?');
+    values.push(fromDate);
+  }
+  if (toDate) {
+    where.push('t.tx_date <= ?');
+    values.push(toDate);
+  }
+
+  // "Desde el cierre": excluye lo registrado antes del ultimo cierre de caja
+  // (cerrado es cerrado). Usa el mismo ancla que el saldo de caja.
+  const sinceClose = ['1', 'true', 'yes'].includes(String(params.get('since_close') || '').toLowerCase());
+  if (sinceClose) {
+    const opening = await getCashOpening(env, chatId);
+    if (opening?.at) {
+      where.push('t.created_at > ?');
+      values.push(opening.at);
+    }
+  }
+
+  // Ciclo anclado al sueldo: offset 0 = ciclo actual (desde el ultimo sueldo),
+  // negativos = anteriores. El boundary es la fecha del sueldo, no el dia 22.
+  let resolvedCycle = null;
+  const cycleOffsetRaw = params.get('cycle_offset');
+  if (cycleOffsetRaw !== null && cycleOffsetRaw !== '') {
+    const offset = Math.min(0, Math.trunc(Number(cycleOffsetRaw) || 0));
+    const todayKey = localDateKey(new Date());
+    const salaryDates = await loadSalaryDates(env, chatId, todayKey);
+    let win = salaryCycleWindow(salaryDates, todayKey, offset);
+    if (!win) {
+      // Sin sueldo para ese ciclo: caer a la malla 22->22.
+      const grid = payCycleRelative(payCycleFromDate(new Date()), offset);
+      win = { startKey: grid.startKey, endKey: offset === 0 ? todayKey : grid.endKey };
+    }
+    where.push('t.tx_date >= ?');
+    values.push(win.startKey);
+    where.push('t.tx_date <= ?');
+    values.push(win.endKey);
+    resolvedCycle = { offset, start: win.startKey, end: win.endKey };
+  }
+
   const rows = await env.DB.prepare(`
     SELECT
       t.id,
@@ -72,8 +117,22 @@ export async function transactions(env, params) {
     ok: true,
     total: rows.results?.length || 0,
     limit,
+    cycle: resolvedCycle,
     transacciones: (rows.results || []).map(txShape),
   };
+}
+
+// Fechas de sueldo (ingreso categoria 'salario') mas recientes, descendente.
+// Definen los limites de los ciclos anclados al sueldo.
+export async function loadSalaryDates(env, chatId, todayKey, limit = 24) {
+  const rows = await env.DB.prepare(`
+    SELECT DISTINCT tx_date
+    FROM transactions
+    WHERE chat_id = ? AND type = 'ingreso' AND category = 'salario' AND tx_date <= ?
+    ORDER BY tx_date DESC
+    LIMIT ?
+  `).bind(chatId, todayKey, limit).all();
+  return (rows.results || []).map((row) => row.tx_date).filter(Boolean);
 }
 
 export async function insertTransaction(env, payload) {
@@ -121,8 +180,9 @@ export async function clearCashOpening(env, chatId) {
 }
 
 // Calculo unico de la caja para dashboard y patrimonio. Si hay cierre, parte
-// del saldo de apertura + neto de lo registrado despues; si no, usa el
-// acumulado (ingresos - gastos - fijos pagados a mano) de los totales dados.
+// del saldo de apertura + neto de lo registrado despues - fijos pagados a mano
+// despues del cierre; si no, usa el acumulado (ingresos - gastos - fijos
+// pagados a mano) de los totales dados.
 export async function computeCashBalance(env, chatId, usdRate, fallback = {}) {
   const opening = await getCashOpening(env, chatId);
   if (opening) {
@@ -136,9 +196,28 @@ export async function computeCashBalance(env, chatId, usdRate, fallback = {}) {
       FROM transactions
       WHERE chat_id = ? AND created_at > ?
     `).bind(usdRate, usdRate, chatId, opening.at).first();
+    // Los gastos fijos marcados como pagados a mano no crean movimiento, asi
+    // que se restan aparte: solo los marcados despues del cierre y sin un gasto
+    // equivalente registrado despues (para no contarlos dos veces con el neto).
+    const fixedSince = await env.DB.prepare(`
+      SELECT COALESCE(SUM(CASE WHEN f.currency = 'USD' THEN f.amount * ? ELSE f.amount END), 0) AS pagado
+      FROM fixed_expense_month_status s
+      JOIN fixed_expenses f ON f.id = s.fixed_id AND f.chat_id = s.chat_id
+      WHERE s.chat_id = ?
+        AND s.status = 'pagado'
+        AND s.updated_at > ?
+        AND NOT EXISTS (
+          SELECT 1 FROM transactions t
+          WHERE t.chat_id = f.chat_id
+            AND t.type = 'gasto'
+            AND lower(t.description) = lower(f.name)
+            AND t.created_at > ?
+        )
+    `).bind(usdRate, chatId, opening.at, opening.at).first();
     const neto = round(Number(since?.neto || 0));
+    const fixedPaidSince = round(Number(fixedSince?.pagado || 0));
     return {
-      balance: round(opening.balance + neto),
+      balance: round(opening.balance + neto - fixedPaidSince),
       opening: { balance: round(opening.balance), at: opening.at, since: neto, movimientos: Number(since?.movimientos || 0) },
     };
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   dateInRange,
   dateKeyFromParts,
+  dayBeforeKey,
   daysBetween,
   maxDateKey,
   minDateKey,
@@ -10,7 +11,36 @@ import {
   parseDateKeyParts,
   payCycleFromDate,
   payCycleRelative,
+  salaryCycleWindow,
 } from '../src/shared/dates.js';
+
+describe('salaryCycleWindow (ciclo anclado al sueldo)', () => {
+  const salaries = ['2026-06-23', '2026-05-22', '2026-04-21']; // desc, mas reciente primero
+
+  it('offset 0 = desde el ultimo sueldo hasta hoy', () => {
+    expect(salaryCycleWindow(salaries, '2026-06-28', 0)).toEqual({ startKey: '2026-06-23', endKey: '2026-06-28' });
+  });
+
+  it('offset -1 = entre el sueldo anterior y el dia previo al ultimo', () => {
+    expect(salaryCycleWindow(salaries, '2026-06-28', -1)).toEqual({ startKey: '2026-05-22', endKey: '2026-06-22' });
+  });
+
+  it('offset -2 = ciclo mas viejo', () => {
+    expect(salaryCycleWindow(salaries, '2026-06-28', -2)).toEqual({ startKey: '2026-04-21', endKey: '2026-05-21' });
+  });
+
+  it('devuelve null si no hay sueldo para ese offset', () => {
+    expect(salaryCycleWindow(salaries, '2026-06-28', -3)).toBeNull();
+    expect(salaryCycleWindow([], '2026-06-28', 0)).toBeNull();
+  });
+});
+
+describe('dayBeforeKey', () => {
+  it('resta un dia cruzando mes', () => {
+    expect(dayBeforeKey('2026-06-01')).toBe('2026-05-31');
+    expect(dayBeforeKey('2026-06-23')).toBe('2026-06-22');
+  });
+});
 
 describe('payCycleFromDate (ciclo 22 a 22)', () => {
   it('un dia despues del 22 abre el ciclo del mes actual', () => {

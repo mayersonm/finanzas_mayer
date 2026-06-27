@@ -3,7 +3,7 @@ import { Badge, Card, Text, Title } from '@tremor/react';
 import { RiAddLine, RiCloseLine, RiSave3Line } from '@remixicon/react';
 import { apiRequest } from '../../app/apiClient';
 import type { WorkItem, WorkPriority, WorkStatus, WorkSummary } from '../../types/dashboard';
-import { WorkDetailView } from './WorkDetailView';
+import { WorkNoteDetail } from './WorkNoteDetail';
 
 interface Draft {
   id?: string;
@@ -35,12 +35,6 @@ const columns: Array<{ id: WorkStatus; title: string; subtitle: string; tone: 's
   { id: 'done', title: 'Completadas', subtitle: 'Notas terminadas', tone: 'emerald' },
 ];
 
-const statusLabels: Record<WorkStatus, string> = {
-  todo: 'Todo',
-  in_progress: 'En progreso',
-  done: 'Done',
-};
-
 const priorityLabels: Record<WorkPriority, string> = {
   low: 'Baja',
   medium: 'Media',
@@ -62,6 +56,8 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
   const [items, setItems] = useState<WorkItem[]>([]);
   const [summary, setSummary] = useState<WorkSummary>({ total: 0, todo: 0, in_progress: 0, done: 0, blocked: 0, highPriority: 0 });
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [showForm, setShowForm] = useState(false);
+  const [mode, setMode] = useState<'board' | 'detail'>('board');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingTimeline, setSavingTimeline] = useState(false);
@@ -160,13 +156,23 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
       dueDate: item.dueDate || '',
       tags: (item.tags || []).join(', '),
     });
+    setShowForm(true);
     setMessage('');
     setError('');
     setTimelineDraft({ date: todayInputDate(), message: '' });
   };
 
+  const startNew = () => {
+    setDraft(emptyDraft);
+    setTimelineDraft({ date: todayInputDate(), message: '' });
+    setMessage('');
+    setError('');
+    setShowForm(true);
+  };
+
   const openDetails = (item: WorkItem) => {
     setSelectedDetailId(item.id);
+    setMode('detail');
     setMessage('');
     setError('');
   };
@@ -176,6 +182,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
     setTimelineDraft({ date: todayInputDate(), message: '' });
     setMessage('');
     setError('');
+    setShowForm(false);
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
@@ -196,6 +203,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
 
       setMessage(draft.id ? 'Apunte actualizado.' : 'Apunte guardado.');
       setDraft(emptyDraft);
+      setShowForm(false);
       if (result.item?.id) setSelectedDetailId(result.item.id);
       await load();
     } catch (err) {
@@ -254,7 +262,46 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
     }
   };
 
+  const overdueCount = useMemo(
+    () => items.filter((item) => item.status !== 'done' && (daysBetweenToday(item.dueDate) ?? 1) < 0).length,
+    [items],
+  );
+  const addTimelineForItem = async (itemId: string, date: string, message: string) => {
+    if (!authToken || !itemId || !message.trim()) return;
+    setSavingTimeline(true);
+    setMessage('');
+    setError('');
+    try {
+      await apiRequest(`work-items/${encodeURIComponent(itemId)}/timeline`, {
+        method: 'POST',
+        token: authToken,
+        query: { chat_id: chatId },
+        body: { eventDate: date || todayInputDate(), message },
+      });
+      setMessage('Hito agregado a la línea de tiempo.');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo agregar a la línea de tiempo');
+    } finally {
+      setSavingTimeline(false);
+    }
+  };
+
   const donePct = summary.total > 0 ? Math.round((summary.done / summary.total) * 100) : 0;
+  const selectedItem = items.find((item) => item.id === selectedDetailId) || null;
+
+  if (mode === 'detail' && selectedItem) {
+    return (
+      <WorkNoteDetail
+        item={selectedItem}
+        onBack={() => setMode('board')}
+        onEdit={(it) => { startEdit(it); setMode('board'); }}
+        onDelete={(it) => { void remove(it); setMode('board'); }}
+        onAddTimeline={(date, message) => void addTimelineForItem(selectedItem.id, date, message)}
+        savingTimeline={savingTimeline}
+      />
+    );
+  }
 
   return (
     <section className="grid gap-4">
@@ -266,11 +313,22 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
               <Badge color={summary.blocked ? 'rose' : 'slate'}>{summary.blocked} bloqueante{summary.blocked === 1 ? '' : 's'}</Badge>
             </div>
             <Title>Notas de trabajo</Title>
-            <Text>Arrastra solo las cabeceras en el canvas y ve el detalle en la página de detalle.</Text>
+            <Text>Tu tablero de pendientes. Arrastra las tarjetas entre columnas.</Text>
+            {!showForm ? (
+              <button
+                type="button"
+                className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+                onClick={startNew}
+              >
+                <RiAddLine className="h-4 w-4" />
+                Nuevo apunte
+              </button>
+            ) : null}
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[34rem]">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5 xl:min-w-[40rem]">
             <SummaryTile label="Total" value={summary.total} />
             <SummaryTile label="En progreso" value={summary.in_progress} tone="amber" />
+            <SummaryTile label="Vencidas" value={overdueCount} tone="rose" />
             <SummaryTile label="Hecho" value={`${donePct}%`} tone="emerald" />
             <SummaryTile label="Alta prioridad" value={summary.highPriority} tone="rose" />
           </div>
@@ -279,19 +337,17 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
         {message ? <div className="mt-4 rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{message}</div> : null}
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[24rem_minmax(0,1.4fr)]">
-        <div className="grid gap-4">
+      <div className={`grid gap-4 ${showForm ? 'xl:grid-cols-[22rem_minmax(0,1fr)]' : ''}`}>
+        {showForm ? (
           <Card className="rounded-tremor-default border-slate-800 bg-slate-900/95 !p-4 sm:!p-5 shadow-slate-950/10">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <Title className="text-base">{draft.id ? 'Editar apunte' : 'Nuevo apunte'}</Title>
-                <Text>Registra tu nota rápida y luego muévela en el canvas de cabeceras.</Text>
+                <Text>Registra tu nota rápida y luego muévela en el tablero.</Text>
               </div>
-              {draft.id ? (
-                <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 text-slate-200" onClick={resetDraft} title="Cancelar edición">
-                  <RiCloseLine className="h-4 w-4" />
-                </button>
-              ) : null}
+              <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-tremor-default border border-slate-700 bg-slate-900/70 text-slate-200" onClick={resetDraft} title="Cerrar">
+                <RiCloseLine className="h-4 w-4" />
+              </button>
             </div>
 
             <form className="mt-4 grid gap-3" onSubmit={save}>
@@ -354,14 +410,15 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
               </button>
             </form>
           </Card>
+        ) : null}
 
-          <Card className="rounded-tremor-default border-slate-800 bg-slate-900/95 !p-4 sm:!p-5 shadow-slate-950/10">
+        <Card className="rounded-tremor-default border-slate-800 bg-slate-900/95 !p-4 sm:!p-5 shadow-slate-950/10">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <Title className="text-base">Canvas de cabeceras</Title>
-                <Text>Arrastra las cabeceras para mover el apunte entre columnas.</Text>
+                <Title className="text-base">Tablero</Title>
+                <Text>Arrastra las tarjetas para moverlas entre columnas.</Text>
               </div>
-              <Badge color="slate">{items.length} apunte{items.length === 1 ? '' : 's'}</Badge>
+              <Badge color="slate">{loading ? 'Actualizando…' : `${items.length} apunte${items.length === 1 ? '' : 's'}`}</Badge>
             </div>
             <div className="grid gap-3 xl:grid-cols-3">
               {columns.map((column) => (
@@ -386,7 +443,10 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
                     <Badge color={column.tone}>{boardItems[column.id].length}</Badge>
                   </div>
                   <div className="space-y-3">
-                    {boardItems[column.id].length ? boardItems[column.id].map((item) => (
+                    {boardItems[column.id].length ? boardItems[column.id].map((item) => {
+                      const due = dueInfo(item);
+                      const aging = agingLabel(item);
+                      return (
                       <article
                         key={item.id}
                         draggable
@@ -410,11 +470,17 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
                           <p className="text-sm font-semibold text-slate-100 line-clamp-2">{item.title}</p>
                           <div className="mt-2 flex flex-wrap gap-2 text-[0.65rem] text-slate-400">
                             <span className="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-0.5">{priorityLabels[item.priority]}</span>
-                            <span className="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-0.5">{statusLabels[item.status]}</span>
+                            {due ? (
+                              <span className={`rounded-full px-2 py-0.5 font-semibold ${dueToneClass(due.tone)}`}>{due.label}</span>
+                            ) : null}
+                            {aging ? (
+                              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">{aging}</span>
+                            ) : null}
                           </div>
                         </button>
                       </article>
-                    )) : (
+                      );
+                    }) : (
                       <div className="rounded-tremor-default border border-dashed border-slate-800 bg-slate-900/80 p-4 text-center text-sm text-slate-500">
                         Sin notas en esta columna
                       </div>
@@ -423,17 +489,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
                 </div>
               ))}
             </div>
-          </Card>
-        </div>
-
-        <WorkDetailView
-          items={items}
-          loading={loading}
-          selectedItemId={selectedDetailId}
-          onSelectItem={setSelectedDetailId}
-          onEdit={startEdit}
-          onDelete={(item) => void remove(item)}
-        />
+        </Card>
       </div>
     </section>
   );
@@ -509,4 +565,48 @@ function normalizePriority(value: string): WorkPriority {
 
 function todayInputDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function parseDueDate(value?: string): Date | null {
+  const match = (value || '').slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+// Dias entre hoy y la fecha objetivo (negativo = vencida).
+function daysBetweenToday(value?: string): number | null {
+  const date = parseDueDate(value);
+  if (!date) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((date.getTime() - today.getTime()) / 86400000);
+}
+
+function dueInfo(item: WorkItem): { label: string; tone: 'rose' | 'amber' | 'slate' } | null {
+  if (item.status === 'done') return null;
+  const days = daysBetweenToday(item.dueDate);
+  if (days === null) return null;
+  if (days < 0) return { label: `Vencida ${Math.abs(days)}d`, tone: 'rose' };
+  if (days === 0) return { label: 'Vence hoy', tone: 'amber' };
+  if (days <= 3) return { label: `Vence en ${days}d`, tone: 'amber' };
+  if (days <= 7) return { label: `Vence en ${days}d`, tone: 'slate' };
+  const key = (item.dueDate || '').slice(0, 10);
+  return { label: `Vence ${key.slice(8, 10)}/${key.slice(5, 7)}`, tone: 'slate' };
+}
+
+function dueToneClass(tone: 'rose' | 'amber' | 'slate'): string {
+  if (tone === 'rose') return 'border border-rose-500/40 bg-rose-500/15 text-rose-200';
+  if (tone === 'amber') return 'border border-amber-500/40 bg-amber-500/15 text-amber-200';
+  return 'border border-slate-700 bg-slate-950/80 text-slate-300';
+}
+
+// "Sin avanzar Nd": dias desde la ultima actualizacion para items en progreso.
+function agingLabel(item: WorkItem): string | null {
+  if (item.status !== 'in_progress') return null;
+  const ref = item.updatedAt || item.createdAt;
+  if (!ref) return null;
+  const date = new Date(ref.replace(' ', 'T'));
+  if (Number.isNaN(date.getTime())) return null;
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  return days >= 2 ? `Sin avanzar ${days}d` : null;
 }

@@ -100,6 +100,7 @@ export function DashboardSidebar({
         <div className="mt-3 grid gap-2 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-2.5">
           <SidebarMeta label="Mes" value={data.mes} />
           <SidebarMeta label="Ciclo" value={cycleLabel(data)} />
+          <SidebarMeta label="Dólar (TC)" value={exchangeLabel(data)} />
           <SidebarMeta label="Actualizado" value={loading ? 'Actualizando...' : formatUpdatedAt(data.updatedAt)} />
         </div>
       </div>
@@ -228,4 +229,10 @@ function cycleLabel(data: DashboardData): string {
     return `${formatDate(data.cycleStart)} - ${formatDate(data.cycleEnd)}`;
   }
   return data.cycleRange || data.cycleLabel || data.mes;
+}
+
+function exchangeLabel(data: DashboardData): string {
+  const rate = Number(data.exchangeRate || 0);
+  if (!rate) return '—';
+  return `US$ 1 = S/ ${rate.toFixed(3)}`;
 }

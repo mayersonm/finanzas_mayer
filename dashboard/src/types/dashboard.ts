@@ -424,6 +424,8 @@ export interface FreeMoneyPlan {
   commitments: number;
   fixedPending: number;
   debtPending: number;
+  debtDueCycle?: number;
+  committedObligations?: number;
   savingsTarget: number;
   actualSavings?: number;
   configuredSavingsGoal?: number;
@@ -628,6 +630,9 @@ export interface DashboardData {
   mesKey?: string;
   cycleKey?: string;
   cycleLabel?: string;
+  awaitingSalary?: boolean;
+  cashAnchorPending?: boolean;
+  pendingSalary?: { date: string; amount: number } | null;
   cycleStart?: string;
   cycleEnd?: string;
   cycleClose?: string;

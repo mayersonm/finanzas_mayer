@@ -147,6 +147,24 @@ export function OverviewSection({
 
   return (
     <>
+      {data.cashAnchorPending ? (
+        <div className="mb-4 flex flex-col gap-2 rounded-tremor-default border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100 sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            💰 Entró tu sueldo{data.pendingSalary ? ` (${formatMoney(data.pendingSalary.amount)} · ${formatShortDateLabel(data.pendingSalary.date)})` : ''}. Confirma tu saldo real para iniciar el ciclo nuevo.
+          </span>
+          <button
+            type="button"
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-tremor-default bg-emerald-500 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+            onClick={() => { setShowAdjust(true); setAdjustError(''); setRealBalance(String(cashBalance)); }}
+          >
+            Confirmar saldo
+          </button>
+        </div>
+      ) : data.awaitingSalary ? (
+        <div className="mb-4 rounded-tremor-default border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+          Sigues en el ciclo <span className="font-semibold">{data.cycleRange || data.cycleLabel || data.mes}</span>. El ciclo nuevo iniciará cuando registres tu sueldo; mientras tanto, los gastos de estos días siguen contando en este ciclo.
+        </div>
+      ) : null}
       <SummaryBar
         className="mb-4"
         stats={[
