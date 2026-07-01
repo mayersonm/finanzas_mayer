@@ -1,7 +1,6 @@
 import { httpError, safeJsonParse } from '../../shared/http.js';
 import { getChatId } from '../../shared/request.js';
 import { round } from '../../shared/money.js';
-import { normalizeDateOnly } from '../../shared/normalizers.js';
 import { dateFromKey, localDateKey, localIso, payCycleFromDate, payCycleRelative } from '../../shared/dates.js';
 import { dashboard } from '../dashboard/service.js';
 import { closeCashCycle } from '../transactions/service.js';
@@ -24,12 +23,18 @@ export async function financialClosures(env, params) {
 
 export async function saveFinancialClosure(env, params, payload = {}) {
   const chatId = getChatId(env, params);
-  const dashboardParams = new URLSearchParams(params);
-  const requestedCycleStart = normalizeDateOnly(payload?.cycle_start || payload?.cycleStart || '');
-  if (requestedCycleStart) dashboardParams.set('cycle_start', requestedCycleStart);
-  const data = await dashboard(env, dashboardParams);
+  // Siempre se cierra el ciclo real anclado al sueldo tal como esta "ahora";
+  // no se acepta un cycle_start del caller (eso permitia recalcular el cierre
+  // con la malla 22 fija en vez del ciclo anclado, inflando/reduciendo caja).
+  const data = await dashboard(env, new URLSearchParams(params));
   const closure = data.cierre;
   if (!closure) throw httpError(500, 'No se pudo calcular el cierre');
+
+  // El cierre solo procede si ya se registro el sueldo del ciclo nuevo (o si el
+  // sueldo entro y esto es justo la confirmacion de saldo que lo ancla).
+  if (data.awaitingSalary && !data.cashAnchorPending) {
+    throw httpError(409, 'Todavia no registras el sueldo del ciclo nuevo. Registra el ingreso categoria salario antes de cerrar.');
+  }
 
   if (payload?.dryRun) {
     return {

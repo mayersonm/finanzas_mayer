@@ -36,6 +36,12 @@ function resumenMensualAutomatico() {
     return 'No corresponde resumen mensual hoy';
   }
 
+  const chatId = PropertiesService.getScriptProperties().getProperty('dashboard_chat_id') || '1538086276';
+  if (esperandoSueldoD1_(chatId)) {
+    Logger.log('Cierre mensual en pausa: falta registrar el sueldo del ciclo nuevo');
+    return 'Cierre mensual en pausa: falta registrar el sueldo del ciclo nuevo';
+  }
+
   const periodo = periodoPagoCerradoEmail_(now);
   const periodoKey = periodo.key;
   const props = PropertiesService.getScriptProperties();
@@ -74,6 +80,12 @@ function resumenAnualAutomatico() {
   const month = Utilities.formatDate(now, 'America/Lima', 'MM');
   if (month !== '01') {
     return 'No corresponde resumen anual este mes';
+  }
+
+  const chatId = PropertiesService.getScriptProperties().getProperty('dashboard_chat_id') || '1538086276';
+  if (esperandoSueldoD1_(chatId)) {
+    Logger.log('Cierre anual en pausa: falta registrar el sueldo del ciclo nuevo');
+    return 'Cierre anual en pausa: falta registrar el sueldo del ciclo nuevo';
   }
 
   const year = Number(Utilities.formatDate(now, 'America/Lima', 'yyyy')) - 1;

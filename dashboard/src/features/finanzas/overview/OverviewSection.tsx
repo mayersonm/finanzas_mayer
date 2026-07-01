@@ -98,16 +98,14 @@ export function OverviewSection({
     setCloseMessage('');
     setCloseError('');
     try {
+      // El backend siempre cierra el ciclo real anclado al sueldo tal como
+      // esta "ahora" (ver resolveCurrentCycle en d1-api); no se le pasa un
+      // cycle_start, para no recalcular con la malla 22 fija.
       const result = await apiRequest<{ closure?: ClosureSummary }>('closures', {
         method: 'POST',
         token: authToken,
         query: { chat_id: chatId },
-        body: {
-          openingBalance: opening,
-          ...(data.cierreAutomatico?.active && !data.cierreAutomatico.saved
-            ? { cycle_start: data.cierreAutomatico.targetCycleStart }
-            : {}),
-        },
+        body: { openingBalance: opening },
       });
       const savedClosure = result.closure;
       const savingsText = savedClosure?.suggestedSavings && savedClosure.suggestedSavings > 0
