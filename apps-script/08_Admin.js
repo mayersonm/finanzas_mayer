@@ -118,10 +118,10 @@ function setupTriggersDiarios() {
     .atHour(21)
     .create();
 
-  // Gastos fijos — 1ro de cada mes a las 8AM
+  // Gastos fijos — dia 23 (inicio del ciclo nuevo, corte 22) a las 8AM Lima
   ScriptApp.newTrigger('registrarGastosFijos')
     .timeBased()
-    .onMonthDay(1)
+    .onMonthDay(23)
     .atHour(8)
     .create();
 
