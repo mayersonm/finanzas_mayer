@@ -2,7 +2,7 @@ import { safeJsonParse } from '../../shared/http.js';
 import { getChatId } from '../../shared/request.js';
 import { round, currencyToPen } from '../../shared/money.js';
 import { clamp, normalizeMonthKey } from '../../shared/normalizers.js';
-import { dateKeyFromParts, localDateKey, localIso, monthLongNameFromKey, parseDateKeyParts, payCycleFromDate, payCycleRelative } from '../../shared/dates.js';
+import { cycleDateTimeBounds, dateKeyFromParts, localDateKey, localIso, monthLongNameFromKey, parseDateKeyParts, payCycleFromDate, payCycleRelative } from '../../shared/dates.js';
 import { budgetRulesForDashboard, loadBudgetRules, loadCategoryRules } from '../../shared/categories.js';
 import { ensureUserForChat, getUserSettings, normalizeSettingsConfig, userSettingsToConfig, usersList } from '../settings/service.js';
 import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPlan, monthlyCalendar, realExpenses, smartAlerts, smartInsights, weeklyGoalPlan } from './planning.js';
@@ -70,11 +70,17 @@ export async function aiAdvisor(env, params, payload) {
 export async function resolveCurrentCycle(env, chatId, now) {
   const today = localDateKey(now);
   const dateCycle = payCycleFromDate(now);
-  const salaryDates = await loadSalaryDates(env, chatId, today);
+  const salaryMoments = await loadSalaryDates(env, chatId, today);
   // Sin sueldos registrados -> malla 22->22 de siempre.
-  if (!salaryDates.length) return dateCycle;
+  if (!salaryMoments.length) return dateCycle;
 
-  const startKey = salaryDates[0]; // ultimo sueldo <= hoy: abre el ciclo actual.
+  const startKey = salaryMoments[0].date; // ultimo sueldo <= hoy: abre el ciclo actual.
+  // Precision de hora en el arranque: si gastaste el mismo dia del sueldo
+  // ANTES de que entrara, eso cuenta en el ciclo anterior, no en este - pero
+  // solo si existe un sueldo aun mas antiguo donde "aterrizan" esos gastos
+  // (si este es el primer sueldo conocido, no hay a donde reubicarlos y se
+  // deja el dia completo aqui, como antes).
+  const startTime = salaryMoments.length > 1 ? (salaryMoments[0].time || '00:00') : null;
   // Si el ultimo sueldo es anterior al corte nominal, todavia no cobramos el
   // ciclo nuevo: seguimos en el anterior, extendido hasta hoy.
   const awaitingSalary = startKey < dateCycle.startKey;
@@ -83,7 +89,9 @@ export async function resolveCurrentCycle(env, chatId, now) {
   return {
     ...dateCycle,
     startKey,
+    startTime,
     endKey,
+    endTime: null, // ciclo actual: siempre abierto, sin sueldo siguiente todavia
     key,
     rangeLabel: `${startKey.slice(8, 10)}/${startKey.slice(5, 7)}/${startKey.slice(0, 4)} - ${endKey.slice(8, 10)}/${endKey.slice(5, 7)}/${endKey.slice(0, 4)}`,
     awaitingSalary,
@@ -125,14 +133,15 @@ export async function dashboard(env, params) {
     WHERE chat_id = ?
   `).bind(usdRate, usdRate, chatId).first();
 
+  const monthBounds = cycleDateTimeBounds('tx_date', 'tx_time', calendarMonth);
   const monthTotalsPromise = env.DB.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresosMes,
       COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastosMes,
       COUNT(*) AS movimientosMes
     FROM transactions
-    WHERE chat_id = ? AND tx_date BETWEEN ? AND ?
-  `).bind(usdRate, usdRate, chatId, calendarMonth.startKey, calendarMonth.endKey).first();
+    WHERE chat_id = ? AND ${monthBounds.sql}
+  `).bind(usdRate, usdRate, chatId, ...monthBounds.values).first();
 
   const cycleIncomeTotalsPromise = env.DB.prepare(`
     SELECT

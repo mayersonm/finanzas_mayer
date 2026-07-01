@@ -2,7 +2,7 @@ import { COLORS } from '../../shared/constants.js';
 import { httpError } from '../../shared/http.js';
 import { round, parseAmount, currencyToPen } from '../../shared/money.js';
 import { classifyCategory } from '../../shared/categories.js';
-import { localDateKey, payCycleFromDate } from '../../shared/dates.js';
+import { cycleDateTimeBounds, localDateKey, payCycleFromDate } from '../../shared/dates.js';
 import { normalizeCurrency, normalizeDateOnly, normalizeKey, title } from '../../shared/normalizers.js';
 
 export async function upsertFixedExpense(env, chatId, raw) {
@@ -199,8 +199,13 @@ export function fixedExpenseShape(row) {
 }
 
 export async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85, cycle = null) {
-  const startKey = cycle?.startKey || `${monthKey}-01`;
-  const endKey = cycle?.endKey || `${monthKey}-31`;
+  const window = {
+    startKey: cycle?.startKey || `${monthKey}-01`,
+    startTime: cycle?.startTime || null,
+    endKey: cycle?.endKey || `${monthKey}-31`,
+    endTime: cycle?.endTime || null,
+  };
+  const bounds = cycleDateTimeBounds('t.tx_date', 't.tx_time', window);
   const rows = await env.DB.prepare(`
     SELECT
       f.id AS id,
@@ -215,7 +220,7 @@ export async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85, c
         FROM transactions t
         WHERE t.chat_id = f.chat_id
           AND t.type = 'gasto'
-          AND t.tx_date BETWEEN ? AND ?
+          AND ${bounds.sql}
           AND lower(t.description) = lower(f.name)
       ) AS pagadoMes
     FROM fixed_expenses f
@@ -225,7 +230,7 @@ export async function fixedExpensesList(env, chatId, monthKey, usdRate = 3.85, c
       AND s.month_key = ?
     WHERE f.chat_id = ? AND f.active = 1
     ORDER BY f.name ASC
-  `).bind(startKey, endKey, monthKey, chatId).all();
+  `).bind(...bounds.values, monthKey, chatId).all();
 
   return (rows.results || [])
     .map((row) => {
