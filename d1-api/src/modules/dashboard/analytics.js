@@ -1,17 +1,18 @@
 ﻿import { COLORS } from '../../shared/constants.js';
 import { round, currencyToPen } from '../../shared/money.js';
-import { dateKeyFromParts, localDateKey, monthLongNameFromKey, monthShortNameFromKey, parseDateKeyParts } from '../../shared/dates.js';
+import { cycleDateTimeBounds, dateKeyFromParts, localDateKey, monthLongNameFromKey, monthShortNameFromKey, parseDateKeyParts } from '../../shared/dates.js';
 import { normalizeKey, title } from '../../shared/normalizers.js';
 import { normalizeCategory, budgetSpendWithRules, classifyCategoryFromLoadedRules, loadBudgetRules, loadCategoryRules } from '../../shared/categories.js';
 
 export async function cycleExpenseRows(env, chatId, cycle) {
+  const bounds = cycleDateTimeBounds('tx_date', 'tx_time', cycle);
   const rows = await env.DB.prepare(`
     SELECT description AS desc, category AS cat, amount, currency, source
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
-      AND tx_date BETWEEN ? AND ?
-  `).bind(chatId, cycle.startKey, cycle.endKey).all();
+      AND ${bounds.sql}
+  `).bind(chatId, ...bounds.values).all();
 
   return rows.results || [];
 }
@@ -82,13 +83,14 @@ export function topLeaksFromExpenseRows(rows, rules, usdRate = 3.85) {
 
 // Lee los gastos del periodo y sus reglas. Reutilizado por las variantes "WithSpending"/topLeaks.
 async function loadExpenseRowsAndRules(env, chatId, period) {
+  const bounds = cycleDateTimeBounds('tx_date', 'tx_time', period);
   const rowsPromise = env.DB.prepare(`
     SELECT category AS cat, description AS desc, amount, currency, source
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
-      AND tx_date BETWEEN ? AND ?
-  `).bind(chatId, period.startKey, period.endKey).all();
+      AND ${bounds.sql}
+  `).bind(chatId, ...bounds.values).all();
 
   const [rows, rules] = await Promise.all([rowsPromise, loadCategoryRules(env, chatId)]);
   return { rows: rows.results || [], rules };
@@ -174,13 +176,14 @@ export async function budgetsWithSpending(env, chatId, cycle, usdRate = 3.85) {
     WHERE chat_id = ?
   `).bind(chatId).all();
 
+  const cycleBounds = cycleDateTimeBounds('tx_date', 'tx_time', cycle);
   const spendingRowsPromise = env.DB.prepare(`
     SELECT category AS cat, description AS desc, amount, currency
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
-      AND tx_date BETWEEN ? AND ?
-  `).bind(chatId, cycle.startKey, cycle.endKey).all();
+      AND ${cycleBounds.sql}
+  `).bind(chatId, ...cycleBounds.values).all();
 
   const [rows, spendingRows, categoryRules, budgetRules] = await Promise.all([
     rowsPromise,

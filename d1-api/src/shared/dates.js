@@ -113,16 +113,47 @@ export function dayBeforeKey(key) {
   return dateKeyFromParts(p.year, p.monthIndex, p.day - 1);
 }
 
-// Ventana de un ciclo anclado al sueldo. `salaryDatesDesc` son las fechas de
-// los sueldos (mas reciente primero, todas <= hoy). offset 0 = ciclo actual
-// (desde el ultimo sueldo hasta hoy); -1 = anterior (entre dos sueldos); etc.
-// Devuelve null si no hay sueldo para ese offset (el caller usa la malla 22).
-export function salaryCycleWindow(salaryDatesDesc, todayKey, offset) {
+// Ventana de un ciclo anclado al sueldo. `salaryMomentsDesc` son los sueldos
+// (mas reciente primero, todos <= hoy) como {date, time}. offset 0 = ciclo
+// actual (desde el ultimo sueldo hasta hoy); -1 = anterior (entre dos
+// sueldos); etc. Devuelve null si no hay sueldo para ese offset (el caller
+// usa la malla 22).
+//
+// Precision de hora: el arranque de un ciclo solo se recorta a la hora exacta
+// del sueldo si existe un sueldo AUN MAS antiguo conocido (idx+1 en el
+// arreglo) - si no, lo gastado esa misma madrugada/mañana antes del sueldo no
+// tiene a donde "reubicarse" (no hay ciclo anterior calculable) y se queda
+// completo en este ciclo, como antes. El cierre (endKey/endTime) siempre usa
+// la hora exacta del sueldo mas reciente cuando existe, porque ese sueldo SI
+// esta confirmado y define sin ambiguedad donde empieza el ciclo siguiente.
+export function salaryCycleWindow(salaryMomentsDesc, todayKey, offset) {
   const idx = -Number(offset || 0);
-  if (!Array.isArray(salaryDatesDesc) || idx < 0 || idx >= salaryDatesDesc.length) return null;
-  const startKey = salaryDatesDesc[idx];
-  const endKey = idx === 0 ? todayKey : dayBeforeKey(salaryDatesDesc[idx - 1]);
-  return { startKey, endKey };
+  if (!Array.isArray(salaryMomentsDesc) || idx < 0 || idx >= salaryMomentsDesc.length) return null;
+  const current = salaryMomentsDesc[idx];
+  const hasOlderSalary = idx + 1 < salaryMomentsDesc.length;
+  const next = idx > 0 ? salaryMomentsDesc[idx - 1] : null;
+  return {
+    startKey: current.date,
+    startTime: hasOlderSalary ? (current.time || '00:00') : null,
+    endKey: next ? next.date : todayKey,
+    endTime: next ? (next.time || '00:00') : null,
+  };
+}
+
+// Condicion SQL (con precision de hora si la ventana la trae) para filtrar
+// una columna fecha/hora contra el arranque/cierre de un ciclo. Si la ventana
+// no trae hora en ese borde, cae al filtro por fecha sola (comportamiento de
+// siempre, ej. malla 22 sin sueldo real).
+export function cycleDateTimeBounds(dateCol, timeCol, window) {
+  const startSql = window.startTime
+    ? `(${dateCol} || ' ' || COALESCE(NULLIF(${timeCol}, ''), '00:00')) >= ?`
+    : `${dateCol} >= ?`;
+  const startValue = window.startTime ? `${window.startKey} ${window.startTime}` : window.startKey;
+  const endSql = window.endTime
+    ? `(${dateCol} || ' ' || COALESCE(NULLIF(${timeCol}, ''), '00:00')) < ?`
+    : `${dateCol} <= ?`;
+  const endValue = window.endTime ? `${window.endKey} ${window.endTime}` : window.endKey;
+  return { sql: `${startSql} AND ${endSql}`, values: [startValue, endValue] };
 }
 
 export function payCycleRelative(cycle, offset) {
@@ -160,9 +191,16 @@ export function weekRangeFromDate(today, cycle) {
   const mondayOffset = (weekday + 6) % 7;
   const start = dateKeyFromParts(parts.year, parts.monthIndex, parts.day - mondayOffset);
   const end = dateKeyFromParts(parts.year, parts.monthIndex, parts.day + (6 - mondayOffset));
+  const startKey = maxDateKey(start, cycle.startKey);
+  const endKey = minDateKey(end, cycle.endKey);
+  // Si el recorte de la semana coincide justo con el borde del ciclo, hereda
+  // la precision de hora de ese borde (si no, la semana cabe entera dentro
+  // del ciclo y no hay ambiguedad que resolver).
   return {
-    startKey: maxDateKey(start, cycle.startKey),
-    endKey: minDateKey(end, cycle.endKey),
+    startKey,
+    startTime: startKey === cycle.startKey ? cycle.startTime : null,
+    endKey,
+    endTime: endKey === cycle.endKey ? cycle.endTime : null,
   };
 }
 

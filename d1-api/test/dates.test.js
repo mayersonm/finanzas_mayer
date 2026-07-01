@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cycleDateTimeBounds,
   dateInRange,
   dateKeyFromParts,
   dayBeforeKey,
@@ -14,24 +15,65 @@ import {
   salaryCycleWindow,
 } from '../src/shared/dates.js';
 
-describe('salaryCycleWindow (ciclo anclado al sueldo)', () => {
-  const salaries = ['2026-06-23', '2026-05-22', '2026-04-21']; // desc, mas reciente primero
+describe('salaryCycleWindow (ciclo anclado al sueldo, con precision de hora)', () => {
+  // desc, mas reciente primero
+  const salaries = [
+    { date: '2026-06-23', time: '14:31' },
+    { date: '2026-05-22', time: '12:00' },
+    { date: '2026-04-21', time: '09:00' },
+  ];
 
-  it('offset 0 = desde el ultimo sueldo hasta hoy', () => {
-    expect(salaryCycleWindow(salaries, '2026-06-28', 0)).toEqual({ startKey: '2026-06-23', endKey: '2026-06-28' });
+  it('offset 0 = desde el ultimo sueldo (con hora, hay un sueldo anterior conocido) hasta hoy, abierto', () => {
+    expect(salaryCycleWindow(salaries, '2026-06-28', 0)).toEqual({
+      startKey: '2026-06-23',
+      startTime: '14:31',
+      endKey: '2026-06-28',
+      endTime: null,
+    });
   });
 
-  it('offset -1 = entre el sueldo anterior y el dia previo al ultimo', () => {
-    expect(salaryCycleWindow(salaries, '2026-06-28', -1)).toEqual({ startKey: '2026-05-22', endKey: '2026-06-22' });
+  it('offset -1 = entre el sueldo anterior (con hora) y la hora exacta del sueldo siguiente (exclusiva)', () => {
+    expect(salaryCycleWindow(salaries, '2026-06-28', -1)).toEqual({
+      startKey: '2026-05-22',
+      startTime: '12:00',
+      endKey: '2026-06-23',
+      endTime: '14:31',
+    });
   });
 
-  it('offset -2 = ciclo mas viejo', () => {
-    expect(salaryCycleWindow(salaries, '2026-06-28', -2)).toEqual({ startKey: '2026-04-21', endKey: '2026-05-21' });
+  it('offset -2 = ciclo mas viejo: sin sueldo aun mas antiguo, arranque sin hora (dia completo)', () => {
+    expect(salaryCycleWindow(salaries, '2026-06-28', -2)).toEqual({
+      startKey: '2026-04-21',
+      startTime: null,
+      endKey: '2026-05-22',
+      endTime: '12:00',
+    });
   });
 
   it('devuelve null si no hay sueldo para ese offset', () => {
     expect(salaryCycleWindow(salaries, '2026-06-28', -3)).toBeNull();
     expect(salaryCycleWindow([], '2026-06-28', 0)).toBeNull();
+  });
+});
+
+describe('cycleDateTimeBounds (filtro SQL fecha/hora del ciclo)', () => {
+  it('usa comparacion combinada fecha+hora cuando la ventana trae hora en ambos bordes', () => {
+    const bounds = cycleDateTimeBounds('t.tx_date', 't.tx_time', {
+      startKey: '2026-05-22', startTime: '12:00', endKey: '2026-06-23', endTime: '14:31',
+    });
+    expect(bounds.sql).toBe(
+      "(t.tx_date || ' ' || COALESCE(NULLIF(t.tx_time, ''), '00:00')) >= ? AND "
+      + "(t.tx_date || ' ' || COALESCE(NULLIF(t.tx_time, ''), '00:00')) < ?",
+    );
+    expect(bounds.values).toEqual(['2026-05-22 12:00', '2026-06-23 14:31']);
+  });
+
+  it('cae a comparacion solo por fecha cuando la ventana no trae hora (sin sueldo real en ese borde)', () => {
+    const bounds = cycleDateTimeBounds('tx_date', 'tx_time', {
+      startKey: '2026-04-21', startTime: null, endKey: '2026-05-22', endTime: null,
+    });
+    expect(bounds.sql).toBe('tx_date >= ? AND tx_date <= ?');
+    expect(bounds.values).toEqual(['2026-04-21', '2026-05-22']);
   });
 });
 

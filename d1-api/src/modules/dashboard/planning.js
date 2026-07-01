@@ -1,7 +1,7 @@
 
 import { round, currencyToPen, formatCurrency } from '../../shared/money.js';
 import { clamp, normalizeCurrency, normalizeInvestorProfile, normalizeInvestmentHorizon, normalizeKey, title } from '../../shared/normalizers.js';
-import { dateFromKey, dateInRange, dateKeyFromParts, daysBetween, localDateKey, monthRangeFromKey, nextFinancialClose, parseDateKeyParts, payCycleFromDate, weekRangeFromDate } from '../../shared/dates.js';
+import { cycleDateTimeBounds, dateFromKey, dateInRange, dateKeyFromParts, daysBetween, localDateKey, monthRangeFromKey, nextFinancialClose, parseDateKeyParts, payCycleFromDate, weekRangeFromDate } from '../../shared/dates.js';
 
 export function netWorthInsights({ assets, liabilities, net, availableBalance, debtToAssetsPct, investmentSharePct, liquiditySharePct }) {
   const insights = [];
@@ -268,15 +268,16 @@ export async function closureRuleSuggestion(env, chatId, now, cycle, plan, deps 
 export async function weeklyGoalPlan(env, chatId, now, cycle, plan, usdRate = 3.85) {
   const today = localDateKey(now || new Date());
   const range = weekRangeFromDate(today, cycle);
+  const rangeBounds = cycleDateTimeBounds('tx_date', 'tx_time', range);
   const row = await env.DB.prepare(`
     SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END), 0) AS spent
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
-      AND tx_date BETWEEN ? AND ?
+      AND ${rangeBounds.sql}
       AND COALESCE(source, '') <> 'debt_payment'
       AND lower(description) NOT LIKE 'fijo pagado%'
-  `).bind(usdRate, chatId, range.startKey, range.endKey).first();
+  `).bind(usdRate, chatId, ...rangeBounds.values).first();
 
   const spent = round(row?.spent || 0);
   const daysInWeek = Math.max(1, daysBetween(range.startKey, range.endKey) + 1);

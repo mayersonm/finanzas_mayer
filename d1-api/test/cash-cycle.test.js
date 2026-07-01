@@ -78,9 +78,9 @@ describe('computeCashBalance', () => {
 
 describe('resolveCurrentCycle (anclado al sueldo)', () => {
   const now = new Date('2026-06-24T12:00:00Z'); // 24/06 en America/Lima
-  // El query de sueldos es "SELECT DISTINCT tx_date ... salario ... ORDER BY DESC".
-  const salaryDb = (dates) => fakeDb((sql) => {
-    if (sql.includes('tx_date') && sql.includes('salario')) return { results: dates.map((d) => ({ tx_date: d })) };
+  // El query de sueldos ahora es "SELECT tx_date, MIN(...) AS tx_time ... salario ... GROUP BY tx_date ORDER BY DESC".
+  const salaryDb = (rows) => fakeDb((sql) => {
+    if (sql.includes('tx_date') && sql.includes('salario')) return { results: rows.map((r) => (typeof r === 'string' ? { tx_date: r } : { tx_date: r.date, tx_time: r.time })) };
     return null;
   });
 
@@ -96,6 +96,18 @@ describe('resolveCurrentCycle (anclado al sueldo)', () => {
     expect(cycle.awaitingSalary).toBe(false);
     expect(cycle.startKey).toBe('2026-06-24'); // empieza con el sueldo
     expect(cycle.key).toBe('2026-06');
+  });
+
+  it('un solo sueldo conocido (sin uno anterior): arranque sin hora, dia completo', async () => {
+    const cycle = await resolveCurrentCycle({ DB: salaryDb(['2026-06-24']) }, 'chat1', now);
+    expect(cycle.startTime).toBeNull();
+  });
+
+  it('con un sueldo anterior conocido: arranque con precision de hora (excluye gastos de esa manana antes del sueldo)', async () => {
+    const cycle = await resolveCurrentCycle({ DB: salaryDb([{ date: '2026-06-24', time: '14:31' }, { date: '2026-05-23', time: '12:48' }]) }, 'chat1', now);
+    expect(cycle.startKey).toBe('2026-06-24');
+    expect(cycle.startTime).toBe('14:31');
+    expect(cycle.endTime).toBeNull(); // ciclo actual, siempre abierto
   });
 
   it('si el ultimo sueldo es del ciclo anterior, sigue en el (extendido a hoy)', async () => {

@@ -5,7 +5,7 @@ import { getAppSetting, setAppSetting } from '../../shared/settings-store.js';
 import { clamp, normalizeCurrency, normalizeDateOnly, normalizeKey, normalizePaymentMethod, title } from '../../shared/normalizers.js';
 import { classifyCategory, normalizeBaseCategory, normalizeCategory } from '../../shared/categories.js';
 import { stableTransactionId } from '../../shared/files.js';
-import { localDateKey, payCycleFromDate, payCycleRelative, salaryCycleWindow } from '../../shared/dates.js';
+import { cycleDateTimeBounds, localDateKey, payCycleFromDate, payCycleRelative, salaryCycleWindow } from '../../shared/dates.js';
 
 export async function transactions(env, params) {
   const chatId = getChatId(env, params);
@@ -81,10 +81,9 @@ export async function transactions(env, params) {
       const grid = payCycleRelative(payCycleFromDate(new Date()), offset);
       win = { startKey: grid.startKey, endKey: offset === 0 ? todayKey : grid.endKey };
     }
-    where.push('t.tx_date >= ?');
-    values.push(win.startKey);
-    where.push('t.tx_date <= ?');
-    values.push(win.endKey);
+    const bounds = cycleDateTimeBounds('t.tx_date', 't.tx_time', win);
+    where.push(bounds.sql);
+    values.push(...bounds.values);
     resolvedCycle = { offset, start: win.startKey, end: win.endKey };
   }
 
@@ -122,17 +121,22 @@ export async function transactions(env, params) {
   };
 }
 
-// Fechas de sueldo (ingreso categoria 'salario') mas recientes, descendente.
-// Definen los limites de los ciclos anclados al sueldo.
+// Fechas+hora de sueldo (ingreso categoria 'salario') mas recientes,
+// descendente. Definen los limites de los ciclos anclados al sueldo. Si hay
+// mas de un sueldo el mismo dia, se usa el mas temprano (esa es la hora en
+// que "empieza" el ciclo nuevo ese dia).
 export async function loadSalaryDates(env, chatId, todayKey, limit = 24) {
   const rows = await env.DB.prepare(`
-    SELECT DISTINCT tx_date
+    SELECT tx_date, MIN(COALESCE(NULLIF(tx_time, ''), '00:00')) AS tx_time
     FROM transactions
     WHERE chat_id = ? AND type = 'ingreso' AND category = 'salario' AND tx_date <= ?
+    GROUP BY tx_date
     ORDER BY tx_date DESC
     LIMIT ?
   `).bind(chatId, todayKey, limit).all();
-  return (rows.results || []).map((row) => row.tx_date).filter(Boolean);
+  return (rows.results || [])
+    .filter((row) => row.tx_date)
+    .map((row) => ({ date: row.tx_date, time: row.tx_time || '00:00' }));
 }
 
 export async function insertTransaction(env, payload) {
