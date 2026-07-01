@@ -24,22 +24,30 @@ export function DashboardTabs({
 }) {
   return (
     <nav className="mb-4 lg:hidden" aria-label="Secciones del dashboard">
-      <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-current={activeTab === item.id ? 'page' : undefined}
-            className={`flex h-10 min-w-[8.25rem] shrink-0 items-center justify-center gap-2 rounded-tremor-default border px-3 text-xs font-semibold leading-tight transition ${
-              activeTab === item.id
-                ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-                : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-700 hover:bg-slate-900/80 hover:text-slate-100'
-            }`}
-            onClick={() => onTabChange(item.id)}
-          >
-            <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 truncate text-center">{item.label}</span>
-          </button>
+      <div className="-mx-3 flex items-stretch gap-1 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
+        {tabGroups.map((group, groupIndex) => (
+          <div key={group.label} className={`flex shrink-0 items-center gap-1 ${groupIndex > 0 ? 'ml-1 border-l border-slate-800 pl-2' : ''}`}>
+            {group.ids.map((id) => {
+              const item = tabById[id];
+              const active = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-current={active ? 'page' : undefined}
+                  className={`flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-tremor-default px-2.5 text-xs font-semibold leading-tight transition ${
+                    active
+                      ? 'bg-emerald-500/15 text-emerald-100'
+                      : 'text-slate-500 hover:bg-slate-900/60 hover:text-slate-200'
+                  }`}
+                  onClick={() => onTabChange(item.id)}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 truncate text-center">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
         ))}
       </div>
     </nav>

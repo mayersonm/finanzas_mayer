@@ -310,9 +310,9 @@ export function CommitmentsSection({
     <div className="grid gap-3 sm:gap-4">
       <SummaryBar
         stats={[
-          { label: 'Fijos pendientes', value: formatMoney(realExpenses.totalFijos), tone: 'warn', detail: `${fixedExpenses.length} activos` },
-          { label: 'Presupuesto', value: formatMoney(realExpenses.totalPresupuesto), tone: 'info' },
-          { label: 'Deudas activas', value: formatMoney(activeDebtTotal), tone: 'bad', detail: `${debts.filter((item) => item.estado !== 'pagada').length} activas` },
+          { label: 'Fijos pendientes', value: formatMoney(realExpenses.totalFijos), detail: `${fixedExpenses.length} activos` },
+          { label: 'Presupuesto', value: formatMoney(realExpenses.totalPresupuesto) },
+          { label: 'Deudas activas', value: formatMoney(activeDebtTotal), detail: `${debts.filter((item) => item.estado !== 'pagada').length} activas` },
           { label: 'Total comprometido', value: formatMoney(realExpenses.total + activeDebtTotal) },
         ]}
       />
@@ -327,7 +327,7 @@ export function CommitmentsSection({
           {!showFixedForm ? (
             <button
               type="button"
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-tremor-default border border-amber-500/40 bg-amber-500/10 px-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-tremor-default border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
               onClick={() => { setFixedDraft(emptyFixedDraft); setFixedMessage(''); setFixedError(''); setShowFixedForm(true); }}
             >
               <RiAddLine className="h-4 w-4" /> Nuevo
@@ -354,7 +354,7 @@ export function CommitmentsSection({
             </Field>
             <Field label="Categoría"><input className="form-input" value={fixedDraft.cat} onChange={(event) => setFixedDraft((current) => ({ ...current, cat: event.target.value }))} required /></Field>
           </div>
-          <button className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-amber-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:opacity-60" disabled={saving || !authToken}>
+          <button className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60" disabled={saving || !authToken}>
             {fixedDraft.id ? <RiSave3Line className="h-4 w-4" /> : <RiAddLine className="h-4 w-4" />}
             {fixedDraft.id ? 'Guardar fijo' : 'Crear fijo'}
           </button>
@@ -388,7 +388,7 @@ export function CommitmentsSection({
             <Title>Presupuesto</Title>
             <Text>Si no hay gasto, se considera el limite completo.</Text>
           </div>
-          <Badge color="sky">{formatMoney(realExpenses.totalPresupuesto)}</Badge>
+          <Badge color="slate">{formatMoney(realExpenses.totalPresupuesto)}</Badge>
         </div>
         <div className="mt-4 sm:mt-5">
           {data.presupuestos.length ? (

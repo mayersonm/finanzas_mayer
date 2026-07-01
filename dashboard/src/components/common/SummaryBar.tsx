@@ -15,17 +15,18 @@ const toneClass: Record<StatTone, string> = {
   good: 'text-emerald-300',
   bad: 'text-rose-300',
   warn: 'text-amber-300',
-  info: 'text-cyan-300',
+  info: 'text-slate-200',
 };
 
 // Franja de KPIs reutilizable: el "héroe" de cada vista, lectura de un vistazo.
+// Una sola tira con divisores internos en vez de N cajas con borde propio.
 export function SummaryBar({ stats, className = '' }: { stats: SummaryStat[]; className?: string }) {
   const cols = stats.length <= 3 ? 'sm:grid-cols-3' : stats.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3 lg:grid-cols-5';
   return (
-    <div className={`grid grid-cols-2 gap-2 sm:gap-3 ${cols} ${className}`}>
+    <div className={`grid grid-cols-2 gap-px overflow-hidden rounded-tremor-default border border-slate-800 bg-slate-800 ${cols} ${className}`}>
       {stats.map((stat) => (
-        <div key={stat.label} className="min-w-0 rounded-tremor-default border border-slate-800 bg-slate-900/40 px-3 py-2.5">
-          <p className="truncate text-[0.68rem] font-semibold uppercase tracking-wide text-slate-500">{stat.label}</p>
+        <div key={stat.label} className="min-w-0 bg-slate-950/70 px-3 py-2.5">
+          <p className="truncate text-[0.68rem] font-medium uppercase tracking-wide text-slate-500">{stat.label}</p>
           <p className={`mt-1 truncate font-mono text-lg font-semibold sm:text-xl ${toneClass[stat.tone || 'neutral']}`}>{stat.value}</p>
           {stat.detail ? <p className="mt-0.5 truncate text-xs text-slate-500">{stat.detail}</p> : null}
         </div>

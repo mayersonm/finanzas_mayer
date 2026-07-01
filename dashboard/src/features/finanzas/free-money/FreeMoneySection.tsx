@@ -23,7 +23,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <Badge color={tone.badge}>{plan.statusLabel}</Badge>
-              <Badge color="cyan">{plan.closeLabel}</Badge>
+              <Badge color="slate">{plan.closeLabel}</Badge>
               <Badge color="slate">{plan.daysLeft} dias</Badge>
             </div>
             <Title>Dinero Libre</Title>
@@ -38,13 +38,13 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Metric icon={RiShieldCheckLine} label="Caja libre" value={formatMoney(distributionBase)} sub="tras ahorro, colchon y compromisos" tone="emerald" />
-          <Metric icon={RiShoppingBag3Line} label="Para gastar ciclo" value={formatMoney(plan.availableToSpend)} sub={`${plan.daysLeft} dias restantes`} tone="cyan" />
+          <Metric icon={RiShoppingBag3Line} label="Para gastar ciclo" value={formatMoney(plan.availableToSpend)} sub={`${plan.daysLeft} dias restantes`} tone="slate" />
           <Metric icon={RiSparklingLine} label="Puedes ahorrar" value={formatMoney(plan.recommendedSavings)} sub="sugerencia del ciclo" tone="emerald" />
-          <Metric icon={RiBankLine} label="Margen extra" value={formatMoney(extraMargin)} sub="despues de gastar y ahorrar" tone="amber" />
+          <Metric icon={RiBankLine} label="Margen extra" value={formatMoney(extraMargin)} sub="despues de gastar y ahorrar" tone="slate" />
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-4">
+          <div className="rounded-tremor-default bg-slate-900/40 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-slate-100">Distribucion de lo que queda</p>
@@ -52,7 +52,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
                   {formatMoney(distributionBase)} = {formatMoney(plan.availableToSpend)} gasto + {formatMoney(plan.recommendedSavings)} ahorro sugerido + {formatMoney(extraMargin)} margen extra
                 </p>
               </div>
-              <p className="text-sm font-semibold text-cyan-200">{progressValue}% gasto</p>
+              <p className="text-sm font-semibold text-slate-300">{progressValue}% gasto</p>
             </div>
             <ProgressBar className="mt-3" value={progressValue} color={tone.progress} />
             <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -64,7 +64,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
             </div>
           </div>
 
-          <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-4">
+          <div className="rounded-tremor-default bg-slate-900/40 p-4">
             <p className="text-sm font-semibold text-slate-100">Probar compra</p>
             <div className="mt-3 grid gap-2">
               <input className="form-input" type="number" min="0" step="0.01" placeholder="Monto" value={purchaseAmount} onChange={(event) => setPurchaseAmount(event.target.value)} />
@@ -81,7 +81,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-tremor-default bg-amber-500/15 text-amber-200">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-tremor-default bg-slate-900/60 text-slate-300">
               <RiSparklingLine className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
@@ -97,13 +97,13 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
                   <p className="text-sm font-medium text-slate-200">{item.label}</p>
                   <p className="text-sm font-semibold text-slate-300">{item.pct}%</p>
                 </div>
-                <ProgressBar value={item.pct} color="amber" />
+                <ProgressBar value={item.pct} color="slate" />
               </div>
             ))}
           </div>
 
-          <div className="mt-5 rounded-tremor-default border border-amber-500/25 bg-amber-500/10 p-3">
-            <p className="flex items-center gap-2 text-sm font-semibold text-amber-200">
+          <div className="mt-5 rounded-tremor-default bg-slate-900/40 p-3">
+            <p className="flex items-center gap-2 text-sm font-semibold text-slate-200">
               <RiArrowRightLine className="h-4 w-4" aria-hidden="true" />
               {plan.investment.nextStep}
             </p>
@@ -115,7 +115,7 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
           <Title>Acciones</Title>
           <div className="mt-4 grid gap-3">
             {(plan.actions.length ? plan.actions : ['Mantén el gasto diario dentro del rango normal.']).map((item) => (
-              <div key={item} className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3 text-sm text-slate-300">
+              <div key={item} className="rounded-tremor-default bg-slate-900/40 p-3 text-sm text-slate-300">
                 {item}
               </div>
             ))}
@@ -126,11 +126,10 @@ export function FreeMoneySection({ data }: { data: DashboardData }) {
   );
 }
 
-function Metric({ icon: Icon, label, value, sub, tone }: { icon: typeof RiShieldCheckLine; label: string; value: string; sub: string; tone: 'emerald' | 'cyan' | 'amber' }) {
+function Metric({ icon: Icon, label, value, sub, tone }: { icon: typeof RiShieldCheckLine; label: string; value: string; sub: string; tone: 'emerald' | 'slate' }) {
   const colors = {
     emerald: 'bg-emerald-500/10 text-emerald-200 border-emerald-500/25',
-    cyan: 'bg-cyan-500/10 text-cyan-200 border-cyan-500/25',
-    amber: 'bg-amber-500/10 text-amber-200 border-amber-500/25',
+    slate: 'bg-slate-900/40 text-slate-200 border-slate-800',
   };
   return (
     <div className={`rounded-tremor-default border p-4 ${colors[tone]}`}>
@@ -144,7 +143,7 @@ function Metric({ icon: Icon, label, value, sub, tone }: { icon: typeof RiShield
 
 function Mini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-tremor-default border border-slate-800 bg-slate-950/60 p-3">
+    <div className="rounded-tremor-default bg-slate-950/60 p-3">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="mt-1 font-semibold text-slate-100">{value}</p>
     </div>

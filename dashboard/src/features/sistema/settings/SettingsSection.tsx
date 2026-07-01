@@ -331,7 +331,7 @@ export function SettingsSection({ authToken, chatId }: { authToken?: string | nu
               <Summary label="OK" value={health.summary.ok} tone="emerald" />
               <Summary label="Avisos" value={health.summary.warnings} tone="amber" />
               <Summary label="Errores" value={health.summary.errors} tone="rose" />
-              <Summary label="Latencia" value={`${health.summary.latencyMs} ms`} tone="cyan" />
+              <Summary label="Latencia" value={`${health.summary.latencyMs} ms`} tone="slate" />
             </div>
             <div className="mt-4 grid max-h-80 gap-2 overflow-auto">
               {health.checks.slice(0, 12).map((item) => (
@@ -348,7 +348,7 @@ export function SettingsSection({ authToken, chatId }: { authToken?: string | nu
                 const ok = Boolean(secrets[key]);
                 const Icon = ok ? RiCheckboxCircleLine : RiErrorWarningLine;
                 return (
-                  <div key={key} className="flex items-center justify-between gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/40 px-3 py-2">
+                  <div key={key} className="flex items-center justify-between gap-3 rounded-tremor-default bg-slate-900/40 px-3 py-2">
                     <span className="flex min-w-0 items-center gap-2 text-sm text-slate-200">
                       <Icon className={`h-4 w-4 shrink-0 ${ok ? 'text-emerald-300' : 'text-amber-300'}`} />
                       <span className="truncate">{label}</span>
@@ -435,16 +435,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Summary({ label, value, tone }: { label: string; value: number | string; tone: 'emerald' | 'amber' | 'rose' | 'cyan' }) {
+function Summary({ label, value, tone }: { label: string; value: number | string; tone: 'emerald' | 'amber' | 'rose' | 'slate' }) {
   const colorClass = {
     emerald: 'text-emerald-200',
     amber: 'text-amber-200',
     rose: 'text-rose-200',
-    cyan: 'text-cyan-200',
+    slate: 'text-slate-200',
   }[tone];
 
   return (
-    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
+    <div className="rounded-tremor-default bg-slate-900/40 p-3">
       <Text>{label}</Text>
       <p className={`mt-1 text-lg font-semibold ${colorClass}`}>{value}</p>
     </div>
@@ -457,7 +457,7 @@ function HealthRow({ item }: { item: HealthCheck }) {
   const Icon = ok ? RiCheckboxCircleLine : RiErrorWarningLine;
 
   return (
-    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
+    <div className="rounded-tremor-default bg-slate-900/40 p-3">
       <div className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-100">
           <Icon className={`h-4 w-4 shrink-0 ${ok ? 'text-emerald-300' : warning ? 'text-amber-300' : 'text-rose-300'}`} />
@@ -486,7 +486,7 @@ function List({ children }: { children: ReactNode }) {
 
 function Row({ title, subtitle, color, onDelete }: { title: string; subtitle: string; color?: string; onDelete?: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/40 px-3 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-tremor-default bg-slate-900/40 px-3 py-2">
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-slate-100">
           <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color || '#64748b' }} />

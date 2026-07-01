@@ -10,9 +10,7 @@ export function budgetColor(pct: number): Color {
 }
 
 export function goalColor(pct: number): Color {
-  if (pct >= 100) return 'emerald';
-  if (pct >= 50) return 'amber';
-  return 'sky';
+  return pct >= 100 ? 'emerald' : 'slate';
 }
 
 export function statusColor(status: ApiStatus): Color {
@@ -23,6 +21,6 @@ export function statusColor(status: ApiStatus): Color {
 
 export function fixedStatusColor(status: string): Color {
   if (status === 'pagado') return 'emerald';
-  if (status === 'saltado') return 'sky';
+  if (status === 'saltado') return 'slate';
   return 'amber';
 }

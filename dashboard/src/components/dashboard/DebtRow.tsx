@@ -27,7 +27,7 @@ export function DebtRow({
   const payments = item.payments || [];
 
   return (
-    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3 transition hover:border-slate-700 sm:p-4">
+    <div className="rounded-tremor-default bg-slate-900/40 p-3 transition hover:bg-slate-900/70 sm:p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <Text className="truncate font-semibold text-slate-100">{item.nombre}</Text>
@@ -67,7 +67,7 @@ export function DebtRow({
       ) : null}
 
       {payments.length ? (
-        <div className="mt-3 rounded-tremor-default border border-slate-800/80 bg-slate-950/40 p-3">
+        <div className="mt-3 rounded-tremor-default bg-slate-950/40 p-3">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Historial de pagos</div>
           <div className="space-y-2">
             {payments.slice(0, 5).map((payment) => (

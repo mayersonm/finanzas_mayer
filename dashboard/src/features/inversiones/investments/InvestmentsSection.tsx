@@ -258,7 +258,7 @@ function InvestmentRow({
   const positive = gain >= 0;
 
   return (
-    <div className="rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3">
+    <div className="rounded-tremor-default bg-slate-900/40 p-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
