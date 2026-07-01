@@ -146,7 +146,7 @@ export function AiSection({
             <ChatMessage key={message.id} message={message} />
           ))}
           {loading ? (
-            <div className="max-w-[88%] rounded-tremor-default border border-slate-800 bg-slate-900/30 px-3 py-3 text-sm text-slate-300">
+            <div className="max-w-[88%] rounded-tremor-default bg-slate-900/40 px-3 py-3 text-sm text-slate-300">
               <div className="flex items-center gap-2">
                 <SparklesIcon className="h-4 w-4 animate-pulse text-emerald-300" aria-hidden="true" />
                 Analizando caja, historial y contexto actual...
@@ -167,7 +167,7 @@ export function AiSection({
               <button
                 key={item}
                 type="button"
-                className="rounded-full border border-slate-800 bg-slate-900/30 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-cyan-400/50 hover:text-cyan-200 disabled:cursor-wait disabled:opacity-60"
+                className="rounded-full border border-slate-800 bg-slate-900/30 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-emerald-400/50 hover:text-emerald-200 disabled:cursor-wait disabled:opacity-60"
                 disabled={loading || !authToken}
                 onClick={() => void sendMessage(item)}
               >
@@ -207,7 +207,7 @@ export function AiSection({
           <Text>{data.cycleLabel || data.mes}</Text>
           <div className="mt-4 grid gap-2">
             {context.map((item) => (
-              <div key={item.label} className="rounded-tremor-default border border-slate-800 bg-slate-900/30 px-3 py-2">
+              <div key={item.label} className="rounded-tremor-default bg-slate-900/40 px-3 py-2">
                 <p className="text-xs font-medium text-slate-500">{item.label}</p>
                 <p className={`mt-1 truncate font-mono text-sm font-semibold ${item.tone}`}>{item.value}</p>
               </div>
@@ -219,7 +219,7 @@ export function AiSection({
           <Title>Fugas</Title>
           <div className="mt-3 grid gap-2">
             {(data.topFugas || []).slice(0, 3).map((item) => (
-              <div key={`${item.category}-${item.label}`} className="min-w-0 rounded-tremor-default border border-slate-800 bg-slate-900/30 px-3 py-2">
+              <div key={`${item.category}-${item.label}`} className="min-w-0 rounded-tremor-default bg-slate-900/40 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate text-sm font-semibold text-slate-100">{item.label}</p>
                   <p className="shrink-0 font-mono text-xs font-semibold text-slate-300">{formatMoney(item.amount)}</p>
@@ -241,10 +241,10 @@ function ChatMessage({ message }: { message: AiMessage }) {
 
   return (
     <article className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[88%] rounded-tremor-default border px-3 py-3 text-sm shadow-sm ${
+      <div className={`max-w-[88%] rounded-tremor-default px-3 py-3 text-sm shadow-sm ${
         isUser
-          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
-          : 'border-slate-800 bg-slate-900/30 text-slate-300'
+          ? 'bg-emerald-500/10 text-emerald-100'
+          : 'bg-slate-900/40 text-slate-300'
       }`}
       >
         {result ? (
@@ -257,7 +257,7 @@ function ChatMessage({ message }: { message: AiMessage }) {
             {result.bullets?.length ? (
               <div className="grid gap-2">
                 {result.bullets.map((item) => (
-                  <p key={item} className="rounded-tremor-default border border-slate-800 bg-slate-950/40 px-3 py-2">
+                  <p key={item} className="rounded-tremor-default bg-slate-950/40 px-3 py-2">
                     {item}
                   </p>
                 ))}
@@ -297,7 +297,7 @@ function contextCards(data: DashboardData) {
     {
       label: 'Gasto diario',
       value: formatMoney(free?.daily?.normal || data.automatizacion?.daily?.normal || 0),
-      tone: 'text-cyan-300',
+      tone: 'text-slate-200',
     },
     {
       label: 'Presupuesto',
@@ -307,7 +307,7 @@ function contextCards(data: DashboardData) {
     {
       label: 'Deuda pendiente',
       value: formatMoney(data.deudaPendiente || cierre?.deudasPendientes || 0),
-      tone: 'text-amber-300',
+      tone: 'text-slate-200',
     },
   ];
 }

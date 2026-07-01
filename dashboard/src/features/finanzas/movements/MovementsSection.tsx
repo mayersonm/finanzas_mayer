@@ -143,7 +143,7 @@ export function MovementsSection({
       </div>
 
       {/* 1) Periodo: que ciclo estoy viendo */}
-      <div className="mt-4 rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
+      <div className="mt-4 rounded-tremor-default bg-slate-900/40 p-3">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Periodo</p>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-1">
@@ -173,7 +173,7 @@ export function MovementsSection({
             {!isCurrentCycle ? (
               <button
                 type="button"
-                className="h-9 rounded-tremor-default border border-cyan-500/40 bg-cyan-500/10 px-3 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-500/15"
+                className="h-9 rounded-tremor-default border border-slate-700 bg-slate-900/60 px-3 text-xs font-semibold text-slate-200 transition hover:bg-slate-800"
                 onClick={() => setCycleOffset(0)}
               >
                 Ir al actual
@@ -199,7 +199,7 @@ export function MovementsSection({
       />
 
       {/* 3) Filtros dentro del ciclo */}
-      <div className="mt-4 rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
+      <div className="mt-4 rounded-tremor-default bg-slate-900/40 p-3">
         <div className="mb-3 flex items-center justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filtros</p>
           {hasActiveFilters ? (
@@ -298,7 +298,7 @@ function Segmented({
             type="button"
             onClick={() => onChange(option.value)}
             className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
-              active ? 'bg-cyan-500/15 text-cyan-200' : 'text-slate-400 hover:text-slate-200'
+              active ? 'bg-emerald-500/15 text-emerald-200' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {option.label}

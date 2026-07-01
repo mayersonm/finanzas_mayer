@@ -188,7 +188,7 @@ export function TransactionsTable({
                 {tx.receipt ? (
                   <button
                     type="button"
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-500/20 disabled:cursor-wait disabled:opacity-60"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/60 px-2.5 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
                     disabled={loadingReceiptId === tx.receipt.id}
                     onClick={() => void openReceipt(tx)}
                     aria-label="Ver foto del recibo"
@@ -200,7 +200,7 @@ export function TransactionsTable({
                 ) : null}
                 <button
                   type="button"
-                  className="grid h-8 w-8 place-items-center rounded-lg border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-cyan-400/60 hover:text-cyan-200"
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-slate-600 hover:text-slate-100"
                   onClick={() => setEditing(tx)}
                   aria-label={`Editar ${tx.desc}`}
                   title="Editar movimiento"
@@ -305,7 +305,7 @@ function SortChip({
       onClick={() => onSort(sortKey)}
       className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-semibold transition ${
         active
-          ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200'
+          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
           : 'border-slate-800 bg-slate-900/40 text-slate-400 hover:text-slate-200'
       }`}
     >

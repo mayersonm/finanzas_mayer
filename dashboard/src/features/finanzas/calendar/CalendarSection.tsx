@@ -133,12 +133,12 @@ export function CalendarSection({ data, authToken, chatId }: { data: DashboardDa
             <div className="min-w-[44rem]">
               <div className="grid grid-cols-7 gap-1.5">
                 {WEEK_DAYS.map((day) => (
-                  <div key={day} className="rounded-tremor-default border border-slate-800 bg-slate-900/40 px-2 py-2 text-center text-xs font-semibold uppercase text-slate-500">
+                  <div key={day} className="rounded-tremor-default bg-slate-900/40 px-2 py-2 text-center text-xs font-semibold uppercase text-slate-500">
                     {day}
                   </div>
                 ))}
                 {Array.from({ length: days.offset }).map((_, index) => (
-                  <div key={`empty-${index}`} className="min-h-[6.25rem] rounded-tremor-default border border-slate-800/60 bg-slate-900/20" />
+                  <div key={`empty-${index}`} className="min-h-[6.25rem] rounded-tremor-default bg-slate-900/20" />
                 ))}
                 {days.items.map((day) => (
                   <DayCell
@@ -181,7 +181,7 @@ function MonthButton({ label, disabled, onClick, children }: { label: string; di
 function HeaderStat({ label, value, tone = 'slate' }: { label: string; value: string | number; tone?: 'slate' | 'rose' }) {
   const valueClass = tone === 'rose' ? 'text-rose-200' : 'text-slate-100';
   return (
-    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 px-3 py-2">
+    <div className="rounded-tremor-default bg-slate-900/40 px-3 py-2">
       <p className="text-[0.68rem] font-medium uppercase text-slate-500">{label}</p>
       <p className={`mt-0.5 truncate font-mono text-sm font-semibold ${valueClass}`}>{value}</p>
     </div>
@@ -203,7 +203,7 @@ function DayCell({
   const hasIncome = Boolean(daily?.ingresos);
 
   return (
-    <div className={`min-h-[6.25rem] rounded-tremor-default border p-2 transition ${isToday ? 'border-emerald-400/70 bg-emerald-500/10' : 'border-slate-800 bg-slate-900/40'}`}>
+    <div className={`min-h-[6.25rem] rounded-tremor-default p-2 transition ${isToday ? 'border border-emerald-400/70 bg-emerald-500/10' : 'bg-slate-900/40'}`}>
       <div className="flex items-center justify-between gap-2">
         <span className={`text-sm font-semibold ${isToday ? 'text-emerald-200' : 'text-slate-200'}`}>{day.day}</span>
         {events.length ? <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[0.65rem] font-semibold text-slate-300">{events.length}</span> : null}
@@ -310,7 +310,7 @@ function AgendaCard({ events }: { events: CalendarEvent[] }) {
           <Title>Agenda</Title>
           <Text>Eventos del mes</Text>
         </div>
-        <Badge color={events.length ? 'cyan' : 'emerald'}>{events.length || 'OK'}</Badge>
+        <Badge color={events.length ? 'slate' : 'emerald'}>{events.length || 'OK'}</Badge>
       </div>
       <div className="mt-4 grid gap-2">
         {events.length ? events.map((event) => <EventRow key={event.id} event={event} />) : <EmptyState>Sin eventos este mes.</EmptyState>}
@@ -365,7 +365,7 @@ function eventTone(type: string) {
   if (type === 'cierre') return { row: 'border-emerald-500/25 bg-emerald-500/10', icon: 'bg-emerald-500/15 text-emerald-200' };
   if (type === 'alerta') return { row: 'border-amber-500/25 bg-amber-500/10', icon: 'bg-amber-500/15 text-amber-200' };
   if (type === 'objetivo') return { row: 'border-violet-500/25 bg-violet-500/10', icon: 'bg-violet-500/15 text-violet-200' };
-  return { row: 'border-slate-800 bg-slate-900/40', icon: 'bg-slate-800 text-slate-200' };
+  return { row: 'border-transparent bg-slate-900/40', icon: 'bg-slate-800 text-slate-200' };
 }
 
 function weeklyTone(status: string): { badge: Color; progress: Color } {
@@ -377,7 +377,6 @@ function weeklyTone(status: string): { badge: Color; progress: Color } {
 
 function closureTone(status: string): Color {
   if (status === 'due') return 'amber';
-  if (status === 'soon') return 'cyan';
   if (status === 'closed') return 'emerald';
   return 'slate';
 }

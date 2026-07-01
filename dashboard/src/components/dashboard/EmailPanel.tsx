@@ -21,7 +21,7 @@ export function EmailPanel({ config }: { config?: EmailConfig }) {
           ['Mensual', config.monthly || '-'],
           ['Anual', config.yearly || '-'],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-tremor-default border border-slate-800 bg-slate-900/60 p-3">
+          <div key={label} className="rounded-tremor-default bg-slate-900/60 p-3">
             <Text>{label}</Text>
             <p className="mt-1 truncate font-mono text-sm font-semibold text-slate-100">{value}</p>
           </div>

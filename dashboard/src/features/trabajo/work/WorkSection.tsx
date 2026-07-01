@@ -400,7 +400,7 @@ export function WorkSection({ authToken, chatId }: { authToken?: string | null; 
               </Field>
 
               {draft.id ? (
-                <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
+                <div className="rounded-tremor-default bg-slate-900/40 p-3">
                   <p className="text-xs font-semibold uppercase text-slate-400">Línea de tiempo</p>
                   <div className="mt-3 grid gap-3">
                     <Field label="Fecha">
@@ -533,7 +533,7 @@ function SummaryTile({ label, value, tone = 'slate' }: { label: string; value: n
   }[tone];
 
   return (
-    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3">
+    <div className="rounded-tremor-default bg-slate-900/40 p-3">
       <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p>
       <p className={`mt-1 text-xl font-semibold ${color}`}>{value}</p>
     </div>

@@ -11,7 +11,7 @@ export function GoalsSection({ data }: { data: DashboardData }) {
           <Title>Metas de ahorro</Title>
           <Text>Seguimiento de avance por objetivo</Text>
         </div>
-        <Badge color="violet">{data.metas.length}</Badge>
+        <Badge color="slate">{data.metas.length}</Badge>
       </div>
       <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
         {data.metas.length ? (

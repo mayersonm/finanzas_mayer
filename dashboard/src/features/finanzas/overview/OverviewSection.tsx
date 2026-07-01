@@ -177,56 +177,38 @@ export function OverviewSection({
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge color={cashBalance >= 0 ? 'emerald' : 'rose'}>{cashBalance >= 0 ? 'Caja positiva' : 'Caja negativa'}</Badge>
-                <Badge color="slate">{data.cycleLabel || data.mes}</Badge>
-              </div>
               <Title>Vista principal</Title>
-              <Text>{periodLabel}</Text>
+              <Text>
+                <span className={cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{cashBalance >= 0 ? 'Caja positiva' : 'Caja negativa'}</span>
+                {' · '}{periodLabel}
+              </Text>
             </div>
-            <Badge color="cyan">Cierre {formatDateLabel(closure.closeDate)}</Badge>
+            <Text className="shrink-0 text-slate-500">Cierre {formatDateLabel(closure.closeDate)}</Text>
           </div>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
-            <div className="min-w-0">
-              <Text>Caja registrada</Text>
-              <p className={`mt-2 truncate font-mono text-4xl font-semibold sm:text-5xl ${cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                {formatMoney(cashBalance)}
+          <div className="mt-5 min-w-0">
+            <Text>Caja registrada</Text>
+            <p className={`mt-2 truncate font-mono text-4xl font-semibold sm:text-5xl ${cashBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              {formatMoney(cashBalance)}
+            </p>
+            <Sparkline months={data.meses} />
+            <p className="mt-3 max-w-2xl text-sm text-slate-400">
+              Saldo calculado con movimientos en D1. No es lectura directa del banco.
+            </p>
+            {cashOpening ? (
+              <p className="mt-3 max-w-xl text-xs text-slate-500">
+                Cerraste en {formatMoney(cashOpening.balance)} el {formatClosureDateTime(cashOpening.at)}
+                {cashOpening.movimientos > 0
+                  ? ` · ${cashOpening.since >= 0 ? '+' : '−'}${formatMoney(Math.abs(cashOpening.since))} en ${cashOpening.movimientos} mov. desde entonces`
+                  : ' · sin movimientos nuevos aun'}
+                {' · '}
+                <button type="button" className="font-semibold text-slate-300 transition hover:underline disabled:opacity-60" onClick={() => void undoClose()} disabled={closing}>
+                  deshacer
+                </button>
               </p>
-              <Sparkline months={data.meses} />
-              <p className="mt-3 max-w-2xl text-sm text-slate-400">
-                Saldo calculado con movimientos en D1. No es lectura directa del banco.
-              </p>
-              {cashOpening ? (
-                <p className="mt-3 max-w-xl text-xs text-slate-500">
-                  Cerraste en {formatMoney(cashOpening.balance)} el {formatClosureDateTime(cashOpening.at)}
-                  {cashOpening.movimientos > 0
-                    ? ` · ${cashOpening.since >= 0 ? '+' : '−'}${formatMoney(Math.abs(cashOpening.since))} en ${cashOpening.movimientos} mov. desde entonces`
-                    : ' · sin movimientos nuevos aun'}
-                  {' · '}
-                  <button type="button" className="font-semibold text-cyan-300 transition hover:underline disabled:opacity-60" onClick={() => void undoClose()} disabled={closing}>
-                    deshacer
-                  </button>
-                </p>
-              ) : null}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              <FocusMetric
-                label="Libre proyectado"
-                value={formatMoney(projectedFree)}
-                detail="Caja menos compromisos y presupuesto"
-                tone={projectedFree >= 0 ? 'text-emerald-300' : 'text-rose-300'}
-              />
-              <FocusMetric
-                label="Patrimonio"
-                value={formatMoney(patrimonioDisponible)}
-                detail="Caja menos deudas y fijos"
-                tone={patrimonioDisponible >= 0 ? 'text-emerald-300' : 'text-rose-300'}
-              />
-            </div>
+            ) : null}
           </div>
         </Card>
 
@@ -250,7 +232,7 @@ export function OverviewSection({
               label="Salidas del ciclo"
               value={formatMoney(data.gastosMes)}
               detail={`Gastos + fijos pagados (${expensePeriodLabel})`}
-              tone={data.gastosMes > cashBalance ? 'text-amber-300' : 'text-sky-300'}
+              tone={data.gastosMes > cashBalance ? 'text-amber-300' : 'text-slate-200'}
             />
             <StatusRow
               label="Presupuesto disponible"
@@ -281,9 +263,7 @@ export function OverviewSection({
               {closure.savedAt ? <Text>Guardado {formatSavedAt(closure.savedAt)}</Text> : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge color={closure.queQueda >= 0 ? 'emerald' : 'rose'}>
-                {closure.movimientos ?? data.movimientosMes ?? 0} movimientos
-              </Badge>
+              <Text className="shrink-0">{closure.movimientos ?? data.movimientosMes ?? 0} movimientos</Text>
               {closureClosed ? <Badge color="emerald">Ciclo cerrado</Badge> : null}
               <button
                 type="button"
@@ -402,7 +382,7 @@ export function OverviewSection({
           {topFugas.length ? (
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               {topFugas.slice(0, 3).map((item, index) => (
-                <div key={`${item.label}-${item.category}`} className="min-w-0 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3">
+                <div key={`${item.label}-${item.category}`} className="min-w-0 rounded-tremor-default bg-slate-900/40 p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-200">#{index + 1}</span>
@@ -411,7 +391,7 @@ export function OverviewSection({
                     </div>
                     <span className="shrink-0 font-mono text-sm font-semibold text-slate-100">{formatMoney(item.amount)}</span>
                   </div>
-                  <ProgressBar className="mt-3" value={item.sharePct} color={item.sharePct >= 35 ? 'rose' : item.sharePct >= 20 ? 'amber' : 'cyan'} />
+                  <ProgressBar className="mt-3" value={item.sharePct} color={item.sharePct >= 35 ? 'rose' : item.sharePct >= 20 ? 'amber' : 'slate'} />
                   <p className="mt-2 line-clamp-2 text-xs text-slate-400">{item.reason}</p>
                 </div>
               ))}
@@ -431,12 +411,12 @@ export function OverviewSection({
               <Title>Historial de cierres</Title>
               <Text>Cada cierre guarda con cuanto cerraste, mas los ingresos y gastos del ciclo.</Text>
             </div>
-            <Badge color={closures.length ? 'cyan' : 'slate'}>{closures.length || 0}</Badge>
+            <Badge color="slate">{closures.length || 0}</Badge>
           </div>
           {closures.length ? (
             <div className="mt-4 grid gap-2">
               {closures.map((item) => (
-                <div key={item.id || item.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3">
+                <div key={item.id || item.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-tremor-default bg-slate-900/40 p-3">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-slate-100">{item.label || item.key}</p>
                     <p className="mt-0.5 truncate text-xs text-slate-500">
@@ -485,7 +465,7 @@ export function OverviewSection({
                 <input className="form-input" type="number" step="0.01" value={realBalance} onChange={(event) => setRealBalance(event.target.value)} placeholder="Ej: 362.68" autoFocus />
               </label>
               {closeDiff !== null && Math.abs(closeDiff) >= 0.01 ? (
-                <div className="rounded-tremor-default border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">
+                <div className="rounded-tremor-default border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-slate-300">
                   El nuevo ciclo arranca en {formatMoney(Number(realBalance))} ({closeDiff > 0 ? '−' : '+'}{formatMoney(Math.abs(closeDiff))} frente a lo calculado).
                 </div>
               ) : null}
@@ -529,7 +509,7 @@ function Sparkline({ months }: { months: MonthTotal[] }) {
 
 function FocusMetric({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: string }) {
   return (
-    <div className="min-w-0 rounded-tremor-default border border-slate-800 bg-slate-900/30 px-3 py-3">
+    <div className="min-w-0 rounded-tremor-default bg-slate-900/40 px-3 py-3">
       <Text>{label}</Text>
       <p className={`mt-1 truncate font-mono text-xl font-semibold ${tone}`}>{value}</p>
       <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>
@@ -577,7 +557,7 @@ function AutomationPanel({
                 label="Gasto diario"
                 value={formatMoney(automation.daily.normal)}
                 detail={`${automation.daily.daysLeft} dias restantes`}
-                tone="text-cyan-300"
+                tone="text-slate-200"
               />
               <FocusMetric
                 label="Respaldo Sheets"
@@ -600,7 +580,7 @@ function AutomationPanel({
             {primaryActions.length ? (
               <div className="mt-4 grid gap-2">
                 {primaryActions.map((action) => (
-                  <div key={action.id} className="grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                  <div key={action.id} className="grid gap-3 rounded-tremor-default bg-slate-900/40 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="min-w-0 truncate text-sm font-semibold text-slate-100">{action.title}</p>
@@ -611,7 +591,7 @@ function AutomationPanel({
                     {action.type === 'sync' && onSyncSheets ? (
                       <button
                         type="button"
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default border border-cyan-500/40 bg-cyan-500/10 px-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400/60 hover:bg-cyan-500/15 disabled:cursor-wait disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:opacity-60"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-500/15 disabled:cursor-wait disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500 disabled:opacity-60"
                         disabled={syncing}
                         onClick={onSyncSheets}
                       >

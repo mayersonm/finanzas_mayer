@@ -98,7 +98,7 @@ export function WorkNoteDetail({ item, onBack, onEdit, onDelete, onAddTimeline, 
           <Badge color="slate">{timeline.length}</Badge>
         </div>
 
-        <div className="mb-4 grid gap-2 rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-end">
+        <div className="mb-4 grid gap-2 rounded-tremor-default bg-slate-900/40 p-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-end">
           <label className="grid gap-1 text-xs font-semibold uppercase text-slate-400">
             Fecha
             <input className="form-input" type="date" value={hitoDate} onChange={(event) => setHitoDate(event.target.value)} />
@@ -133,11 +133,11 @@ export function WorkNoteDetail({ item, onBack, onEdit, onDelete, onAddTimeline, 
 
 function DetailBlock({ title, value, empty, tone = 'slate' }: { title: string; value?: string; empty: string; tone?: 'slate' | 'rose' }) {
   const toneClass = tone === 'rose'
-    ? 'border-rose-500/25 bg-rose-500/10 text-rose-100'
-    : 'border-slate-800 bg-slate-900/30 text-slate-300';
+    ? 'border border-rose-500/25 bg-rose-500/10 text-rose-100'
+    : 'bg-slate-900/40 text-slate-300';
 
   return (
-    <section className={`rounded-tremor-default border p-4 ${toneClass}`}>
+    <section className={`rounded-tremor-default p-4 ${toneClass}`}>
       <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{title}</h3>
       <p className="mt-3 whitespace-pre-line text-sm leading-6">{value || empty}</p>
     </section>
@@ -146,7 +146,7 @@ function DetailBlock({ title, value, empty, tone = 'slate' }: { title: string; v
 
 function TimelineRow({ event }: { event: WorkTimelineEvent }) {
   return (
-    <div className="grid gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-[7rem_minmax(0,1fr)]">
+    <div className="grid gap-3 rounded-tremor-default bg-slate-950/40 p-3 sm:grid-cols-[7rem_minmax(0,1fr)]">
       <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
         <RiCalendarLine className="h-4 w-4" />
         {formatDate(event.eventDate)}

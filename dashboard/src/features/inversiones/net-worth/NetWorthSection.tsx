@@ -165,7 +165,7 @@ export function NetWorthSection({
           <Text>{data.snapshots.length ? `${data.snapshots.length} cortes guardados` : 'Sin cortes guardados'}</Text>
           <div className="mt-5 grid gap-2">
             {data.snapshots.length ? data.snapshots.map((snapshot) => (
-              <div key={snapshot.id} className="flex items-center justify-between gap-3 rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3 text-sm">
+              <div key={snapshot.id} className="flex items-center justify-between gap-3 rounded-tremor-default bg-slate-950/40 p-3 text-sm">
                 <span className="text-slate-400">{snapshot.date}</span>
                 <span className={snapshot.netWorth >= 0 ? 'font-semibold text-emerald-200' : 'font-semibold text-rose-200'}>{formatMoney(snapshot.netWorth)}</span>
               </div>
@@ -214,9 +214,9 @@ function BreakdownCard({ title, rows }: { title: string; rows: Array<[string, nu
 }
 
 function InsightItem({ item }: { item: NetWorthInsight }) {
-  const color = item.level === 'danger' ? 'rose' : item.level === 'warning' ? 'amber' : item.level === 'success' ? 'emerald' : 'sky';
+  const color = item.level === 'danger' ? 'rose' : item.level === 'warning' ? 'amber' : item.level === 'success' ? 'emerald' : 'slate';
   return (
-    <div className="rounded-tremor-default border border-slate-800 bg-slate-950/40 p-3">
+    <div className="rounded-tremor-default bg-slate-950/40 p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="font-semibold text-slate-100">{item.title}</div>

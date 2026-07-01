@@ -31,7 +31,7 @@ export function AnalysisSection({ data }: { data: DashboardData }) {
   const alertColor = (level: string): Color => {
     if (level === 'danger') return 'rose';
     if (level === 'warning') return 'amber';
-    return 'sky';
+    return 'slate';
   };
 
   return (
@@ -99,7 +99,7 @@ export function AnalysisSection({ data }: { data: DashboardData }) {
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {alerts.length ? (
             alerts.map((item) => (
-              <div key={`${item.title}-${item.message}`} className="rounded-tremor-default border border-slate-800 bg-slate-900/60 p-3">
+              <div key={`${item.title}-${item.message}`} className="rounded-tremor-default bg-slate-900/60 p-3">
                 <Badge color={alertColor(item.level)}>{item.level}</Badge>
                 <Text className="mt-2 font-semibold text-slate-100">{item.title}</Text>
                 <Text className="mt-1">{item.message}</Text>
@@ -119,7 +119,7 @@ export function AnalysisSection({ data }: { data: DashboardData }) {
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {insights.length ? (
             insights.map((item) => (
-              <div key={`${item.title}-${item.message}`} className="rounded-tremor-default border border-slate-800 bg-slate-900/60 p-3">
+              <div key={`${item.title}-${item.message}`} className="rounded-tremor-default bg-slate-900/60 p-3">
                 <Text className="font-semibold text-slate-100">{item.title}</Text>
                 <Text className="mt-1">{item.message}</Text>
               </div>

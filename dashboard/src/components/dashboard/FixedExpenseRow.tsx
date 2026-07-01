@@ -24,7 +24,7 @@ export function FixedExpenseRow({
   const montoPen = item.montoPen ?? (currency === 'USD' ? convertCurrency(item.monto, 'USD', 'PEN', exchangeRate) : item.monto);
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3 transition hover:border-slate-700 sm:gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-tremor-default bg-slate-900/40 p-3 transition hover:bg-slate-900/70 sm:gap-4">
       <div className="min-w-0">
         <Text className="truncate font-semibold text-slate-200">{item.nombre}</Text>
         <Text className="truncate">{item.cat}</Text>
