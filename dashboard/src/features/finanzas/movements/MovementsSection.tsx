@@ -41,7 +41,20 @@ export function MovementsSection({
     return acc;
   }, { ingresos: 0, gastos: 0 }), [transactions, exchangeRate]);
 
+  // Compromisos pendientes (fijos + deudas + presupuesto por usar) - el mismo
+  // criterio que "Libre proyectado" en Inicio, para que el neto del ciclo no
+  // se vea sano solo porque falta gastar lo que ya esta comprometido.
+  const budgetRemaining = data.presupuestos.reduce((total, item) => {
+    return total + Math.max(Number(item.limite || 0) - Number(item.gasto || 0), 0);
+  }, 0);
+  const committedRemaining = data.cierre?.pendienteComprometido
+    ?? (Number(data.fijosPendientes || 0) + Number(data.deudaPendiente || 0) + budgetRemaining);
+
   const isCurrentCycle = cycleOffset === 0;
+  // Los compromisos pendientes son los de HOY, no los de un ciclo cerrado en
+  // el pasado - el ajuste solo tiene sentido mirando el ciclo actual.
+  const rawNeto = totals.ingresos - totals.gastos;
+  const netoCiclo = isCurrentCycle ? rawNeto - committedRemaining : rawNeto;
   const cycleLabel = cycleInfo ? cycleRangeLabel(cycleInfo.start, cycleInfo.end) : (loading ? '…' : 'Ciclo');
 
   const setFilter = (key: keyof typeof filters, value: string) => setFilters((current) => ({ ...current, [key]: value }));
@@ -194,7 +207,14 @@ export function MovementsSection({
         stats={[
           { label: 'Ingresos', value: formatMoney(totals.ingresos), tone: 'good', detail: 'del ciclo, en PEN' },
           { label: 'Gastos', value: formatMoney(totals.gastos), tone: 'bad', detail: 'del ciclo, en PEN' },
-          { label: 'Neto del ciclo', value: formatMoney(totals.ingresos - totals.gastos), tone: totals.ingresos - totals.gastos >= 0 ? 'good' : 'bad', detail: 'ingresos − gastos (no es tu caja)' },
+          {
+            label: 'Neto del ciclo',
+            value: formatMoney(netoCiclo),
+            tone: netoCiclo >= 0 ? 'good' : 'bad',
+            detail: isCurrentCycle
+              ? 'ingresos − gastos − compromisos pendientes'
+              : 'ingresos − gastos (ciclo cerrado, no es tu caja)',
+          },
         ]}
       />
 
