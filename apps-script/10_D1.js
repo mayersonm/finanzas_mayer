@@ -655,6 +655,16 @@ function leerDashboardD1_(chatId) {
   }
 }
 
+// El ciclo esta anclado al sueldo (ver resolveCurrentCycle en d1-api): los
+// cierres automaticos no deben dispararse solo por fecha si todavia no se
+// registra el sueldo del ciclo nuevo. Si D1 no responde, no bloqueamos el
+// envio (fallback conservador para no dejar de enviar reportes por un corte).
+function esperandoSueldoD1_(chatId) {
+  const data = leerDashboardD1_(chatId);
+  if (!data) return false;
+  return Boolean(data.awaitingSalary && !data.cashAnchorPending);
+}
+
 function leerTransaccionesD1_(chatId, limit) {
   try {
     const cleanLimit = Math.max(1, Math.min(Number(limit || 500), 500));

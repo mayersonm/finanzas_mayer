@@ -1,8 +1,8 @@
 import { safeJsonParse } from '../../shared/http.js';
 import { getChatId } from '../../shared/request.js';
 import { round, currencyToPen } from '../../shared/money.js';
-import { clamp, normalizeDateOnly, normalizeMonthKey } from '../../shared/normalizers.js';
-import { dateFromKey, dateKeyFromParts, localDateKey, localIso, monthLongNameFromKey, parseDateKeyParts, payCycleFromDate, payCycleRelative } from '../../shared/dates.js';
+import { clamp, normalizeMonthKey } from '../../shared/normalizers.js';
+import { dateKeyFromParts, localDateKey, localIso, monthLongNameFromKey, parseDateKeyParts, payCycleFromDate, payCycleRelative } from '../../shared/dates.js';
 import { budgetRulesForDashboard, loadBudgetRules, loadCategoryRules } from '../../shared/categories.js';
 import { ensureUserForChat, getUserSettings, normalizeSettingsConfig, userSettingsToConfig, usersList } from '../settings/service.js';
 import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPlan, monthlyCalendar, realExpenses, smartAlerts, smartInsights, weeklyGoalPlan } from './planning.js';
@@ -93,7 +93,6 @@ export async function resolveCurrentCycle(env, chatId, now) {
 export async function dashboard(env, params) {
   const chatId = getChatId(env, params);
   const now = new Date();
-  const requestedCycleStart = normalizeDateOnly(params.get('cycle_start') || params.get('cycleStart') || '');
   const requestedCalendarMonth = normalizeMonthKey(params.get('calendar_month') || params.get('calendarMonth') || '');
   const rateInfo = await exchangeRate(env);
   const usdRate = Number(rateInfo.rate || 3.85);
@@ -101,10 +100,10 @@ export async function dashboard(env, params) {
   const settings = normalizeSettingsConfig(userSettingsToConfig(await getUserSettings(env, user.id)));
   const cycleIncomeLeadDays = clamp(Number(settings.cycleIncomeLeadDays ?? 0), 0, 7);
   // El ciclo no salta al siguiente solo por la fecha de corte: espera a que se
-  // registre el sueldo del nuevo ciclo (ver resolveCurrentCycle).
-  const cycle = requestedCycleStart
-    ? payCycleFromDate(dateFromKey(requestedCycleStart))
-    : await resolveCurrentCycle(env, chatId, now);
+  // registre el sueldo del nuevo ciclo (ver resolveCurrentCycle). Siempre se
+  // resuelve el ciclo real anclado al sueldo; nunca se reconstruye desde una
+  // fecha suelta (eso rompia el anclaje al recalcular con la malla 22 fija).
+  const cycle = await resolveCurrentCycle(env, chatId, now);
   const monthKey = cycle.key;
   const calendarMonth = cycle;
   const cycleKey = monthKey;

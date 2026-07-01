@@ -206,27 +206,45 @@ export function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deu
 export async function closureRuleSuggestion(env, chatId, now, cycle, plan, deps = {}) {
   const today = localDateKey(now || new Date());
   const todayParts = parseDateKeyParts(today);
-  const isCloseDay = todayParts.day === 22;
-  const targetCycle = isCloseDay ? payCycleFromDate(dateFromKey(dateKeyFromParts(todayParts.year, todayParts.monthIndex, 22))) : cycle;
+  // El cierre no se sugiere/activa mientras el ciclo siga esperando el sueldo
+  // nuevo (ver resolveCurrentCycle): la fecha 22 es solo la malla nominal.
+  // targetCycle SIEMPRE es el ciclo anclado que llega (cycle) - nunca se
+  // reconstruye desde la malla 22 fija, o el cierre calcularia ingresos/gastos
+  // con el rango equivocado (ej. deja fuera o duplica el sueldo real).
+  const awaitingSalary = Boolean(cycle.awaitingSalary);
+  const isCloseDay = !awaitingSalary && todayParts.day === 22;
+  const targetCycle = cycle;
   const daysToClose = isCloseDay ? 0 : daysBetween(today, targetCycle.closeDate);
-  const isSoon = !isCloseDay && daysToClose >= 0 && daysToClose <= 3;
+  const isSoon = !awaitingSalary && !isCloseDay && daysToClose >= 0 && daysToClose <= 3;
   const findClosure = deps.currentFinancialClosure;
   const saved = findClosure ? await findClosure(env, chatId, targetCycle.key) : null;
   const suggestedSavings = round(Math.max(0, Number(plan?.recommendedSavings || 0)));
-  const active = (isCloseDay || isSoon) && !saved;
-  const status = saved ? 'closed' : isCloseDay ? 'due' : isSoon ? 'soon' : 'waiting';
+  const active = !awaitingSalary && (isCloseDay || isSoon) && !saved;
+  const status = saved
+    ? 'closed'
+    : awaitingSalary
+      ? 'awaiting_salary'
+      : isCloseDay
+        ? 'due'
+        : isSoon
+          ? 'soon'
+          : 'waiting';
   const titleText = saved
     ? 'Ciclo ya cerrado'
-    : isCloseDay
-      ? 'Cierre de ciclo listo'
-      : isSoon
-        ? 'Cierre de ciclo cercano'
-        : 'Cierre programado';
+    : awaitingSalary
+      ? 'Cierre en pausa: falta tu sueldo'
+      : isCloseDay
+        ? 'Cierre de ciclo listo'
+        : isSoon
+          ? 'Cierre de ciclo cercano'
+          : 'Cierre programado';
   const message = saved
     ? `El ciclo ${targetCycle.rangeLabel} ya tiene cierre guardado.`
-    : active
-      ? 'Cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto.'
-      : `Faltan ${Math.max(daysToClose, 0)} dia${Math.max(daysToClose, 0) === 1 ? '' : 's'} para el cierre ${targetCycle.closeDate.slice(8, 10)}/${targetCycle.closeDate.slice(5, 7)}.`;
+    : awaitingSalary
+      ? `El ciclo ${cycle.rangeLabel} sigue abierto hasta que registres el sueldo del ciclo nuevo.`
+      : active
+        ? 'Cerrar ciclo, separar ahorro sugerido y reiniciar presupuesto.'
+        : `Faltan ${Math.max(daysToClose, 0)} dia${Math.max(daysToClose, 0) === 1 ? '' : 's'} para el cierre ${targetCycle.closeDate.slice(8, 10)}/${targetCycle.closeDate.slice(5, 7)}.`;
 
   return {
     status,
