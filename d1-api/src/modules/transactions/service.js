@@ -187,6 +187,9 @@ export async function clearCashOpening(env, chatId) {
 // del saldo de apertura + neto de lo registrado despues - fijos pagados a mano
 // despues del cierre; si no, usa el acumulado (ingresos - gastos - fijos
 // pagados a mano) de los totales dados.
+// Los gastos a credito NO tocan la Caja: son deuda de tarjeta (ver TDC),
+// la caja solo baja cuando se registra el pago real de la tarjeta (un gasto
+// a debito aparte). Por eso se excluyen del neto aqui.
 export async function computeCashBalance(env, chatId, usdRate, fallback = {}) {
   const opening = await getCashOpening(env, chatId);
   if (opening) {
@@ -194,7 +197,7 @@ export async function computeCashBalance(env, chatId, usdRate, fallback = {}) {
       SELECT
         COALESCE(SUM(CASE
           WHEN type = 'ingreso' THEN (CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
-          WHEN type = 'gasto' THEN -(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
+          WHEN type = 'gasto' AND payment_method != 'credito' THEN -(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END)
           ELSE 0 END), 0) AS neto,
         COUNT(*) AS movimientos
       FROM transactions
@@ -229,6 +232,28 @@ export async function computeCashBalance(env, chatId, usdRate, fallback = {}) {
   const gastos = Number(fallback.gastos || 0);
   const fixedPaid = Number(fallback.fixedPaid || 0);
   return { balance: round(ingresos - gastos - fixedPaid), opening: null };
+}
+
+// Total de gastos a credito sin pagar (no hay flag de "pagado": desaparecen
+// solo si se borran o se corrigen a debito). `pending` es el total completo
+// (para patrimonio/compromisos, igual que deudaPendiente); `dueCycle` es solo
+// lo que vence dentro del ciclo dado (para reservarlo en Dinero Libre, igual
+// que debtDueCycle).
+export async function creditCardSummary(env, chatId, usdRate, cycle) {
+  const startKey = cycle?.startKey || '0000-00-00';
+  const endKey = cycle?.endKey || '9999-99-99';
+  const row = await env.DB.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END), 0) AS pendiente,
+      COALESCE(SUM(CASE WHEN payment_due_date BETWEEN ? AND ? THEN (CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END) ELSE 0 END), 0) AS dueCiclo
+    FROM transactions
+    WHERE chat_id = ? AND type = 'gasto' AND payment_method = 'credito'
+  `).bind(usdRate, startKey, endKey, usdRate, chatId).first();
+
+  return {
+    pending: round(Number(row?.pendiente || 0)),
+    dueCycle: round(Number(row?.dueCiclo || 0)),
+  };
 }
 
 export async function deleteTransaction(env, { id, chatId, deleteFromGas = false }) {

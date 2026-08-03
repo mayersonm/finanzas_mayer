@@ -88,7 +88,7 @@ export function fixedExpensesSummary(fixedExpenses, usdRate = 3.85) {
   };
 }
 
-export function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendiente, debtDueCycle = 0, goals = [], cashBalance, patrimonioDisponible, ingresosMes, gastosMes }) {
+export function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deudaPendiente, debtDueCycle = 0, tdcDueCycle = 0, goals = [], cashBalance, patrimonioDisponible, ingresosMes, gastosMes }) {
   const close = nextFinancialClose(now);
   const daysLeft = close.daysLeft;
   const income = round(ingresosMes || 0);
@@ -98,6 +98,10 @@ export function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deu
   // Deudas que vencen dentro de este ciclo: son las que de verdad hay que
   // reservar de la caja (la deuda total puede repartirse en varios ciclos).
   const debtDue = round(Math.max(0, Number(debtDueCycle || 0)));
+  // Gastos a credito que se pagan dentro de este ciclo: como ya no bajan la
+  // Caja al momento de comprar, hay que reservarlos aqui o "puedes gastar"
+  // incluiria plata que en realidad ya tiene dueño (la tarjeta).
+  const tdcDue = round(Math.max(0, Number(tdcDueCycle || 0)));
   const cash = round(Number.isFinite(Number(cashBalance)) ? Number(cashBalance) : Number(cierre?.balance || 0));
   const availableBase = cash;
   const baseBalance = cash;
@@ -109,8 +113,8 @@ export function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deu
   const hasBudget = budgetLimit > 0;
   const savingsTarget = actualSavings;
   // Obligaciones del ciclo que se descuentan antes del gasto variable, para que
-  // "puedes gastar" no incluya plata que ya tiene dueño (fijos y deudas).
-  const committedObligations = round(fixedPending + debtDue);
+  // "puedes gastar" no incluya plata que ya tiene dueño (fijos, deudas y TDC).
+  const committedObligations = round(fixedPending + debtDue + tdcDue);
   const commitments = round(savingsTarget + emergencyBuffer);
   const freeAfterCommitments = round(availableBase - savingsTarget - emergencyBuffer - committedObligations);
   const variableReserve = hasBudget ? budgetRemaining : Math.max(0, freeAfterCommitments);
@@ -146,6 +150,7 @@ export function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deu
     emergencyBuffer,
     fixedPending,
     debtPending,
+    tdcDue,
     committedObligations,
     freeAfterCommitments,
     dailyNormal,
@@ -166,6 +171,7 @@ export function freeMoneyPlan({ now, settings, cierre, budget, fixedSummary, deu
     fixedPending,
     debtPending,
     debtDueCycle: debtDue,
+    tdcDueCycle: tdcDue,
     committedObligations,
     savingsTarget,
     actualSavings,
@@ -482,14 +488,17 @@ export function priorityRank(value) {
   return 1;
 }
 
-export function freeMoneyActions({ actualSavings, configuredSavingsGoal, recommendedSavings, emergencyBuffer, fixedPending = 0, debtPending = 0, committedObligations = 0, freeAfterCommitments, dailyNormal, budgetLimit, investableNow }) {
+export function freeMoneyActions({ actualSavings, configuredSavingsGoal, recommendedSavings, emergencyBuffer, fixedPending = 0, debtPending = 0, tdcDue = 0, committedObligations = 0, freeAfterCommitments, dailyNormal, budgetLimit, investableNow }) {
   const actions = [];
   if (!actualSavings) actions.push('Aun no hay ahorro real registrado; el ahorro sugerido no reduce tu dinero libre.');
   if (recommendedSavings > 0) actions.push(`Puedes separar ${formatCurrency(recommendedSavings, 'PEN')} como ahorro sugerido este ciclo.`);
   if (!configuredSavingsGoal) actions.push('Si quieres una meta mas exacta, configura un ahorro sugerido del ciclo.');
   if (!emergencyBuffer) actions.push('Configura un colchon minimo para que el dinero libre no se coma tu seguridad.');
   if (!budgetLimit) actions.push('Agrega presupuestos por categoria para separar gasto permitido de excedente invertible.');
-  if (committedObligations > 0) actions.push(`Ya reservamos ${formatCurrency(committedObligations, 'PEN')} para fijos y deudas de este ciclo; el gasto diario es lo que queda libre.`);
+  if (committedObligations > 0) {
+    const label = tdcDue > 0 ? 'fijos, deudas y tarjeta de credito' : 'fijos y deudas';
+    actions.push(`Ya reservamos ${formatCurrency(committedObligations, 'PEN')} para ${label} de este ciclo; el gasto diario es lo que queda libre.`);
+  }
   if (freeAfterCommitments < 0) actions.push('Recorta gasto variable o pausa compras: la caja no cubre ahorro real y colchon.');
   if (dailyNormal > 0 && dailyNormal < 25) actions.push('Mantente en modo seguro unos dias para proteger el cierre.');
   if (investableNow > 0) actions.push('Hay margen extra despues de gasto y ahorro sugerido: revisa si conviene invertirlo o dejarlo liquido.');

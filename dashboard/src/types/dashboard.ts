@@ -226,6 +226,7 @@ export interface NetWorthData {
   liabilities: {
     debts: number;
     fixedExpenses: number;
+    tdc: number;
     total: number;
   };
   netWorth: number;
@@ -387,6 +388,7 @@ export interface ClosureSummary {
   fijosPagados: number;
   fijosPendientes: number;
   deudasPendientes: number;
+  tdcPendiente?: number;
   presupuestoLimite: number;
   presupuestoUsado: number;
   presupuestoRestante: number;
@@ -425,6 +427,7 @@ export interface FreeMoneyPlan {
   fixedPending: number;
   debtPending: number;
   debtDueCycle?: number;
+  tdcDueCycle?: number;
   committedObligations?: number;
   savingsTarget: number;
   actualSavings?: number;
@@ -648,6 +651,7 @@ export interface DashboardData {
   fijos?: FixedExpense[];
   deudas?: Debt[];
   deudaPendiente?: number;
+  tdcPendiente?: number;
   fijosPendientes?: number;
   fijosPagadosMes?: number;
   cierre?: ClosureSummary;

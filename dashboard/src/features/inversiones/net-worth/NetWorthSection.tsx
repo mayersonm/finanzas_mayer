@@ -10,7 +10,7 @@ const emptyNetWorth: NetWorthData = {
   currency: 'PEN',
   exchangeRate: 3.85,
   assets: { cash: 0, investments: 0, goals: 0, total: 0 },
-  liabilities: { debts: 0, fixedExpenses: 0, total: 0 },
+  liabilities: { debts: 0, fixedExpenses: 0, tdc: 0, total: 0 },
   netWorth: 0,
   availableBalance: 0,
   patrimonioDisponible: 0,
@@ -159,6 +159,7 @@ export function NetWorthSection({
         <BreakdownCard title="Pasivos" rows={[
           ['Deudas', data.liabilities.debts],
           ['Fijos pendientes', data.liabilities.fixedExpenses || 0],
+          ['Tarjeta de credito', data.liabilities.tdc || 0],
         ]} />
         <Card className="rounded-tremor-default border-slate-800 bg-slate-950/70 !p-4 sm:!p-6">
           <Title>Evolucion</Title>

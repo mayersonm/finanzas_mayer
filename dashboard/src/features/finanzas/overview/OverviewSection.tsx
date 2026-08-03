@@ -338,6 +338,7 @@ export function OverviewSection({
               <ClosureLine label="Fijos pendientes" value={closure.fijosPendientes} />
               <ClosureLine label="Presupuesto pendiente" value={closure.presupuestoRestante} strong />
               <ClosureLine label="Deudas pendientes" value={closure.deudasPendientes} />
+              <ClosureLine label="TDC pendiente" value={closure.tdcPendiente ?? 0} />
               <ClosureLine label="Total pendiente" value={closure.pendienteComprometido} strong />
             </div>
           </Collapsible>

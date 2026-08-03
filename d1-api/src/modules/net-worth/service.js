@@ -2,7 +2,7 @@ import { getChatId } from '../../shared/request.js';
 import { round, currencyToPen } from '../../shared/money.js';
 import { localDateKey, localIso, payCycleFromDate } from '../../shared/dates.js';
 import { fixedExpensesSummary, netWorthInsights } from '../dashboard/planning.js';
-import { computeCashBalance } from '../transactions/service.js';
+import { computeCashBalance, creditCardSummary } from '../transactions/service.js';
 import { investmentsList } from '../investments/service.js';
 import { exchangeRate } from '../system/exchange-rate.js';
 import { fixedExpensesList } from '../commitments/fixed-expenses.js';
@@ -17,7 +17,7 @@ export async function netWorth(env, params) {
   const monthKey = cycle.key;
 
   const cashRows = await env.DB.prepare(`
-    SELECT type, amount, currency
+    SELECT type, amount, currency, payment_method
     FROM transactions
     WHERE chat_id = ?
   `).bind(chatId).all();
@@ -26,7 +26,10 @@ export async function netWorth(env, params) {
   for (const row of cashRows.results || []) {
     const amount = currencyToPen(Number(row.amount || 0), row.currency || 'PEN', rate);
     if (row.type === 'ingreso') incomePen += amount;
-    if (row.type === 'gasto') expensesPen += amount;
+    // Gastos a credito no cuentan aqui: alimentan el fallback de
+    // computeCashBalance cuando no hay ancla de caja, mismo criterio que la
+    // rama con ancla (no deben restar la caja).
+    if (row.type === 'gasto' && row.payment_method !== 'credito') expensesPen += amount;
   }
 
   const investments = (await investmentsList(env, params)).investments || [];
@@ -48,7 +51,12 @@ export async function netWorth(env, params) {
     .filter((item) => item.estado !== 'pagada')
     .reduce((total, item) => total + currencyToPen(Number(item.pendiente || 0), item.currency || 'PEN', rate), 0));
   const fixedPending = fixedSummary.pending;
-  const availableBalance = round(cash - debtPending - fixedPending);
+  // Gastos a credito sin pagar: no bajan la Caja (ver computeCashBalance), asi
+  // que hay que restarlos aparte para que el patrimonio disponible no quede
+  // inflado por deuda de tarjeta.
+  const tdcSummary = await creditCardSummary(env, chatId, rate, cycle);
+  const tdcPending = tdcSummary.pending;
+  const availableBalance = round(cash - debtPending - fixedPending - tdcPending);
 
   const assets = {
     cash,
@@ -59,7 +67,8 @@ export async function netWorth(env, params) {
   const liabilities = {
     debts: debtPending,
     fixedExpenses: fixedPending,
-    total: round(debtPending + fixedPending),
+    tdc: tdcPending,
+    total: round(debtPending + fixedPending + tdcPending),
   };
   const net = round(assets.total - liabilities.total);
   const debtToAssetsPct = assets.total > 0 ? round((liabilities.total / assets.total) * 100) : 0;
@@ -93,6 +102,7 @@ export async function netWorth(env, params) {
       { label: 'Metas', value: assets.goals, type: 'asset' },
       { label: 'Deudas', value: liabilities.debts, type: 'liability' },
       { label: 'Fijos pendientes', value: liabilities.fixedExpenses, type: 'liability' },
+      { label: 'Tarjeta de credito', value: liabilities.tdc, type: 'liability' },
     ],
     insights: netWorthInsights({ assets, liabilities, net, availableBalance, debtToAssetsPct, investmentSharePct, liquiditySharePct }),
     snapshots,

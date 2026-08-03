@@ -9,7 +9,7 @@ import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPl
 import { automationCenter } from './automation.js';
 import { advisorResponse } from '../ai/advisor.js';
 import { exchangeRate } from '../system/exchange-rate.js';
-import { computeCashBalance, loadSalaryDates, txShape } from '../transactions/service.js';
+import { computeCashBalance, creditCardSummary, loadSalaryDates, txShape } from '../transactions/service.js';
 import { budgetsRows } from '../budgeting/service.js';
 import { cycleExpenseRows, categoriesFromExpenseRows, topLeaksFromExpenseRows, budgetsFromExpenseRows, lastMonths } from './analytics.js';
 import { fixedExpensesList } from '../commitments/fixed-expenses.js';
@@ -124,10 +124,13 @@ export async function dashboard(env, params) {
     cycleStartParts.day - cycleIncomeLeadDays,
   );
 
+  // gastos aqui alimenta el fallback de computeCashBalance cuando no hay
+  // cierre/ancla de caja todavia: los gastos a credito tampoco deben restar
+  // ahi, mismo criterio que la rama con ancla.
   const totalsPromise = env.DB.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
-      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos,
+      COALESCE(SUM(CASE WHEN type = 'gasto' AND payment_method != 'credito' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos,
       COUNT(*) AS movimientos
     FROM transactions
     WHERE chat_id = ?
@@ -225,6 +228,9 @@ export async function dashboard(env, params) {
       && item.vencimiento >= calendarMonth.startKey
       && item.vencimiento <= calendarMonth.endKey)
     .reduce((total, item) => total + currencyToPen(Number(item.pendiente || 0), item.currency || 'PEN', usdRate), 0));
+  // Gastos a credito sin pagar: no bajan la Caja (ver computeCashBalance), asi
+  // que hay que restarlos aparte en patrimonio/compromisos, igual que deudas.
+  const tdcSummary = await creditCardSummary(env, chatId, usdRate, calendarMonth);
 
   const ingresos = Number(totals?.ingresos || 0);
   const gastos = Number(totals?.gastos || 0);
@@ -259,11 +265,11 @@ export async function dashboard(env, params) {
     : null;
 
   const balanceMesCaja = round(ingresosMes - gastosMesConFijosPagados);
-  const patrimonioDisponible = round(balanceCaja - deudaPendiente - fixedSummary.pending);
+  const patrimonioDisponible = round(balanceCaja - deudaPendiente - fixedSummary.pending - tdcSummary.pending);
   const budget = budgetSummary(budgets);
   const gastosCierreConFijos = round(gastosCierre + fixedSummary.paid);
   const balanceCierre = round(ingresosCierre - gastosCierreConFijos);
-  const pendienteComprometido = round(deudaPendiente + fixedSummary.pending + budget.remaining);
+  const pendienteComprometido = round(deudaPendiente + fixedSummary.pending + budget.remaining + tdcSummary.pending);
   const cierre = {
     label: `Cierre ${calendarMonth.closeDate.slice(8, 10)}/${calendarMonth.closeDate.slice(5, 7)}`,
     range: calendarMonth.rangeLabel,
@@ -282,6 +288,7 @@ export async function dashboard(env, params) {
     fijosPagados: fixedSummary.paid,
     fijosPendientes: fixedSummary.pending,
     deudasPendientes: deudaPendiente,
+    tdcPendiente: tdcSummary.pending,
     presupuestoLimite: budget.limit,
     presupuestoUsado: budget.spent,
     presupuestoRestante: budget.remaining,
@@ -298,6 +305,7 @@ export async function dashboard(env, params) {
     fixedSummary,
     deudaPendiente,
     debtDueCycle: deudaVenceCiclo,
+    tdcDueCycle: tdcSummary.dueCycle,
     goals,
     cashBalance: balanceCaja,
     patrimonioDisponible,
@@ -411,6 +419,7 @@ export async function dashboard(env, params) {
     fijos: fixedExpenses,
     deudas: debts,
     deudaPendiente,
+    tdcPendiente: tdcSummary.pending,
     fijosPendientes: fixedSummary.pending,
     fijosPagadosMes: fixedSummary.paid,
     gastosReales: realExpenses(fixedExpenses, budgets, usdRate),
