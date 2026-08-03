@@ -274,6 +274,7 @@ export async function weeklyGoalPlan(env, chatId, now, cycle, plan, usdRate = 3.
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
+      AND payment_method != 'credito'
       AND ${rangeBounds.sql}
       AND COALESCE(source, '') <> 'debt_payment'
       AND lower(description) NOT LIKE 'fijo pagado%'
@@ -419,7 +420,7 @@ export async function monthlyCalendar(env, chatId, now, cycle, fixedExpenses, de
   const dailyRows = await env.DB.prepare(`
     SELECT
       tx_date AS date,
-      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos,
+      COALESCE(SUM(CASE WHEN type = 'gasto' AND payment_method != 'credito' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos,
       COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
       COUNT(*) AS movimientos
     FROM transactions

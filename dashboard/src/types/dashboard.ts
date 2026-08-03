@@ -2,7 +2,7 @@ import type { ElementType } from 'react';
 
 export type TxType = 'ingreso' | 'gasto';
 export type Currency = 'PEN' | 'USD';
-export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'dinero' | 'calendario' | 'trabajo' | 'patrimonio' | 'inversiones' | 'ia' | 'analisis' | 'metas' | 'configuracion';
+export type TabId = 'inicio' | 'movimientos' | 'compromisos' | 'tdc' | 'dinero' | 'calendario' | 'trabajo' | 'patrimonio' | 'inversiones' | 'ia' | 'analisis' | 'metas' | 'configuracion';
 export type ApiStatus = 'demo' | 'live' | 'error';
 
 export interface Transaction {

@@ -4,7 +4,7 @@ import { formatDate, formatUpdatedAt } from '../../lib/formatters';
 import type { ApiStatus, DashboardData, DashboardUser, TabId } from '../../types/dashboard';
 
 const tabGroups: Array<{ label: string; ids: TabId[] }> = [
-  { label: 'Operacion', ids: ['inicio', 'movimientos', 'compromisos'] },
+  { label: 'Operacion', ids: ['inicio', 'movimientos', 'compromisos', 'tdc'] },
   { label: 'Plan', ids: ['dinero', 'calendario', 'trabajo', 'metas'] },
   { label: 'Crecimiento', ids: ['patrimonio', 'inversiones', 'ia', 'analisis'] },
   { label: 'Sistema', ids: ['configuracion'] },

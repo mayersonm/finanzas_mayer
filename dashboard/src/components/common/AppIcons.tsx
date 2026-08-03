@@ -37,6 +37,15 @@ export const CardIcon: AppIcon = (props) => (
   </Icon>
 );
 
+export const CreditCardIcon: AppIcon = (props) => (
+  <Icon {...props}>
+    <path d="M4 6h16v12H4z" />
+    <path d="M4 9.5h16" />
+    <path d="M7 15h2" />
+    <path d="M12 15h5" />
+  </Icon>
+);
+
 export const BriefcaseIcon: AppIcon = (props) => (
   <Icon {...props}>
     <path d="M9 7V5h6v2" />

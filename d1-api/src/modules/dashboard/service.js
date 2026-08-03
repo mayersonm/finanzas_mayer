@@ -134,10 +134,13 @@ export async function dashboard(env, params) {
   `).bind(usdRate, usdRate, chatId).first();
 
   const monthBounds = cycleDateTimeBounds('tx_date', 'tx_time', calendarMonth);
+  // Los gastos a credito no cuentan como gasto del ciclo (van aparte en TDC,
+  // ver planning.js/monthlyCalendar): solo importan a la Caja cuando de verdad
+  // pagas la tarjeta, no cuando compras con ella.
   const monthTotalsPromise = env.DB.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresosMes,
-      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastosMes,
+      COALESCE(SUM(CASE WHEN type = 'gasto' AND payment_method != 'credito' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastosMes,
       COUNT(*) AS movimientosMes
     FROM transactions
     WHERE chat_id = ? AND ${monthBounds.sql}

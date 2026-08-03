@@ -4,6 +4,8 @@ import { cycleDateTimeBounds, dateKeyFromParts, localDateKey, monthLongNameFromK
 import { normalizeKey, title } from '../../shared/normalizers.js';
 import { normalizeCategory, budgetSpendWithRules, classifyCategoryFromLoadedRules, loadBudgetRules, loadCategoryRules } from '../../shared/categories.js';
 
+// Los gastos a credito quedan fuera de categorias/top fugas/presupuestos: se
+// gestionan aparte en TDC y no deben inflar el gasto "del dia a dia".
 export async function cycleExpenseRows(env, chatId, cycle) {
   const bounds = cycleDateTimeBounds('tx_date', 'tx_time', cycle);
   const rows = await env.DB.prepare(`
@@ -11,6 +13,7 @@ export async function cycleExpenseRows(env, chatId, cycle) {
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
+      AND payment_method != 'credito'
       AND ${bounds.sql}
   `).bind(chatId, ...bounds.values).all();
 
@@ -89,6 +92,7 @@ async function loadExpenseRowsAndRules(env, chatId, period) {
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
+      AND payment_method != 'credito'
       AND ${bounds.sql}
   `).bind(chatId, ...bounds.values).all();
 
@@ -119,7 +123,7 @@ export async function lastMonths(env, chatId, now, usdRate = 3.85) {
     SELECT
       substr(tx_date, 1, 7) AS month_key,
       COALESCE(SUM(CASE WHEN type = 'ingreso' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS ingresos,
-      COALESCE(SUM(CASE WHEN type = 'gasto' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos
+      COALESCE(SUM(CASE WHEN type = 'gasto' AND payment_method != 'credito' THEN CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END ELSE 0 END), 0) AS gastos
     FROM transactions
     WHERE chat_id = ?
       AND tx_date BETWEEN ? AND ?
@@ -182,6 +186,7 @@ export async function budgetsWithSpending(env, chatId, cycle, usdRate = 3.85) {
     FROM transactions
     WHERE chat_id = ?
       AND type = 'gasto'
+      AND payment_method != 'credito'
       AND ${cycleBounds.sql}
   `).bind(chatId, ...cycleBounds.values).all();
 
