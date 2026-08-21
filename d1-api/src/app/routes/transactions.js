@@ -1,10 +1,12 @@
 import { auth, route } from '../router.js';
 import { getChatId } from '../../shared/request.js';
 import {
+  addCreditCardPayment,
   clearCashOpening,
   closeCashCycle,
   deleteTransaction,
   insertTransaction,
+  listCreditCardPayments,
   transactions,
   updateTransactionCategory,
   updateTransactionFromDashboard,
@@ -13,6 +15,8 @@ import {
 
 export const transactionsRoutes = [
   route('GET', '/api/transactions', auth.dashAdmin, (ctx) => transactions(ctx.env, ctx.query)),
+  route('GET', '/api/tdc/payments', auth.dashAdmin, (ctx) => listCreditCardPayments(ctx.env, ctx.query)),
+  route('POST', '/api/tdc/payments', auth.dashAdmin, async (ctx) => addCreditCardPayment(ctx.env, await ctx.body(), ctx.query), 201),
   route('POST', '/api/cash/close', auth.dash, async (ctx) => closeCashCycle(ctx.env, await ctx.body(), ctx.query)),
   route('POST', '/api/cash/reset', auth.dash, (ctx) => clearCashOpening(ctx.env, getChatId(ctx.env, ctx.query))),
   route('POST', '/api/transactions', auth.admin, async (ctx) => insertTransaction(ctx.env, await ctx.body()), 201),

@@ -5,7 +5,7 @@ import { getAppSetting, setAppSetting } from '../../shared/settings-store.js';
 import { clamp, normalizeCurrency, normalizeDateOnly, normalizeKey, normalizePaymentMethod, title } from '../../shared/normalizers.js';
 import { classifyCategory, normalizeBaseCategory, normalizeCategory } from '../../shared/categories.js';
 import { stableTransactionId } from '../../shared/files.js';
-import { cycleDateTimeBounds, localDateKey, payCycleFromDate, payCycleRelative, salaryCycleWindow } from '../../shared/dates.js';
+import { cycleDateTimeBounds, localDateKey, localIso, payCycleFromDate, payCycleRelative, salaryCycleWindow } from '../../shared/dates.js';
 
 export async function transactions(env, params) {
   const chatId = getChatId(env, params);
@@ -234,11 +234,11 @@ export async function computeCashBalance(env, chatId, usdRate, fallback = {}) {
   return { balance: round(ingresos - gastos - fixedPaid), opening: null };
 }
 
-// Total de gastos a credito sin pagar (no hay flag de "pagado": desaparecen
-// solo si se borran o se corrigen a debito). `pending` es el total completo
-// (para patrimonio/compromisos, igual que deudaPendiente); `dueCycle` es solo
-// lo que vence dentro del ciclo dado (para reservarlo en Dinero Libre, igual
-// que debtDueCycle).
+// Total de gastos a credito, menos lo ya pagado via credit_card_payments
+// (ver addCreditCardPayment). `pending` es el total completo (para
+// patrimonio/compromisos, igual que deudaPendiente); `dueCycle` es solo lo
+// que vence dentro del ciclo dado (para reservarlo en Dinero Libre, igual
+// que debtDueCycle), tambien neto de pagos.
 export async function creditCardSummary(env, chatId, usdRate, cycle) {
   const startKey = cycle?.startKey || '0000-00-00';
   const endKey = cycle?.endKey || '9999-99-99';
@@ -250,9 +250,102 @@ export async function creditCardSummary(env, chatId, usdRate, cycle) {
     WHERE chat_id = ? AND type = 'gasto' AND payment_method = 'credito'
   `).bind(usdRate, startKey, endKey, usdRate, chatId).first();
 
+  const paidRow = await env.DB.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN amount * ? ELSE amount END), 0) AS pagado
+    FROM credit_card_payments
+    WHERE chat_id = ?
+  `).bind(usdRate, chatId).first();
+
+  const pending = Number(row?.pendiente || 0) - Number(paidRow?.pagado || 0);
+  const dueCycle = Math.min(Number(row?.dueCiclo || 0), Math.max(pending, 0));
+
   return {
-    pending: round(Number(row?.pendiente || 0)),
-    dueCycle: round(Number(row?.dueCiclo || 0)),
+    pending: round(Math.max(pending, 0)),
+    dueCycle: round(Math.max(dueCycle, 0)),
+  };
+}
+
+// Registra el pago real de la tarjeta: guarda el pago en credit_card_payments
+// (reduce el pendiente de creditCardSummary) y crea un gasto a debito real
+// para que se vea en movimientos y reste de la Caja (igual patron que
+// insertDebtPaymentTransaction).
+export async function addCreditCardPayment(env, payload, params) {
+  const chatId = String(params?.get?.('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+
+  const amount = parseAmount(payload.amount ?? payload.monto ?? 0);
+  if (amount <= 0) throw httpError(400, 'monto invalido');
+
+  const currency = normalizeCurrency(payload.currency || payload.moneda || 'PEN');
+  const paymentDate = normalizeDateOnly(payload.paymentDate || payload.payment_date || payload.fecha || localDateKey(new Date())) || localDateKey(new Date());
+  const cardName = String(payload.cardName || payload.card_name || payload.tarjeta || '').trim().slice(0, 80);
+  const notes = String(payload.notes || payload.notas || '').trim().slice(0, 200);
+
+  const paymentId = String(payload.id || `tdcpay:${chatId}:${Date.now()}`).slice(0, 180);
+  await env.DB.prepare(`
+    INSERT INTO credit_card_payments (id, chat_id, card_name, amount, currency, payment_date, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).bind(paymentId, chatId, cardName, round(amount), currency, paymentDate, notes).run();
+
+  let transaction = null;
+  if (payload.record_transaction !== false && payload.recordTransaction !== false) {
+    transaction = await insertCreditCardPaymentTransaction(env, {
+      chatId,
+      paymentId,
+      cardName,
+      amount: round(amount),
+      currency,
+      paymentDate,
+    });
+  }
+
+  const payment = await env.DB.prepare('SELECT * FROM credit_card_payments WHERE id = ?')
+    .bind(paymentId)
+    .first();
+
+  return { ok: true, payment: creditCardPaymentShape(payment), transaction: transaction ? txShape(transaction) : null };
+}
+
+export async function insertCreditCardPaymentTransaction(env, { chatId, paymentId, cardName, amount, currency, paymentDate }) {
+  const now = new Date();
+  const tx = await normalizeTransaction(env, {
+    id: `tx:${paymentId}`,
+    chat_id: chatId,
+    fecha: paymentDate || localDateKey(now),
+    hora: localIso(now).slice(11, 16),
+    tipo: 'gasto',
+    desc: cardName ? `Pago tarjeta ${title(cardName)}` : 'Pago tarjeta de credito',
+    cat: 'deudas',
+    monto: amount,
+    currency,
+    payment_method: 'debito',
+    source: 'credit_card_payment',
+  }, chatId);
+
+  await upsertTransaction(env, tx);
+  return tx;
+}
+
+export async function listCreditCardPayments(env, params) {
+  const chatId = String(params?.get?.('chat_id') || env.DEFAULT_CHAT_ID || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+
+  const { results } = await env.DB.prepare(`
+    SELECT * FROM credit_card_payments WHERE chat_id = ? ORDER BY payment_date DESC, created_at DESC
+  `).bind(chatId).all();
+
+  return { payments: (results || []).map(creditCardPaymentShape) };
+}
+
+export function creditCardPaymentShape(row) {
+  return {
+    id: row.id,
+    cardName: row.card_name || '',
+    amount: round(row.amount),
+    currency: normalizeCurrency(row.currency || 'PEN'),
+    paymentDate: row.payment_date || row.paymentDate || '',
+    notes: row.notes || '',
+    createdAt: row.created_at || row.createdAt || '',
   };
 }
 
