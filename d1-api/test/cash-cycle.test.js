@@ -125,4 +125,11 @@ describe('resolveCurrentCycle (anclado al sueldo)', () => {
     expect(cycle.startKey).toBe('2026-08-15');
     expect(cycle.key).toBe('2026-08'); // no '2026-07': fijos/compromisos deben resetear ya
   });
+
+  it('sueldo 1-2 dias antes del corte nominal (21) consultado ya pasado el corte (23): key igual salta', async () => {
+    const afterCutoff = new Date('2026-08-23T12:00:00Z');
+    const cycle = await resolveCurrentCycle({ DB: salaryDb(['2026-08-21']) }, 'chat1', afterCutoff);
+    expect(cycle.startKey).toBe('2026-08-21');
+    expect(cycle.key).toBe('2026-08'); // no '2026-07', aunque dateCycle.startKey (malla) sea 08-22
+  });
 });

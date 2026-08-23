@@ -2,7 +2,7 @@ import { safeJsonParse } from '../../shared/http.js';
 import { getChatId } from '../../shared/request.js';
 import { round, currencyToPen } from '../../shared/money.js';
 import { clamp, normalizeMonthKey } from '../../shared/normalizers.js';
-import { cycleDateTimeBounds, dateKeyFromParts, localDateKey, localIso, monthLongNameFromKey, parseDateKeyParts, payCycleFromDate, payCycleRelative } from '../../shared/dates.js';
+import { cycleDateTimeBounds, dateKeyFromParts, localDateKey, localIso, monthLongNameFromKey, parseDateKeyParts, payCycleFromDate } from '../../shared/dates.js';
 import { budgetRulesForDashboard, loadBudgetRules, loadCategoryRules } from '../../shared/categories.js';
 import { ensureUserForChat, getUserSettings, normalizeSettingsConfig, userSettingsToConfig, usersList } from '../settings/service.js';
 import { budgetSummary, closureRuleSuggestion, fixedExpensesSummary, freeMoneyPlan, monthlyCalendar, realExpenses, smartAlerts, smartInsights, weeklyGoalPlan } from './planning.js';
@@ -85,11 +85,13 @@ export async function resolveCurrentCycle(env, chatId, now) {
   // ciclo nuevo: seguimos en el anterior, extendido hasta hoy.
   const awaitingSalary = startKey < dateCycle.startKey;
   const endKey = awaitingSalary ? today : dateCycle.endKey;
-  // La key (usada como month_key para fijos/cierres) sale de la fecha REAL del
-  // sueldo, no de la malla 22: si el sueldo entra antes del 22, el ciclo debe
-  // "verse nuevo" (fijos/compromisos en pendiente) desde ese dia, no desde el
-  // 22/23 que marca la malla nominal.
-  const key = awaitingSalary ? payCycleRelative(dateCycle, -1).key : startKey.slice(0, 7);
+  // La key (month_key de fijos/cierres) sale SIEMPRE de la fecha real del
+  // sueldo (startKey), nunca de la malla 22: si comparamos contra dateCycle
+  // aqui, un sueldo que entra un par de dias antes del 22 (ej. dia 21) queda
+  // mal clasificado como "del ciclo anterior" y fijos/compromisos no
+  // resetean hasta que la fecha cruce el 22/23, aunque el sueldo ya este
+  // registrado.
+  const key = startKey.slice(0, 7);
   return {
     ...dateCycle,
     startKey,
