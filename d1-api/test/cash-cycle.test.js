@@ -117,4 +117,12 @@ describe('resolveCurrentCycle (anclado al sueldo)', () => {
     expect(cycle.key).toBe('2026-05');
     expect(cycle.endKey).toBe('2026-06-24'); // hasta hoy
   });
+
+  it('sueldo registrado antes del dia 22: la key salta de inmediato, no espera a la malla', async () => {
+    const early = new Date('2026-08-15T12:00:00Z'); // 15/08, malla nominal seguiria en julio
+    const cycle = await resolveCurrentCycle({ DB: salaryDb(['2026-08-15']) }, 'chat1', early);
+    expect(cycle.awaitingSalary).toBe(false);
+    expect(cycle.startKey).toBe('2026-08-15');
+    expect(cycle.key).toBe('2026-08'); // no '2026-07': fijos/compromisos deben resetear ya
+  });
 });

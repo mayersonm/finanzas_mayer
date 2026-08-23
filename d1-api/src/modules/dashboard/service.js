@@ -85,7 +85,11 @@ export async function resolveCurrentCycle(env, chatId, now) {
   // ciclo nuevo: seguimos en el anterior, extendido hasta hoy.
   const awaitingSalary = startKey < dateCycle.startKey;
   const endKey = awaitingSalary ? today : dateCycle.endKey;
-  const key = (awaitingSalary ? payCycleRelative(dateCycle, -1) : dateCycle).key;
+  // La key (usada como month_key para fijos/cierres) sale de la fecha REAL del
+  // sueldo, no de la malla 22: si el sueldo entra antes del 22, el ciclo debe
+  // "verse nuevo" (fijos/compromisos en pendiente) desde ese dia, no desde el
+  // 22/23 que marca la malla nominal.
+  const key = awaitingSalary ? payCycleRelative(dateCycle, -1).key : startKey.slice(0, 7);
   return {
     ...dateCycle,
     startKey,
