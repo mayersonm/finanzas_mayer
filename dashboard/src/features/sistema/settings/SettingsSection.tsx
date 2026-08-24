@@ -23,6 +23,7 @@ const EMPTY_CONFIG: AppSettingsConfig = {
   creditCutoffDay: 25,
   creditDueDay: 10,
   creditCardName: '',
+  creditCardLimit: 1500,
   defaultCurrency: 'PEN',
   defaultPaymentMethod: 'debito',
   receiptImageMaxBytes: 921600,
@@ -227,7 +228,7 @@ export function SettingsSection({ authToken, chatId }: { authToken?: string | nu
           <form className="grid gap-5" onSubmit={handleSubmit}>
             <section>
               <h2 className="text-sm font-semibold text-slate-100">Credito</h2>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="mt-3 grid gap-3 sm:grid-cols-4">
                 <Field label="Dia de corte">
                   <input className="form-input" type="number" min={1} max={31} value={config.creditCutoffDay} onChange={(event) => updateField('creditCutoffDay', Number(event.target.value))} />
                 </Field>
@@ -236,6 +237,9 @@ export function SettingsSection({ authToken, chatId }: { authToken?: string | nu
                 </Field>
                 <Field label="Tarjeta">
                   <input className="form-input" value={config.creditCardName} onChange={(event) => updateField('creditCardName', event.target.value)} placeholder="Opcional" />
+                </Field>
+                <Field label="Limite (S/)">
+                  <input className="form-input" type="number" min={0} step="0.01" value={config.creditCardLimit} onChange={(event) => updateField('creditCardLimit', Number(event.target.value))} />
                 </Field>
               </div>
             </section>

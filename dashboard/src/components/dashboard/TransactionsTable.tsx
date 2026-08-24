@@ -175,6 +175,7 @@ export function TransactionsTable({
                 <p className="mt-0.5 truncate text-xs text-slate-500">
                   {detail}
                   {tx.paymentMethod === 'credito' && tx.paymentDueDate ? ` · pagar ${formatDate(tx.paymentDueDate)}` : ''}
+                  {tx.installmentTotal && tx.installmentTotal > 1 ? ` · cuota ${tx.installmentIndex}/${tx.installmentTotal}` : ''}
                 </p>
               </div>
 

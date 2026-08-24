@@ -17,6 +17,9 @@ export interface Transaction {
   paymentMethod?: 'debito' | 'credito' | string;
   paymentDueDate?: string;
   cardName?: string;
+  installmentGroupId?: string;
+  installmentIndex?: number;
+  installmentTotal?: number;
   receipt?: TransactionReceipt;
 }
 
@@ -389,6 +392,8 @@ export interface ClosureSummary {
   fijosPendientes: number;
   deudasPendientes: number;
   tdcPendiente?: number;
+  tdcLimite?: number;
+  tdcDisponible?: number;
   presupuestoLimite: number;
   presupuestoUsado: number;
   presupuestoRestante: number;
@@ -538,6 +543,7 @@ export interface AppSettingsConfig {
   creditCutoffDay: number;
   creditDueDay: number;
   creditCardName: string;
+  creditCardLimit: number;
   defaultCurrency?: Currency;
   defaultPaymentMethod?: 'debito' | 'credito';
   receiptImageMaxBytes: number;
@@ -652,6 +658,8 @@ export interface DashboardData {
   deudas?: Debt[];
   deudaPendiente?: number;
   tdcPendiente?: number;
+  tdcLimite?: number;
+  tdcDisponible?: number;
   fijosPendientes?: number;
   fijosPagadosMes?: number;
   cierre?: ClosureSummary;

@@ -156,6 +156,7 @@ export function normalizeSettingsConfig(value) {
     creditCutoffDay: clamp(Number(value.creditCutoffDay || 25), 1, 31),
     creditDueDay: clamp(Number(value.creditDueDay || 10), 1, 31),
     creditCardName: String(value.creditCardName || '').slice(0, 80),
+    creditCardLimit: round(Math.max(0, parseAmount(value.creditCardLimit ?? value.credit_card_limit ?? 1500))),
     defaultCurrency: normalizeCurrency(value.defaultCurrency || value.default_currency || 'PEN'),
     defaultPaymentMethod: normalizePaymentMethod(value.defaultPaymentMethod || value.default_payment_method || 'debito') || 'debito',
     receiptImageMaxBytes: clamp(Number(value.receiptImageMaxBytes || 921600), 200000, 3000000),
@@ -353,7 +354,7 @@ export async function getUserSettings(env, userId) {
 export async function upsertUserSettings(env, userId, config) {
   await env.DB.prepare(`
     INSERT INTO user_settings (
-      user_id, credit_cutoff_day, credit_due_day, credit_card_name,
+      user_id, credit_cutoff_day, credit_due_day, credit_card_name, credit_card_limit,
       default_currency, default_payment_method, receipt_image_max_bytes,
       claude_model, claude_api_url, email_finance,
       email_daily, email_monthly, email_yearly,
@@ -361,11 +362,12 @@ export async function upsertUserSettings(env, userId, config) {
       cycle_income_lead_days,
       updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id) DO UPDATE SET
       credit_cutoff_day = excluded.credit_cutoff_day,
       credit_due_day = excluded.credit_due_day,
       credit_card_name = excluded.credit_card_name,
+      credit_card_limit = excluded.credit_card_limit,
       default_currency = excluded.default_currency,
       default_payment_method = excluded.default_payment_method,
       receipt_image_max_bytes = excluded.receipt_image_max_bytes,
@@ -386,6 +388,7 @@ export async function upsertUserSettings(env, userId, config) {
     config.creditCutoffDay,
     config.creditDueDay,
     config.creditCardName,
+    config.creditCardLimit,
     config.defaultCurrency || 'PEN',
     config.defaultPaymentMethod || 'debito',
     config.receiptImageMaxBytes,
@@ -409,6 +412,7 @@ export function userSettingsToConfig(settings) {
     creditCutoffDay: Number(settings.credit_cutoff_day || 25),
     creditDueDay: Number(settings.credit_due_day || 10),
     creditCardName: settings.credit_card_name || '',
+    creditCardLimit: Number(settings.credit_card_limit ?? 1500),
     defaultCurrency: settings.default_currency || 'PEN',
     defaultPaymentMethod: settings.default_payment_method || 'debito',
     receiptImageMaxBytes: Number(settings.receipt_image_max_bytes || 921600),

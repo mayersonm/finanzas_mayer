@@ -108,6 +108,16 @@ export function payCycleFromDate(date) {
   };
 }
 
+// Suma N meses a una fecha clave, recortando el dia si el mes destino es mas
+// corto (ej. 31 ene + 1 mes -> 28/29 feb, no marzo). Usado para las cuotas de
+// tarjeta (cada cuota vence N meses despues del primer corte).
+export function addMonthsToDateKey(key, months) {
+  const parts = parseDateKeyParts(key);
+  const targetMonthIndex = parts.monthIndex + Number(months || 0);
+  const lastDayOfTarget = new Date(Date.UTC(parts.year, targetMonthIndex + 1, 0)).getUTCDate();
+  return dateKeyFromParts(parts.year, targetMonthIndex, Math.min(parts.day, lastDayOfTarget));
+}
+
 export function dayBeforeKey(key) {
   const p = parseDateKeyParts(key);
   return dateKeyFromParts(p.year, p.monthIndex, p.day - 1);

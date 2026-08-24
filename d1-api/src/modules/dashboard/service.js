@@ -237,6 +237,8 @@ export async function dashboard(env, params) {
   // Gastos a credito sin pagar: no bajan la Caja (ver computeCashBalance), asi
   // que hay que restarlos aparte en patrimonio/compromisos, igual que deudas.
   const tdcSummary = await creditCardSummary(env, chatId, usdRate, calendarMonth);
+  const tdcLimit = round(Number(settings.creditCardLimit || 0));
+  const tdcAvailable = round(tdcLimit - tdcSummary.pending);
 
   const ingresos = Number(totals?.ingresos || 0);
   const gastos = Number(totals?.gastos || 0);
@@ -295,6 +297,8 @@ export async function dashboard(env, params) {
     fijosPendientes: fixedSummary.pending,
     deudasPendientes: deudaPendiente,
     tdcPendiente: tdcSummary.pending,
+    tdcLimite: tdcLimit,
+    tdcDisponible: tdcAvailable,
     presupuestoLimite: budget.limit,
     presupuestoUsado: budget.spent,
     presupuestoRestante: budget.remaining,
@@ -426,6 +430,8 @@ export async function dashboard(env, params) {
     deudas: debts,
     deudaPendiente,
     tdcPendiente: tdcSummary.pending,
+    tdcLimite: tdcLimit,
+    tdcDisponible: tdcAvailable,
     fijosPendientes: fixedSummary.pending,
     fijosPagadosMes: fixedSummary.paid,
     gastosReales: realExpenses(fixedExpenses, budgets, usdRate),

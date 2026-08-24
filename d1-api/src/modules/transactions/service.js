@@ -5,7 +5,7 @@ import { getAppSetting, setAppSetting } from '../../shared/settings-store.js';
 import { clamp, normalizeCurrency, normalizeDateOnly, normalizeKey, normalizePaymentMethod, title } from '../../shared/normalizers.js';
 import { classifyCategory, normalizeBaseCategory, normalizeCategory } from '../../shared/categories.js';
 import { stableTransactionId } from '../../shared/files.js';
-import { cycleDateTimeBounds, localDateKey, localIso, payCycleFromDate, payCycleRelative, salaryCycleWindow } from '../../shared/dates.js';
+import { addMonthsToDateKey, cycleDateTimeBounds, localDateKey, localIso, payCycleFromDate, payCycleRelative, salaryCycleWindow } from '../../shared/dates.js';
 
 export async function transactions(env, params) {
   const chatId = getChatId(env, params);
@@ -100,6 +100,9 @@ export async function transactions(env, params) {
       t.payment_method,
       t.payment_due_date,
       t.card_name,
+      t.installment_group_id,
+      t.installment_index,
+      t.installment_total,
       r.id AS receipt_id,
       r.file_name AS receipt_file_name,
       r.content_type AS receipt_content_type,
@@ -146,6 +149,64 @@ export async function insertTransaction(env, payload) {
   const tx = await normalizeTransaction(env, payload, chatId);
   await upsertTransaction(env, tx);
   return { ok: true, transaction: tx };
+}
+
+// Compra a credito en cuotas sin intereses: crea N gastos a credito, uno por
+// cuota, todos con la misma fecha/hora de compra pero cada uno con su propio
+// payment_due_date (el corte donde cae esa cuota). Asi cada cuota aparece en
+// su grupo correspondiente en TDC (ver buildDueGroups en TdcSection) y solo
+// pesa en el "pendiente"/limite de tarjeta hasta que se paga ese corte, igual
+// que un gasto a credito normal.
+export async function insertInstallmentPurchase(env, payload, params) {
+  const chatId = String(params?.get?.('chat_id') || payload.chat_id || payload.chatId || env.DEFAULT_CHAT_ID || '').trim();
+  if (!chatId) throw httpError(400, 'chat_id requerido');
+
+  const totalAmount = parseAmount(payload.amount ?? payload.monto ?? 0);
+  if (totalAmount <= 0) throw httpError(400, 'monto invalido');
+
+  const installments = clamp(Math.trunc(Number(payload.installments ?? payload.cuotas ?? 0)), 2, 36);
+
+  const purchaseDate = normalizeDateOnly(payload.fecha || payload.tx_date || localDateKey(new Date())) || localDateKey(new Date());
+  const firstDueDate = normalizeDateOnly(payload.firstDueDate || payload.first_due_date || payload.paymentDueDate || payload.payment_due_date);
+  if (!firstDueDate) throw httpError(400, 'firstDueDate requerido');
+
+  const description = String(payload.desc || payload.description || 'Compra a cuotas').trim().slice(0, 240);
+  const cardName = String(payload.cardName || payload.card_name || payload.tarjeta || '').trim().slice(0, 80);
+  const currency = normalizeCurrency(payload.currency || payload.moneda || 'PEN');
+  const now = new Date();
+  const hora = String(payload.hora || payload.tx_time || localIso(now).slice(11, 16)).slice(0, 5);
+
+  const groupId = `insttdc:${chatId}:${Date.now()}`;
+  const baseInstallment = round(totalAmount / installments);
+  const lastInstallment = round(totalAmount - baseInstallment * (installments - 1));
+
+  const created = [];
+  for (let i = 1; i <= installments; i += 1) {
+    const amount = i === installments ? lastInstallment : baseInstallment;
+    const dueDate = addMonthsToDateKey(firstDueDate, i - 1);
+    const tx = await normalizeTransaction(env, {
+      id: `${groupId}:${i}`,
+      chat_id: chatId,
+      fecha: purchaseDate,
+      hora,
+      tipo: 'gasto',
+      desc: `${description} (${i}/${installments})`,
+      cat: payload.cat || payload.category || 'otro',
+      monto: amount,
+      currency,
+      payment_method: 'credito',
+      payment_due_date: dueDate,
+      card_name: cardName,
+      installment_group_id: groupId,
+      installment_index: i,
+      installment_total: installments,
+      source: 'dashboard_installment',
+    }, chatId);
+    await upsertTransaction(env, tx);
+    created.push(tx);
+  }
+
+  return { ok: true, installmentGroupId: groupId, transactions: created.map(txShape) };
 }
 
 const CASH_OPENING_PREFIX = 'cash_opening_';
@@ -712,9 +773,10 @@ export async function upsertTransaction(env, tx) {
   await env.DB.prepare(`
     INSERT INTO transactions (
       id, chat_id, tx_date, tx_time, type, description, category, amount,
-      currency, payment_method, payment_due_date, card_name, source, updated_at
+      currency, payment_method, payment_due_date, card_name,
+      installment_group_id, installment_index, installment_total, source, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(id) DO UPDATE SET
       tx_date = excluded.tx_date,
       tx_time = excluded.tx_time,
@@ -726,6 +788,9 @@ export async function upsertTransaction(env, tx) {
       payment_method = excluded.payment_method,
       payment_due_date = excluded.payment_due_date,
       card_name = excluded.card_name,
+      installment_group_id = excluded.installment_group_id,
+      installment_index = excluded.installment_index,
+      installment_total = excluded.installment_total,
       source = CASE
         WHEN excluded.source = 'gas' AND transactions.source <> 'gas' THEN transactions.source
         ELSE excluded.source
@@ -744,6 +809,9 @@ export async function upsertTransaction(env, tx) {
     tx.payment_method,
     tx.payment_due_date || null,
     tx.card_name,
+    tx.installment_group_id || null,
+    tx.installment_index || null,
+    tx.installment_total || null,
     tx.source,
   ).run();
 }
@@ -834,6 +902,9 @@ export async function normalizeTransaction(env, raw, chatId) {
     payment_method: paymentMethod,
     payment_due_date: paymentDueDate,
     card_name: cardName,
+    installment_group_id: raw.installment_group_id || null,
+    installment_index: raw.installment_index || null,
+    installment_total: raw.installment_total || null,
     source: String(raw.source || 'gas').slice(0, 40),
   };
 }
@@ -851,6 +922,9 @@ export function txShape(row) {
     paymentMethod: row.payment_method || 'debito',
     paymentDueDate: row.payment_due_date || '',
     cardName: row.card_name || '',
+    installmentGroupId: row.installment_group_id || '',
+    installmentIndex: row.installment_index ? Number(row.installment_index) : undefined,
+    installmentTotal: row.installment_total ? Number(row.installment_total) : undefined,
     receipt: row.receipt_id ? {
       id: row.receipt_id,
       fileName: row.receipt_file_name || 'recibo',

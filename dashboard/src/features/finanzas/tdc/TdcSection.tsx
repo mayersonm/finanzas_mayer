@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Badge, Card, Text, Title } from '@tremor/react';
-import { RiBankCardLine, RiCloseLine, RiSave3Line } from '@remixicon/react';
+import { RiBankCardLine, RiCloseLine, RiSave3Line, RiStackLine } from '@remixicon/react';
 import { apiRequest } from '../../../app/apiClient';
 import { EmptyState } from '../../../components/common/EmptyState';
 import { SummaryBar } from '../../../components/common/SummaryBar';
@@ -16,6 +16,16 @@ interface PaymentDraft {
   notes: string;
 }
 
+interface InstallmentDraft {
+  amount: string;
+  installments: string;
+  currency: 'PEN' | 'USD';
+  cardName: string;
+  description: string;
+  category: string;
+  firstDueDate: string;
+}
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -26,6 +36,16 @@ const emptyPaymentDraft: PaymentDraft = {
   cardName: '',
   paymentDate: todayKey(),
   notes: '',
+};
+
+const emptyInstallmentDraft: InstallmentDraft = {
+  amount: '',
+  installments: '3',
+  currency: 'PEN',
+  cardName: '',
+  description: '',
+  category: 'otro',
+  firstDueDate: todayKey(),
 };
 
 interface DueGroup {
@@ -68,6 +88,48 @@ export function TdcSection({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [paymentError, setPaymentError] = useState('');
+
+  const [showInstallmentForm, setShowInstallmentForm] = useState(false);
+  const [installment, setInstallment] = useState<InstallmentDraft>(emptyInstallmentDraft);
+  const [savingInstallment, setSavingInstallment] = useState(false);
+  const [installmentError, setInstallmentError] = useState('');
+
+  const tdcLimite = data.cierre?.tdcLimite ?? 0;
+  const tdcDisponible = data.cierre?.tdcDisponible ?? tdcLimite;
+
+  const saveInstallmentPurchase = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!authToken) return;
+    setSavingInstallment(true);
+    setMessage('');
+    setInstallmentError('');
+
+    try {
+      await apiRequest('tdc/installment-purchase', {
+        method: 'POST',
+        token: authToken,
+        query: { chat_id: chatId },
+        body: {
+          amount: Number(installment.amount),
+          installments: Number(installment.installments),
+          currency: installment.currency,
+          cardName: installment.cardName,
+          desc: installment.description,
+          cat: installment.category,
+          firstDueDate: installment.firstDueDate,
+        },
+      });
+      setMessage('Compra a cuotas registrada.');
+      setInstallment(emptyInstallmentDraft);
+      setShowInstallmentForm(false);
+      void loadCreditTransactions();
+      onChanged?.();
+    } catch (err) {
+      setInstallmentError(err instanceof Error ? err.message : 'No se pudo registrar la compra');
+    } finally {
+      setSavingInstallment(false);
+    }
+  };
 
   const savePayment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -149,19 +211,83 @@ export function TdcSection({
           <Title>Tarjeta de credito</Title>
           <Text>{loading ? 'Cargando…' : `${transactions.length} gasto(s) a credito registrados`}</Text>
         </div>
-        <button
-          type="button"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
-          onClick={() => {
-            setMessage('');
-            setPaymentError('');
-            setShowPaymentForm((current) => !current);
-          }}
-        >
-          <RiBankCardLine className="h-4 w-4" />
-          Pagar tarjeta
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default border border-slate-700 bg-slate-900 px-4 text-sm font-semibold text-slate-100 transition hover:bg-slate-800"
+            onClick={() => {
+              setMessage('');
+              setInstallmentError('');
+              setShowInstallmentForm((current) => !current);
+            }}
+          >
+            <RiStackLine className="h-4 w-4" />
+            Compra a cuotas
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+            onClick={() => {
+              setMessage('');
+              setPaymentError('');
+              setShowPaymentForm((current) => !current);
+            }}
+          >
+            <RiBankCardLine className="h-4 w-4" />
+            Pagar tarjeta
+          </button>
+        </div>
       </div>
+
+      {showInstallmentForm ? (
+        <form className="mt-4 grid gap-3 rounded-tremor-default border border-slate-700 bg-slate-900/40 p-3" onSubmit={saveInstallmentPurchase}>
+          <div className="flex items-center justify-between gap-3">
+            <Text className="font-semibold text-slate-100">Registrar compra a cuotas sin intereses</Text>
+            <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-tremor-default border border-slate-700 text-slate-300" onClick={() => setShowInstallmentForm(false)} title="Cancelar">
+              <RiCloseLine className="h-4 w-4" />
+            </button>
+          </div>
+          <label className="grid gap-1 text-xs font-semibold text-slate-400">
+            <span>Descripcion</span>
+            <input className="form-input" value={installment.description} onChange={(event) => setInstallment((current) => ({ ...current, description: event.target.value }))} required />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <label className="grid gap-1 text-xs font-semibold text-slate-400">
+              <span>Monto total</span>
+              <input className="form-input" type="number" min="0.01" step="0.01" value={installment.amount} onChange={(event) => setInstallment((current) => ({ ...current, amount: event.target.value }))} required />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-slate-400">
+              <span>N cuotas</span>
+              <input className="form-input" type="number" min="2" max="36" step="1" value={installment.installments} onChange={(event) => setInstallment((current) => ({ ...current, installments: event.target.value }))} required />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-slate-400">
+              <span>Moneda</span>
+              <select className="form-input" value={installment.currency} onChange={(event) => setInstallment((current) => ({ ...current, currency: event.target.value as 'PEN' | 'USD' }))}>
+                <option value="PEN">PEN</option>
+                <option value="USD">USD</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-slate-400">
+              <span>Tarjeta (opcional)</span>
+              <input className="form-input" value={installment.cardName} onChange={(event) => setInstallment((current) => ({ ...current, cardName: event.target.value }))} />
+            </label>
+          </div>
+          <label className="grid gap-1 text-xs font-semibold text-slate-400">
+            <span>Fecha del primer corte</span>
+            <input className="form-input" type="date" value={installment.firstDueDate} onChange={(event) => setInstallment((current) => ({ ...current, firstDueDate: event.target.value }))} required />
+          </label>
+          {installment.amount && installment.installments && Number(installment.installments) > 0 ? (
+            <Text className="text-xs text-slate-500">
+              {installment.installments} cuota(s) de aprox. {formatMoney(Number(installment.amount) / Number(installment.installments))}
+            </Text>
+          ) : null}
+          {installmentError ? <div className="rounded-tremor-default border border-rose-500/30 bg-rose-500/10 p-2 text-sm text-rose-100">{installmentError}</div> : null}
+          <button className="inline-flex h-10 items-center justify-center gap-2 rounded-tremor-default bg-slate-100 px-4 text-sm font-semibold text-slate-950 transition hover:bg-white disabled:opacity-60" disabled={savingInstallment || !authToken}>
+            <RiSave3Line className="h-4 w-4" />
+            Registrar compra
+          </button>
+        </form>
+      ) : null}
 
       {showPaymentForm ? (
         <form className="mt-4 grid gap-3 rounded-tremor-default border border-emerald-500/20 bg-emerald-500/10 p-3" onSubmit={savePayment}>
@@ -210,6 +336,12 @@ export function TdcSection({
         className="mt-4"
         stats={[
           { label: 'Total a pagar', value: formatMoney(totalPending), tone: totalPending > 0 ? 'bad' : 'good', detail: 'todos los cortes con gasto a credito' },
+          {
+            label: 'Disponible',
+            value: formatMoney(tdcDisponible),
+            tone: tdcDisponible < 0 ? 'bad' : 'good',
+            detail: `limite ${formatMoney(tdcLimite)}`,
+          },
           {
             label: 'Vencido',
             value: formatMoney(overdueTotal),
