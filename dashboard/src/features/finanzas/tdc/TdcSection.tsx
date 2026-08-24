@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Badge, Card, Text, Title } from '@tremor/react';
-import { RiBankCardLine, RiCloseLine, RiSave3Line, RiStackLine } from '@remixicon/react';
+import { RiAlarmWarningLine, RiBankCardLine, RiCloseLine, RiSave3Line, RiStackLine } from '@remixicon/react';
 import { apiRequest } from '../../../app/apiClient';
 import { EmptyState } from '../../../components/common/EmptyState';
-import { SummaryBar } from '../../../components/common/SummaryBar';
+import { Collapsible } from '../../../components/common/SummaryBar';
 import { TransactionsTable } from '../../../components/dashboard/TransactionsTable';
 import { convertCurrency, formatMoney } from '../../../lib/formatters';
 import type { DashboardData, Transaction } from '../../../types/dashboard';
@@ -332,30 +332,30 @@ export function TdcSection({
       {message ? <div className="mt-3 rounded-tremor-default border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">{message}</div> : null}
       {paymentError ? <div className="mt-3 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">{paymentError}</div> : null}
 
-      <SummaryBar
-        className="mt-4"
-        stats={[
-          { label: 'Total a pagar', value: formatMoney(totalPending), tone: totalPending > 0 ? 'bad' : 'good', detail: 'todos los cortes con gasto a credito' },
-          {
-            label: 'Disponible',
-            value: formatMoney(tdcDisponible),
-            tone: tdcDisponible < 0 ? 'bad' : 'good',
-            detail: `limite ${formatMoney(tdcLimite)}`,
-          },
-          {
-            label: 'Vencido',
-            value: formatMoney(overdueTotal),
-            tone: overdueTotal > 0 ? 'bad' : 'good',
-            detail: overdueGroups.length ? `${overdueGroups.length} corte(s) pasado(s)` : 'sin cortes vencidos',
-          },
-          {
-            label: 'Proximo pago',
-            value: nextGroup ? formatMoney(nextGroup.total) : formatMoney(0),
-            tone: 'info',
-            detail: nextGroup ? `pagar ${formatDateLabel(nextGroup.dueDate)}` : 'sin pagos programados',
-          },
-        ]}
-      />
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <CreditCardVisual
+          disponible={tdcDisponible}
+          limite={tdcLimite}
+          totalPending={totalPending}
+          overdueCount={overdueGroups.length}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <MiniStat
+            label="Vencido"
+            value={formatMoney(overdueTotal)}
+            tone={overdueTotal > 0 ? 'bad' : 'good'}
+            detail={overdueGroups.length ? `${overdueGroups.length} corte(s) pasado(s)` : 'sin cortes vencidos'}
+            icon={<RiAlarmWarningLine className="h-4 w-4" />}
+          />
+          <MiniStat
+            label="Proximo pago"
+            value={nextGroup ? formatMoney(nextGroup.total) : formatMoney(0)}
+            tone="info"
+            detail={nextGroup ? `pagar ${formatDateLabel(nextGroup.dueDate)}` : 'sin pagos programados'}
+            icon={<RiBankCardLine className="h-4 w-4" />}
+          />
+        </div>
+      </div>
 
       {error ? (
         <div className="mt-4 rounded-tremor-default border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
@@ -368,31 +368,47 @@ export function TdcSection({
           <EmptyState>Sin gastos a credito registrados.</EmptyState>
         </div>
       ) : (
-        <div className="mt-5 grid gap-4">
+        <div className="mt-5 grid gap-3">
           {groups.map((group) => {
             const isPaid = group.remaining <= 0.005;
             const isOverdue = !isPaid && Boolean(group.dueDate && group.dueDate < todayKey);
+            const pct = group.total > 0 ? Math.min(100, Math.round((group.paid / group.total) * 100)) : 0;
+            const barColor = isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-rose-500' : 'bg-amber-400';
             return (
-              <div key={group.key} className="rounded-tremor-default border border-slate-800 bg-slate-900/30 p-3 sm:p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-100">
-                      {group.dueDate ? `Pago ${formatDateLabel(group.dueDate)}` : 'Sin fecha de pago'}
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">{group.items.length} gasto(s)</p>
+              <Collapsible
+                key={group.key}
+                defaultOpen={isOverdue || group.key === nextGroup?.key}
+                className={isOverdue ? 'border-rose-500/30 bg-rose-500/[0.03]' : ''}
+                summary={
+                  <div className="flex w-full flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-100">
+                        {group.dueDate ? `Pago ${formatDateLabel(group.dueDate)}` : 'Sin fecha de pago'}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">{group.items.length} gasto(s)</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isPaid ? (
+                        <Badge color="emerald">Pagado</Badge>
+                      ) : isOverdue ? (
+                        <Badge color="rose">Vencido</Badge>
+                      ) : group.dueDate ? (
+                        <Badge color="emerald">Programado</Badge>
+                      ) : (
+                        <Badge color="slate">Sin fecha</Badge>
+                      )}
+                      <span className="font-mono text-sm font-semibold text-slate-100">{formatMoney(group.remaining)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {isPaid ? (
-                      <Badge color="emerald">Pagado</Badge>
-                    ) : isOverdue ? (
-                      <Badge color="rose">Vencido</Badge>
-                    ) : group.dueDate ? (
-                      <Badge color="emerald">Programado</Badge>
-                    ) : (
-                      <Badge color="slate">Sin fecha</Badge>
-                    )}
-                    <span className="font-mono text-sm font-semibold text-slate-100">{formatMoney(group.remaining)}</span>
+                }
+              >
+                <div className="mb-3">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                    <div className={`h-full rounded-full ${barColor}`} style={{ width: `${isPaid ? 100 : pct}%` }} />
                   </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {formatMoney(group.paid)} pagado de {formatMoney(group.total)}
+                  </p>
                 </div>
                 <TransactionsTable
                   transactions={group.items}
@@ -403,12 +419,98 @@ export function TdcSection({
                     onChanged?.();
                   }}
                 />
-              </div>
+              </Collapsible>
             );
           })}
         </div>
       )}
     </Card>
+  );
+}
+
+function CreditCardVisual({
+  disponible,
+  limite,
+  totalPending,
+  overdueCount,
+}: {
+  disponible: number;
+  limite: number;
+  totalPending: number;
+  overdueCount: number;
+}) {
+  const used = Math.max(0, limite - disponible);
+  const usedPct = limite > 0 ? Math.min(100, Math.round((used / limite) * 100)) : 0;
+  const barColor = usedPct >= 90 ? 'bg-rose-400' : usedPct >= 70 ? 'bg-amber-400' : 'bg-emerald-400';
+  return (
+    <div className="relative overflow-hidden rounded-tremor-default border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 p-4 sm:p-5">
+      <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-indigo-500/10 blur-2xl" />
+      <div className="pointer-events-none absolute -bottom-12 -left-8 h-32 w-32 rounded-full bg-emerald-500/10 blur-2xl" />
+      <div className="relative flex items-start justify-between">
+        <div>
+          <p className="text-[0.68rem] font-medium uppercase tracking-wide text-slate-400">Disponible</p>
+          <p className={`mt-1 font-mono text-2xl font-semibold sm:text-3xl ${disponible < 0 ? 'text-rose-300' : 'text-slate-50'}`}>
+            {formatMoney(disponible)}
+          </p>
+        </div>
+        <RiBankCardLine className="h-8 w-8 text-slate-600" />
+      </div>
+      <div className="relative mt-4">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800/80">
+          <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${usedPct}%` }} />
+        </div>
+        <div className="mt-1.5 flex items-center justify-between text-xs text-slate-500">
+          <span>{usedPct}% usado</span>
+          <span>limite {formatMoney(limite)}</span>
+        </div>
+      </div>
+      <div className="relative mt-4 flex items-center justify-between border-t border-slate-800/70 pt-3">
+        <div>
+          <p className="text-[0.68rem] font-medium uppercase tracking-wide text-slate-500">Total a pagar</p>
+          <p className={`font-mono text-sm font-semibold ${totalPending > 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+            {formatMoney(totalPending)}
+          </p>
+        </div>
+        {overdueCount > 0 ? (
+          <Badge color="rose" icon={RiAlarmWarningLine}>
+            {overdueCount} vencido(s)
+          </Badge>
+        ) : (
+          <Badge color="emerald">Al dia</Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const miniStatTone: Record<'good' | 'bad' | 'info', string> = {
+  good: 'text-emerald-300',
+  bad: 'text-rose-300',
+  info: 'text-slate-200',
+};
+
+function MiniStat({
+  label,
+  value,
+  tone,
+  detail,
+  icon,
+}: {
+  label: string;
+  value: string;
+  tone: 'good' | 'bad' | 'info';
+  detail: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="rounded-tremor-default border border-slate-800 bg-slate-900/40 p-3.5">
+      <div className="flex items-center gap-1.5 text-slate-500">
+        {icon}
+        <p className="truncate text-[0.68rem] font-medium uppercase tracking-wide">{label}</p>
+      </div>
+      <p className={`mt-1.5 truncate font-mono text-lg font-semibold sm:text-xl ${miniStatTone[tone]}`}>{value}</p>
+      <p className="mt-0.5 truncate text-xs text-slate-500">{detail}</p>
+    </div>
   );
 }
 
