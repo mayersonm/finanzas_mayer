@@ -23,6 +23,12 @@ function doPost(e) {
 
     cache.put(updateId, '1', 21600);
 
+    // ── Botones de avisos de Gmail ───────────────────────
+    if (update.callback_query) {
+      manejarCallbackGmail_(update.callback_query);
+      return ok();
+    }
+
     const msg = update.message || update.edited_message;
     if (!msg) return ok(); // ← solo bloquea si no hay mensaje, ya no bloquea fotos
 

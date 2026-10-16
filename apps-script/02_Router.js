@@ -39,6 +39,10 @@ function handleMessage(chatId, text) {
 
     case 'fijos':      return cmdFijos(chatId, lower);
 
+    case 'probar gmail':  return cmdGmail_(chatId, 'probar');
+    case 'revisar gmail': return cmdGmail_(chatId, 'revisar');
+    case 'activar gmail': return cmdGmail_(chatId, 'activar');
+
     case '/analisis':
     case 'analisis':
     case 'análisis':
