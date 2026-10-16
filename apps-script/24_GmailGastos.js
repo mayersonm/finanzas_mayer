@@ -24,7 +24,11 @@ const GMAIL_FUENTES = [
   { banco: 'BCP', from: 'notificacionesbcp.com.pe', parser: parsearBCP_ },
   { banco: 'BBVA', from: 'bbva.com.pe', parser: parsearBBVA_ },
   { banco: 'Interbank', from: 'netinterbank.com.pe', parser: parsearInterbank_ },
+  { banco: 'Yape', from: 'notificaciones@yape.pe', parser: parsearYape_ },
+  { banco: 'Ligo', from: 'ligo.pe', parser: parsearLigo_ },
 ];
+const GMAIL_FROM_BANCOS = '(from:notificacionesbcp.com.pe OR from:procesos@bbva.com.pe OR from:netinterbank.com.pe ' +
+  'OR from:notificaciones@yape.pe OR from:no-reply@ligo.pe)';
 
 
 // ---- ACTIVACION ---------------------------------------------
@@ -99,11 +103,12 @@ function procesarCorreosNuevosGmail_() {
 }
 
 function gmailQueryBancos_(desde) {
-  return '(from:notificacionesbcp.com.pe OR from:procesos@bbva.com.pe OR from:netinterbank.com.pe) after:' + desde;
+  return GMAIL_FROM_BANCOS + ' after:' + desde;
 }
 
 function gmailQueryCompras_(desde) {
   return '-from:notificacionesbcp.com.pe -from:bbva.com.pe -from:netinterbank.com.pe -from:interbank.pe ' +
+    '-from:yape.pe -from:novedadesyape.pe -from:ligo.pe -from:pagoefectivo.pe ' +
     '-category:promotions ' +
     'subject:(compra OR pedido OR orden OR recibo OR boleta OR factura OR "comprobante de pago" OR "confirmacion de pago" OR "tu pago") ' +
     'after:' + desde;
@@ -152,7 +157,14 @@ function procesarCorreoGasto_(hoja, chatId, msg) {
     metodo: metodo,
     tarjeta: datos.tarjeta ? base.banco + ' *' + datos.tarjeta : '',
   });
-  item.aviso = posibleDuplicadoGmail_(hoja, item);
+  const avisos = [];
+  if (datos.cip && esRecargaLigoGmail_(datos.cip)) {
+    item.desc = 'Recarga a Ligo';
+    avisos.push('🔁 Parece una recarga a tu Ligo (código CIP coincide)');
+  }
+  const duplicado = posibleDuplicadoGmail_(hoja, item);
+  if (duplicado) avisos.push(duplicado);
+  item.aviso = avisos.join('\n');
 
   const fila = registrarControlGmail_(hoja, item);
   const telegramId = enviarAvisoGmail_(chatId, item);
@@ -229,7 +241,9 @@ function parsearBBVA_(t) {
   if (m) {
     const servicio = (t.match(/Nombre de servicio\s+(.+?)\s+(?:Descripcion|Recuerda|Numero|Codigo)/i) || [])[1];
     const tarjeta = (t.match(/Cargo en tarjeta\s*\W*\s*(\d{4})/i) || [])[1] || '';
+    const cip = (t.match(/CODIGO CIP\s*0*(\d{5,})/i) || [])[1] || '';
     return {
+      cip: cip,
       tipo: 'servicio', moneda: monedaGmail_(m[1]), monto: montoGmail_(m[2]),
       desc: servicio ? 'Pago ' + servicio : 'Pago de servicio',
       tarjeta: tarjeta, metodo: tarjeta ? '' : 'debito', op: op,
@@ -262,6 +276,47 @@ function parsearInterbank_(t, asunto) {
     contraparte: dest, metodo: 'debito',
     op: (t.match(/Codigo de operacion\s*:?\s*(\d+)/i) || [])[1] || '',
   };
+}
+
+// Yape: solo el aviso "Acabas de yapear exitosamente" (no los de configuracion).
+function parsearYape_(t) {
+  const m = t.match(new RegExp('Acabas de yapear exitosamente!?\\s*Monto de yapeo\\*?\\s*' + GMAIL_RE_MONTO, 'i'));
+  if (!m) return null;
+  const dest = ((t.match(/Nombre del Beneficiario\s+(.+?)\s+N\W{0,3}\s*de operacion/i) || [])[1] || '')
+    .replace(/\*+$/, '').trim();
+  return {
+    tipo: 'yape', moneda: monedaGmail_(m[1]), monto: montoGmail_(m[2]),
+    desc: dest ? 'Yape a ' + dest : 'Yape', contraparte: dest, metodo: 'debito',
+    op: (t.match(/N\W{0,3}\s*de operacion\s*:?\s*(\d+)/i) || [])[1] || '',
+  };
+}
+
+// Ligo: pagos Plin/transferencias que hiciste. "Usuario" es el destinatario.
+function parsearLigo_(t) {
+  if (!/pago que hiciste|transferencia/i.test(t)) return null;
+  const m = t.match(new RegExp('Monto total:?\\s*' + GMAIL_RE_MONTO, 'i'));
+  if (!m) return null;
+  const dest = ((t.match(/Usuario:?\s+(.+?)\s+(?:Destino|Monto)/i) || [])[1] || '').trim();
+  const destino = ((t.match(/Destino:?\s+(.+?)\s+Monto/i) || [])[1] || '').trim();
+  return {
+    tipo: 'plin', moneda: monedaGmail_(m[1]), monto: montoGmail_(m[2]),
+    desc: 'Plin a ' + (dest || 'tercero') + (destino ? ' (' + destino + ')' : ''),
+    contraparte: dest, metodo: 'debito',
+  };
+}
+
+// Recarga a Ligo: PagoEfectivo envia un correo con el mismo CIP que dice "LIGO".
+function esRecargaLigoGmail_(cip) {
+  try {
+    const threads = GmailApp.search('from:pagoefectivo.pe ' + cip + ' newer_than:7d', 0, 5);
+    return threads.some(th => th.getMessages().some(msg => {
+      const texto = textoCorreoGmail_(msg);
+      return texto.indexOf(cip) !== -1 && /\bLIGO\b/i.test(texto + ' ' + msg.getSubject());
+    }));
+  } catch (err) {
+    Logger.log('esRecargaLigoGmail_: ' + err);
+    return false;
+  }
 }
 
 // Tiendas, apps y suscripciones: toma el ultimo "total" del correo.
@@ -684,7 +739,7 @@ function probarAvisoGmail() {
 // Ejecutala desde el editor: muestra en el log que entenderia el lector
 // de los ultimos correos, sin enviar nada a Telegram ni registrar.
 function probarLectorGmail() {
-  const query = '(from:notificacionesbcp.com.pe OR from:procesos@bbva.com.pe OR from:netinterbank.com.pe) newer_than:15d';
+  const query = GMAIL_FROM_BANCOS + ' newer_than:15d';
   GmailApp.search(query, 0, 15).forEach(thread => {
     thread.getMessages().forEach(msg => {
       const from = String(msg.getFrom() || '').toLowerCase();
