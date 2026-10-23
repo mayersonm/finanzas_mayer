@@ -217,6 +217,20 @@ function parsearBCP_(t, asunto) {
     };
   }
 
+  // Pago de servicios (Entel, WIN, Luz del Sur, Sedapal...) desde Banca Movil
+  if (/Operacion realizada\s*:?\s*Pago de servicios/i.test(t)) {
+    m = t.match(new RegExp('Monto total\\s*:?\\s*' + R, 'i')) ||
+      t.match(new RegExp('Importe\\s*:?\\s*' + R, 'i'));
+    if (!m) return null;
+    const empresa = ((t.match(/Empresa\s*:?\s*(.+?)\s+Servicio\s*:/i) || [])[1] || '').trim();
+    const tc = t.match(/Cuenta de origen\s*:?\s*Tarjeta de Credito\D*(\d{4})/i);
+    return {
+      tipo: 'servicio', moneda: monedaGmail_(m[1]), monto: montoGmail_(m[2]),
+      desc: empresa ? 'Pago ' + empresa : 'Pago de servicio',
+      metodo: tc ? 'credito' : 'debito', tarjeta: tc ? tc[1] : '', op: op,
+    };
+  }
+
   return null;
 }
 
