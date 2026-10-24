@@ -11,11 +11,13 @@
 //   gmail_tarjetas_credito  ultimos 4 digitos de tus tarjetas de credito, separados por coma (default: 0192)
 //   gmail_nombres_propios   nombres que marcan un movimiento como propio (default: mayeson)
 //   gmail_desde             epoch en segundos desde el que se leen correos (lo fija setupTriggerGmail)
+//   gmail_alias_fijos       textos del correo que corresponden a gastos fijos, ej:
+//                           960548022=mayerentel+crisentel; colegio san jose=ariadnacolegio
 
 const GMAIL_HOJA_CONTROL = 'GmailMovimientos';
 const GMAIL_CABECERAS = [
   'Clave', 'MensajeId', 'Estado', 'Procesado', 'Banco', 'Tipo', 'Fecha', 'Hora',
-  'Descripcion', 'Categoria', 'Monto', 'Moneda', 'Metodo', 'Tarjeta', 'Aviso', 'TelegramMsgId',
+  'Descripcion', 'Categoria', 'Monto', 'Moneda', 'Metodo', 'Tarjeta', 'Aviso', 'TelegramMsgId', 'Fijos',
 ];
 const GMAIL_COL = { estado: 3, cat: 10, metodo: 13, telegram: 16 };
 const GMAIL_RE_MONTO = '(S\\/\\.?|US\\$|\\$|PEN|USD)\\s*([\\d,]+(?:\\.\\d{1,2})?)';
@@ -142,8 +144,12 @@ function procesarCorreoGasto_(hoja, chatId, msg) {
     return;
   }
 
-  const desc = capitalizar(limpiarDescGmail_(datos.desc) || base.banco);
+  const descCorreo = capitalizar(limpiarDescGmail_(datos.desc) || base.banco);
   const metodo = datos.metodo || (esTarjetaCreditoGmail_(datos.tarjeta) ? 'credito' : 'debito');
+  const fijos = buscarFijosGmail_(chatId, descCorreo + ' ' + (datos.servicio || ''), texto);
+  // Un solo fijo: se usa su nombre, asi D1 lo marca pagado. Varios (ej. recibo Entel): queda la descripcion del correo.
+  const desc = fijos.length === 1 ? capitalizar(fijos[0].nombre) : descCorreo;
+  const catBase = datos.tipo === 'servicio' ? 'servicios' : 'otro';
 
   const item = Object.assign(base, {
     estado: 'pendiente',
@@ -151,13 +157,18 @@ function procesarCorreoGasto_(hoja, chatId, msg) {
     fecha: Utilities.formatDate(msg.getDate(), 'America/Lima', 'yyyy-MM-dd'),
     hora: Utilities.formatDate(msg.getDate(), 'America/Lima', 'HH:mm'),
     desc: desc,
-    cat: normalizarCat('otro', desc, chatId),
+    cat: fijos.length ? normalizarCat(fijos[0].cat || catBase, desc, chatId) : normalizarCat(catBase, desc, chatId),
     monto: datos.monto,
     moneda: datos.moneda,
     metodo: metodo,
     tarjeta: datos.tarjeta ? base.banco + ' *' + datos.tarjeta : '',
+    fijos: fijos.map(f => f.nombre).join('+'),
   });
   const avisos = [];
+  if (fijos.length) {
+    avisos.push('📌 ' + (fijos.length === 1 ? 'Es tu gasto fijo ' : 'Cubre tus fijos: ') +
+      fijos.map(f => capitalizar(f.nombre)).join(', ') + '. Al registrarlo queda pagado.');
+  }
   if (datos.cip && esRecargaLigoGmail_(datos.cip)) {
     item.desc = 'Recarga a Ligo';
     avisos.push('🔁 Parece una recarga a tu Ligo (código CIP coincide)');
@@ -223,10 +234,11 @@ function parsearBCP_(t, asunto) {
       t.match(new RegExp('Importe\\s*:?\\s*' + R, 'i'));
     if (!m) return null;
     const empresa = ((t.match(/Empresa\s*:?\s*(.+?)\s+Servicio\s*:/i) || [])[1] || '').trim();
+    const servicio = ((t.match(/\bServicio\s*:\s*(.+?)\s+Titular/i) || [])[1] || '').trim();
     const tc = t.match(/Cuenta de origen\s*:?\s*Tarjeta de Credito\D*(\d{4})/i);
     return {
       tipo: 'servicio', moneda: monedaGmail_(m[1]), monto: montoGmail_(m[2]),
-      desc: empresa ? 'Pago ' + empresa : 'Pago de servicio',
+      desc: empresa ? 'Pago ' + empresa : 'Pago de servicio', servicio: servicio,
       metodo: tc ? 'credito' : 'debito', tarjeta: tc ? tc[1] : '', op: op,
     };
   }
@@ -442,7 +454,9 @@ function manejarCallbackGmail_(cb) {
   if (accion === 'ok') {
     actualizarItemGmail_(item, GMAIL_COL.estado, 'registrado');
     const res = registrarGastoGmail_(chatId, item);
+    const pagados = marcarFijosPagadosGmail_(chatId, item);
     const cierre = '✅ <b>Registrado</b>' +
+      (pagados.length ? '\n📌 Fijos pagados: ' + pagados.join(', ') : '') +
       (res.d1Ok ? '' : '\n⚠️ Guardado en Sheets, pero D1 no respondió.');
     editarAvisoGmail_(chatId, messageId, item, cierre);
     responderCallbackGmail_(cb.id, 'Registrado');
@@ -572,6 +586,8 @@ function hojaControlGmail_() {
     hoja.appendRow(GMAIL_CABECERAS);
     hoja.getRange(1, 1, 1, GMAIL_CABECERAS.length).setFontWeight('bold');
     hoja.setFrozenRows(1);
+  } else if (!hoja.getRange(1, GMAIL_CABECERAS.length).getValue()) {
+    hoja.getRange(1, GMAIL_CABECERAS.length).setValue(GMAIL_CABECERAS[GMAIL_CABECERAS.length - 1]).setFontWeight('bold');
   }
   return hoja;
 }
@@ -588,7 +604,7 @@ function registrarControlGmail_(hoja, it) {
     "'" + it.clave, "'" + it.msgId, it.estado, new Date(), it.banco || '', it.tipo || '',
     it.fecha ? "'" + it.fecha : '', it.hora ? "'" + it.hora : '',
     it.desc || '', it.cat || '', it.monto || '', it.moneda || '', it.metodo || '', it.tarjeta || '',
-    it.aviso || '', '',
+    it.aviso || '', '', it.fijos || '',
   ]);
   return hoja.getLastRow();
 }
@@ -606,7 +622,7 @@ function leerItemGmail_(clave) {
   return {
     fila: fila, clave: d[0], msgId: d[1], estado: d[2], banco: d[4], tipo: d[5],
     fecha: d[6], hora: d[7], desc: d[8], cat: d[9], monto: Number(v[10]), moneda: d[11],
-    metodo: d[12], tarjeta: d[13], aviso: d[14],
+    metodo: d[12], tarjeta: d[13], aviso: d[14], fijos: d[16] || '',
   };
 }
 
@@ -635,6 +651,53 @@ function posibleDuplicadoGmail_(hoja, item) {
     return '⚠️ Posible duplicado de ' + disp[i][4] + ': ' + disp[i][8] + ' (' + disp[i][6] + ')';
   }
   return '';
+}
+
+
+// ---- GASTOS FIJOS --------------------------------------------
+// Relaciona el correo con tus gastos fijos pendientes del mes:
+//  1) alias de gmail_alias_fijos encontrados en el correo completo (ej. numero de linea Entel)
+//  2) nombre del fijo dentro de la descripcion (sin espacios: "YouTubePremium" calza con "youtube")
+function buscarFijosGmail_(chatId, descripcion, textoCompleto) {
+  let fijos;
+  try {
+    fijos = leerFijos_(chatId).filter(f => !f.pagadoMes && !f.saltadoMes);
+  } catch (err) {
+    Logger.log('buscarFijosGmail_: ' + err);
+    return [];
+  }
+  if (!fijos.length) return [];
+
+  const compactar = s => normalizarTextoClave_(s).replace(/\s+/g, '');
+  const porNombre = nombre => fijos.find(f => compactar(f.nombre) === compactar(nombre));
+
+  const correo = compactar(textoCompleto);
+  const alias = PropertiesService.getScriptProperties().getProperty('gmail_alias_fijos') || '';
+  for (const regla of alias.split(';')) {
+    const partes = regla.split('=');
+    const clave = compactar(partes[0] || '');
+    if (partes.length !== 2 || clave.length < 3 || correo.indexOf(clave) === -1) continue;
+    const encontrados = partes[1].split('+').map(porNombre).filter(Boolean);
+    if (encontrados.length) return encontrados;
+  }
+
+  const desc = compactar(descripcion);
+  const fijo = fijos.find(f => {
+    const nombre = compactar(f.nombre);
+    return nombre.length >= 3 && desc.indexOf(nombre) !== -1;
+  });
+  return fijo ? [fijo] : [];
+}
+
+function marcarFijosPagadosGmail_(chatId, item) {
+  if (!item.fijos) return [];
+  const mes = cicloPagoDesdeFecha_(new Date(item.fecha + 'T12:00:00')).key;
+  const pagados = [];
+  item.fijos.split('+').forEach(nombre => {
+    const fijo = buscarFijo_(chatId, nombre);
+    if (fijo && marcarEstadoFijoD1_(chatId, fijo, 'pagado', mes)) pagados.push(capitalizar(fijo.nombre));
+  });
+  return pagados;
 }
 
 

@@ -207,7 +207,8 @@ export function hasKeyword(text, keyword) {
   const clean = normalizeRuleKeyword(keyword);
   if (!clean) return false;
   const pattern = clean.split(/\s+/).filter(Boolean).join('\\s+');
-  return new RegExp(`(^|\\s)${pattern}(\\s|$)`).test(text);
+  // \d* tolera numeros de tienda pegados: "kfc155" calza con "kfc"
+  return new RegExp(`(^|\\s)${pattern}\\d*(\\s|$)`).test(text);
 }
 
 export function normalizeRuleKeyword(value) {
