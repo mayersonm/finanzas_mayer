@@ -147,8 +147,8 @@ function procesarCorreoGasto_(hoja, chatId, msg) {
   const descCorreo = capitalizar(limpiarDescGmail_(datos.desc) || base.banco);
   const metodo = datos.metodo || (esTarjetaCreditoGmail_(datos.tarjeta) ? 'credito' : 'debito');
   const fijos = buscarFijosGmail_(chatId, descCorreo + ' ' + (datos.servicio || ''), texto);
-  // Un solo fijo: se usa su nombre, asi D1 lo marca pagado. Varios (ej. recibo Entel): queda la descripcion del correo.
-  const desc = fijos.length === 1 ? capitalizar(fijos[0].nombre) : descCorreo;
+  // Descripcion = nombre(s) del fijo: "Wininternet" o, si cubre varios, "Mayerentel+Crisentel".
+  const desc = fijos.length ? fijos.map(f => capitalizar(f.nombre)).join('+') : descCorreo;
   const catBase = datos.tipo === 'servicio' ? 'servicios' : 'otro';
 
   const item = Object.assign(base, {
