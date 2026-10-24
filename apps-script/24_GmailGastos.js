@@ -165,6 +165,14 @@ function procesarCorreoGasto_(hoja, chatId, msg) {
     fijos: fijos.map(f => f.nombre).join('+'),
   });
   const avisos = [];
+  // Sin fijo ni regla: la IA sugiere la categoria (se confirma al registrar).
+  if (!fijos.length && item.cat === 'otro') {
+    const sugerida = clasificarConIAGmail_(desc, datos.tipo);
+    if (sugerida) {
+      item.cat = sugerida;
+      avisos.push('🤖 Categoría sugerida por IA. Si no es, cámbiala con 🏷️');
+    }
+  }
   if (fijos.length) {
     avisos.push('📌 ' + (fijos.length === 1 ? 'Es tu gasto fijo ' : 'Cubre tus fijos: ') +
       fijos.map(f => capitalizar(f.nombre)).join(', ') + '. Al registrarlo queda pagado.');
@@ -455,8 +463,10 @@ function manejarCallbackGmail_(cb) {
     actualizarItemGmail_(item, GMAIL_COL.estado, 'registrado');
     const res = registrarGastoGmail_(chatId, item);
     const pagados = marcarFijosPagadosGmail_(chatId, item);
+    const aprendida = aprenderReglaGmail_(chatId, item);
     const cierre = '✅ <b>Registrado</b>' +
       (pagados.length ? '\n📌 Fijos pagados: ' + pagados.join(', ') : '') +
+      (aprendida ? '\n🧠 La próxima vez "' + aprendida + '" irá directo a ' + capitalizar(item.cat) : '') +
       (res.d1Ok ? '' : '\n⚠️ Guardado en Sheets, pero D1 no respondió.');
     editarAvisoGmail_(chatId, messageId, item, cierre);
     responderCallbackGmail_(cb.id, 'Registrado');
@@ -651,6 +661,104 @@ function posibleDuplicadoGmail_(hoja, item) {
     return '⚠️ Posible duplicado de ' + disp[i][4] + ': ' + disp[i][8] + ' (' + disp[i][6] + ')';
   }
   return '';
+}
+
+
+// ---- CATEGORIZACION AUTOMATICA ------------------------------
+// Capa 2: la IA sugiere categoria cuando ninguna regla calza.
+// Solo se envia el nombre del comercio y el tipo de movimiento.
+function clasificarConIAGmail_(desc, tipo) {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('claude_api_key');
+  const clave = claveComercioGmail_(desc);
+  if (!apiKey || !clave) return '';
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'ia_cat_' + Utilities.base64EncodeWebSafe(clave).slice(0, 200);
+  const cached = cache.get(cacheKey);
+  if (cached) return cached === '-' ? '' : cached;
+
+  const prompt = [
+    'Clasifica este movimiento bancario de una persona en Peru en UNA de estas categorias:',
+    CATS_GASTO.join(', ') + '.',
+    'Criterios: comida rapida (KFC, Bembos, pizzas, hamburguesas), cine, streaming, juegos = entretenimiento;',
+    'supermercados, mercados, abarrotes, restaurantes de menu, cafes, panaderias = supermercado;',
+    'luz, agua, gas de casa, telefono, internet, alquiler = servicios; gasolina, taxi, apps de transporte, peajes, estacionamiento, SOAT = transporte;',
+    'farmacias, clinicas, gimnasio = salud; tiendas de ropa y calzado = ropa; colegios, cursos, libros = educacion.',
+    'Si no puedes saberlo con razonable seguridad (por ejemplo, transferencia a una persona), responde otro.',
+    '',
+    'Movimiento: ' + (tipo || 'consumo') + ' en "' + String(desc).slice(0, 120) + '"',
+    'Responde solo la categoria, en minusculas, sin explicacion.',
+  ].join('\n');
+
+  try {
+    const url = props.getProperty('claude_api_url') || 'https://api.synterolink.com/v1/messages';
+    const model = props.getProperty('claude_model') || 'claude-haiku-4-5-20251001';
+    let resp = fetchIAConReintentos_(url, {
+      method: 'post',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      payload: JSON.stringify({ model: model, max_tokens: 10, messages: [{ role: 'user', content: prompt }] }),
+      muteHttpExceptions: true,
+    }, 'categoria gmail');
+    let raw = resp.getContentText();
+    let texto = '';
+    if (debeReintentarChatCompletions_(resp.getResponseCode(), raw, url)) {
+      resp = llamarIAChatCompletions_(apiKey, url, model, 10, prompt, '', '');
+      raw = resp.getContentText();
+      const r = parseJsonSeguro_(raw, null);
+      texto = r && r.choices && r.choices[0] && r.choices[0].message ? r.choices[0].message.content : '';
+    } else {
+      const r = parseJsonSeguro_(raw, null);
+      const bloque = r && r.content ? r.content.find(b => b.type === 'text') : null;
+      texto = bloque ? bloque.text : '';
+    }
+
+    const cat = normalizarCatBasica_(normalizarTextoClave_(texto).split(' ')[0]);
+    const valida = CATS_GASTO.indexOf(cat) !== -1 && cat !== 'otro' ? cat : '';
+    cache.put(cacheKey, valida || '-', 21600);
+    return valida;
+  } catch (err) {
+    Logger.log('clasificarConIAGmail_: ' + err);
+    return '';
+  }
+}
+
+// Capa 3: al registrar, guarda una regla personal comercio -> categoria
+// si las reglas actuales no la daban. Devuelve la palabra aprendida.
+function aprenderReglaGmail_(chatId, item) {
+  try {
+    if (item.fijos || !item.cat || item.cat === 'otro') return '';
+    const clave = claveComercioGmail_(item.desc);
+    if (!clave) return '';
+    const porReglas = clasificarCategoriaD1_('otro', item.desc, chatId);
+    if (porReglas && normalizarCatBasica_(porReglas) === item.cat) return '';
+    guardarReglaCategoriaD1_(chatId, clave, item.cat);
+    return clave;
+  } catch (err) {
+    Logger.log('aprenderReglaGmail_: ' + err);
+    return '';
+  }
+}
+
+// Palabra que identifica al comercio o destinatario:
+//   "Kfc155 - puruchuco"          -> "kfc"
+//   "Google YouTubePremium"       -> "google youtubepremium"  (pasarelas: 2 palabras)
+//   "Transferencia a Juan Perez"  -> "juan perez"
+function claveComercioGmail_(desc) {
+  const genericas = ['pago', 'compra', 'consumo', 'de', 'del', 'la', 'el', 'los', 'en', 'sac', 'sa', 'srl', 'eirl',
+    'peru', 'lima', 'www', 'com', 'pe', 'tienda', 'online'];
+  const pasarelas = ['google', 'apple', 'paypal', 'izi', 'izipay', 'niubiz', 'mercadopago', 'dlocal', 'payu',
+    'culqi', 'openpay', 'pagoefectivo', 'amazon', 'microsoft'];
+  let texto = normalizarTextoClave_(desc);
+  const persona = texto.match(/^(?:transferencia|yape|plin) a (.+)$/);
+  if (persona) texto = persona[1];
+  const palabras = texto.replace(/\d+/g, ' ').split(/\s+/)
+    .filter(w => w.length >= 2 && genericas.indexOf(w) === -1);
+  if (!palabras.length) return '';
+  if (persona && palabras.length < 2) return ''; // un solo nombre es ambiguo: "maria" calzaria con "mariano"
+  const n = persona || pasarelas.indexOf(palabras[0]) !== -1 ? 2 : 1;
+  const clave = palabras.slice(0, n).join(' ');
+  return clave.replace(/\s+/g, '').length >= 3 ? clave : '';
 }
 
 
