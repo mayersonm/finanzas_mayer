@@ -831,6 +831,53 @@ function probarLectorGmail() {
 }
 
 
+// ---- ALIAS DE FIJOS DESDE TELEGRAM --------------------------
+//   alias fijos                                -> lista los alias
+//   alias fijo 999888777=fijoa+fijob           -> crea o reemplaza el alias de ese texto
+//   alias fijo borrar 999888777                -> quita ese alias
+// Se guardan en la Script Property gmail_alias_fijos.
+function cmdAliasFijos_(chatId, lower) {
+  if (String(chatId) !== String(gmailChatId_())) {
+    return sendMessage(chatId, '⛔ Este comando solo funciona en tu chat principal.');
+  }
+  const props = PropertiesService.getScriptProperties();
+  const reglas = (props.getProperty('gmail_alias_fijos') || '')
+    .split(';').map(r => r.trim()).filter(r => r.indexOf('=') > 0);
+  const claveDe = r => normalizarTextoClave_(r.split('=')[0]).replace(/\s+/g, '');
+  const guardar = lista => props.setProperty('gmail_alias_fijos', lista.join('; '));
+  const arg = lower.replace(/^alias fijos?\s*/, '').trim();
+
+  if (!arg) {
+    return sendMessage(chatId, reglas.length
+      ? '📌 Alias de fijos:\n' + reglas.map(r => '• ' + r).join('\n')
+      : '📌 No tienes alias de fijos.\nEj: alias fijo 999888777=fijoa+fijob');
+  }
+
+  if (arg.indexOf('borrar ') === 0) {
+    const clave = normalizarTextoClave_(arg.slice(7)).replace(/\s+/g, '');
+    const quedan = reglas.filter(r => claveDe(r) !== clave);
+    guardar(quedan);
+    return sendMessage(chatId, quedan.length < reglas.length ? '🗑️ Alias borrado.' : 'No encontré ese alias.');
+  }
+
+  const partes = arg.split('=');
+  const texto = (partes[0] || '').trim();
+  const nombres = (partes[1] || '').split('+').map(n => n.trim()).filter(Boolean);
+  if (partes.length !== 2 || normalizarTextoClave_(texto).replace(/\s+/g, '').length < 3 || !nombres.length) {
+    return sendMessage(chatId, '❌ Formato: alias fijo <texto del correo>=<fijo>+<fijo>\nEj: alias fijo 999888777=fijoa+fijob');
+  }
+
+  let existentes = [];
+  try { existentes = leerFijos_(chatId).map(f => normalizarTextoClave_(f.nombre).replace(/\s+/g, '')); } catch (err) {}
+  const faltan = nombres.filter(n => existentes.length && existentes.indexOf(normalizarTextoClave_(n).replace(/\s+/g, '')) === -1);
+
+  const regla = texto + '=' + nombres.join('+');
+  guardar(reglas.filter(r => claveDe(r) !== claveDe(regla)).concat(regla));
+  return sendMessage(chatId, '✅ Alias guardado: ' + regla +
+    (faltan.length ? '\n⚠️ No encontré estos fijos: ' + faltan.join(', ') + '. Revisa con "fijos".' : ''));
+}
+
+
 // ---- COMANDOS DESDE TELEGRAM --------------------------------
 //   probar gmail   -> envia el aviso de tu ultimo consumo (probarAvisoGmail)
 //   revisar gmail  -> revisa ahora los correos nuevos (revisarGastosGmail)

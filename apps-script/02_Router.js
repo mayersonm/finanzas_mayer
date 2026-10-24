@@ -104,6 +104,7 @@ function handleMessage(chatId, text) {
   if (lower.startsWith('presupuesto '))    return cmdPresupuesto(chatId, lower);
   if (lower.startsWith('meta '))           return cmdMetas(chatId, lower);
   if (lower.startsWith('ahorrar '))        return cmdAhorrar(chatId, lower);
+  if (lower.startsWith('alias fijo'))     return cmdAliasFijos_(chatId, lower);
   if (lower.startsWith('fijo '))           return cmdFijos(chatId, lower);
   if (lower.startsWith('pagar fijo '))     return cmdFijos(chatId, lower);
   if (lower.startsWith('eliminar fijo '))  return cmdFijos(chatId, lower);
