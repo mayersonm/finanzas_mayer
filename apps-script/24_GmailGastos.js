@@ -12,7 +12,7 @@
 //   gmail_nombres_propios   nombres que marcan un movimiento como propio (default: mayeson)
 //   gmail_desde             epoch en segundos desde el que se leen correos (lo fija setupTriggerGmail)
 //   gmail_alias_fijos       textos del correo que corresponden a gastos fijos, ej:
-//                           960548022=mayerentel+crisentel; colegio san jose=ariadnacolegio
+//                           999888777=fijoa+fijob; nombre del colegio=fijoc
 
 const GMAIL_HOJA_CONTROL = 'GmailMovimientos';
 const GMAIL_CABECERAS = [
